@@ -216,7 +216,8 @@ public class VerificationController {
 
     // unconditionally request a captcha -- it will either be the only requested information, or a fallback
     // if a push challenge sent in `handlePushToken` doesn't arrive in time
-    verificationSession.requestedInformation().add(VerificationSession.Information.CAPTCHA);
+    // FLT(uoemai): Disable captcha verification during development.
+    // verificationSession.requestedInformation().add(VerificationSession.Information.CAPTCHA);
 
     storeVerificationSession(registrationServiceSession, verificationSession);
 
