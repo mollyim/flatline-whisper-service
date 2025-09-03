@@ -1,11 +1,9 @@
 name: Integration Tests
 
-# FLT(uoemai): Workflows run in the platform repository.
-# on:
-#   schedule:
-#     - cron: '30 19 * * MON-FRI'
-#   workflow_dispatch:
-on: workflow_dispatch
+on:
+  schedule:
+    - cron: '30 19 * * MON-FRI'
+  workflow_dispatch:
 
 env:
   # This may seem a little redundant, but copying the configuration to an environment variable makes it easier and safer
