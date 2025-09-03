@@ -1,10 +1,12 @@
 name: Service CI
 
-on:
-  pull_request:
-  push:
-    branches-ignore:
-      - gh-pages
+# FLT(uoemai): Workflows run in the platform repository.
+# on:
+#   pull_request:
+#   push:
+#     branches-ignore:
+#       - gh-pages
+on: workflow_dispatch
 
 jobs:
   build:
