@@ -21,15 +21,12 @@ import static org.whispersystems.textsecuregcm.util.AttributeValues.n;
 import static org.whispersystems.textsecuregcm.util.AttributeValues.s;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.stripe.exception.ApiException;
 import com.stripe.model.PaymentIntent;
 import io.dropwizard.auth.AuthValueFactoryProvider;
 import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 import io.dropwizard.testing.junit5.ResourceExtension;
 import jakarta.ws.rs.client.Entity;
 import jakarta.ws.rs.core.Response;
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -66,20 +63,23 @@ import org.signal.libsignal.zkgroup.receipts.ReceiptCredentialResponse;
 import org.signal.libsignal.zkgroup.receipts.ReceiptSerial;
 import org.signal.libsignal.zkgroup.receipts.ServerZkReceiptOperations;
 import org.whispersystems.textsecuregcm.auth.AuthenticatedDevice;
-import org.whispersystems.textsecuregcm.backup.BackupManager;
 import org.whispersystems.textsecuregcm.badges.BadgeTranslator;
 import org.whispersystems.textsecuregcm.configuration.OneTimeDonationConfiguration;
 import org.whispersystems.textsecuregcm.configuration.SubscriptionConfiguration;
+import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicBackupConfiguration;
+import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicConfiguration;
 import org.whispersystems.textsecuregcm.controllers.SubscriptionController.GetBankMandateResponse;
 import org.whispersystems.textsecuregcm.controllers.SubscriptionController.GetSubscriptionConfigurationResponse;
 import org.whispersystems.textsecuregcm.entities.Badge;
 import org.whispersystems.textsecuregcm.entities.BadgeSvg;
 import org.whispersystems.textsecuregcm.mappers.CompletionExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.SubscriptionExceptionMapper;
+import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.IssuedReceiptsManager;
 import org.whispersystems.textsecuregcm.storage.OneTimeDonationsManager;
 import org.whispersystems.textsecuregcm.storage.PaymentTime;
-import org.whispersystems.textsecuregcm.storage.SubscriptionException;
+import org.whispersystems.textsecuregcm.subscriptions.SubscriptionChargeFailurePaymentRequiredException;
+import org.whispersystems.textsecuregcm.subscriptions.SubscriptionException;
 import org.whispersystems.textsecuregcm.storage.SubscriptionManager;
 import org.whispersystems.textsecuregcm.storage.Subscriptions;
 import org.whispersystems.textsecuregcm.subscriptions.AppleAppStoreManager;
@@ -95,6 +95,13 @@ import org.whispersystems.textsecuregcm.subscriptions.PaymentProvider;
 import org.whispersystems.textsecuregcm.subscriptions.PaymentStatus;
 import org.whispersystems.textsecuregcm.subscriptions.ProcessorCustomer;
 import org.whispersystems.textsecuregcm.subscriptions.StripeManager;
+import org.whispersystems.textsecuregcm.subscriptions.SubscriptionInvalidArgumentsException;
+import org.whispersystems.textsecuregcm.subscriptions.SubscriptionNotFoundException;
+import org.whispersystems.textsecuregcm.subscriptions.SubscriptionPaymentRequiredException;
+import org.whispersystems.textsecuregcm.subscriptions.SubscriptionPaymentRequiresActionException;
+import org.whispersystems.textsecuregcm.subscriptions.SubscriptionProcessorConflictException;
+import org.whispersystems.textsecuregcm.subscriptions.SubscriptionProcessorException;
+import org.whispersystems.textsecuregcm.subscriptions.SubscriptionReceiptRequestedForOpenPaymentException;
 import org.whispersystems.textsecuregcm.tests.util.AuthHelper;
 import org.whispersystems.textsecuregcm.util.MockUtils;
 import org.whispersystems.textsecuregcm.util.SystemMapper;
@@ -107,6 +114,7 @@ class SubscriptionControllerTest {
 
   private static final ObjectMapper YAML_MAPPER = SystemMapper.yamlMapper();
 
+  private static final long MAX_TOTAL_BACKUP_MEDIA_BYTES = 1234L;
   private static final SubscriptionConfiguration SUBSCRIPTION_CONFIG = ConfigHelper.getSubscriptionConfig();
   private static final OneTimeDonationConfiguration ONETIME_CONFIG = ConfigHelper.getOneTimeConfig();
   private static final Subscriptions SUBSCRIPTIONS = mock(Subscriptions.class);
@@ -124,11 +132,12 @@ class SubscriptionControllerTest {
   private static final OneTimeDonationsManager ONE_TIME_DONATIONS_MANAGER = mock(OneTimeDonationsManager.class);
   private static final BadgeTranslator BADGE_TRANSLATOR = mock(BadgeTranslator.class);
   private static final BankMandateTranslator BANK_MANDATE_TRANSLATOR = mock(BankMandateTranslator.class);
+  private static final DynamicConfigurationManager<DynamicConfiguration> DYNAMIC_CONFIGURATION_MANAGER = mock(DynamicConfigurationManager.class);
   private final static SubscriptionController SUBSCRIPTION_CONTROLLER = new SubscriptionController(CLOCK,
       SUBSCRIPTION_CONFIG, ONETIME_CONFIG,
       new SubscriptionManager(SUBSCRIPTIONS, List.of(STRIPE_MANAGER, BRAINTREE_MANAGER, PLAY_MANAGER, APPSTORE_MANAGER),
           ZK_OPS, ISSUED_RECEIPTS_MANAGER), STRIPE_MANAGER, BRAINTREE_MANAGER, PLAY_MANAGER, APPSTORE_MANAGER,
-      BADGE_TRANSLATOR, BANK_MANDATE_TRANSLATOR);
+      BADGE_TRANSLATOR, BANK_MANDATE_TRANSLATOR, DYNAMIC_CONFIGURATION_MANAGER);
   private static final OneTimeDonationController ONE_TIME_CONTROLLER = new OneTimeDonationController(CLOCK,
       ONETIME_CONFIG, STRIPE_MANAGER, BRAINTREE_MANAGER, ZK_OPS, ISSUED_RECEIPTS_MANAGER, ONE_TIME_DONATIONS_MANAGER);
   private static final ResourceExtension RESOURCE_EXTENSION = ResourceExtension.builder()
@@ -149,6 +158,10 @@ class SubscriptionControllerTest {
 
     when(STRIPE_MANAGER.getProvider()).thenReturn(PaymentProvider.STRIPE);
     when(BRAINTREE_MANAGER.getProvider()).thenReturn(PaymentProvider.BRAINTREE);
+    final DynamicConfiguration dynamicConfiguration = mock(DynamicConfiguration.class);
+    when(dynamicConfiguration.getBackupConfiguration())
+        .thenReturn(new DynamicBackupConfiguration(null, null, null, null, MAX_TOTAL_BACKUP_MEDIA_BYTES));
+    when(DYNAMIC_CONFIGURATION_MANAGER.getConfiguration()).thenReturn(dynamicConfiguration);
 
     List.of(STRIPE_MANAGER, BRAINTREE_MANAGER)
         .forEach(manager -> when(manager.supportsPaymentMethod(any()))
@@ -338,7 +351,7 @@ class SubscriptionControllerTest {
 
     when(BRAINTREE_MANAGER.captureOneTimePayment(anyString(), anyString(), anyString(), anyString(), anyLong(),
         anyLong(), any()))
-        .thenReturn(CompletableFuture.failedFuture(new SubscriptionException.ProcessorException(PaymentProvider.BRAINTREE,
+        .thenReturn(CompletableFuture.failedFuture(new SubscriptionProcessorException(PaymentProvider.BRAINTREE,
             new ChargeFailure("2046", "Declined", null, null, null))));
 
     final Response response = RESOURCE_EXTENSION.target("/v1/subscription/boost/paypal/confirm")
@@ -417,7 +430,7 @@ class SubscriptionControllerTest {
     @Test
     void createSubscriptionProcessorDeclined() throws SubscriptionException {
       when(STRIPE_MANAGER.createSubscription(any(), any(), anyLong(), anyLong()))
-          .thenThrow(new SubscriptionException.ProcessorException(PaymentProvider.STRIPE,
+          .thenThrow(new SubscriptionProcessorException(PaymentProvider.STRIPE,
               new ChargeFailure("card_declined", "Insufficient funds", null, null, null)));
 
       final String level = String.valueOf(levelId);
@@ -491,9 +504,9 @@ class SubscriptionControllerTest {
 
     @Test
     void stripePaymentIntentRequiresAction()
-        throws SubscriptionException.InvalidArguments, SubscriptionException.ProcessorException {
+        throws SubscriptionInvalidArgumentsException, SubscriptionProcessorException {
       when(STRIPE_MANAGER.createSubscription(any(), any(), anyLong(), anyLong()))
-          .thenThrow(new SubscriptionException.PaymentRequiresAction());
+          .thenThrow(new SubscriptionPaymentRequiresActionException());
 
       final String level = String.valueOf(levelId);
       final String idempotencyKey = UUID.randomUUID().toString();
@@ -688,7 +701,7 @@ class SubscriptionControllerTest {
       "201, M4",
   })
   void setSubscriptionLevel(long levelId, String expectedProcessorId)
-      throws SubscriptionException.ProcessorConflict, SubscriptionException.ProcessorException {
+      throws SubscriptionProcessorConflictException, SubscriptionProcessorException {
     // set up record
     final byte[] subscriberUserAndKey = new byte[32];
     Arrays.fill(subscriberUserAndKey, (byte) 1);
@@ -735,7 +748,7 @@ class SubscriptionControllerTest {
   @MethodSource
   void setSubscriptionLevelExistingSubscription(final String existingCurrency, final long existingLevel,
       final String requestCurrency, final long requestLevel, final boolean expectUpdate)
-      throws SubscriptionException.ProcessorConflict, SubscriptionException.ProcessorException {
+      throws SubscriptionProcessorConflictException, SubscriptionProcessorException {
 
     // set up record
     final byte[] subscriberUserAndKey = new byte[32];
@@ -854,7 +867,7 @@ class SubscriptionControllerTest {
 
   @Test
   public void setAppStoreTransactionId()
-      throws SubscriptionException.InvalidArguments, SubscriptionException.PaymentRequired, RateLimitExceededException, SubscriptionException.NotFound {
+      throws SubscriptionInvalidArgumentsException, SubscriptionPaymentRequiredException, RateLimitExceededException, SubscriptionNotFoundException {
     final String originalTxId = "aTxId";
     final byte[] subscriberUserAndKey = new byte[32];
     Arrays.fill(subscriberUserAndKey, (byte) 1);
@@ -1003,7 +1016,7 @@ class SubscriptionControllerTest {
                 b(new ProcessorCustomer("customer", PaymentProvider.STRIPE).toDynamoBytes()),
                 Subscriptions.KEY_SUBSCRIPTION_ID, s("subscriptionId"))))));
     when(STRIPE_MANAGER.getReceiptItem(any()))
-        .thenThrow(new SubscriptionException.ChargeFailurePaymentRequired(
+        .thenThrow(new SubscriptionChargeFailurePaymentRequiredException(
             PaymentProvider.STRIPE,
             new ChargeFailure("card_declined", "Insufficient funds", null, null, null)));
 
@@ -1027,7 +1040,7 @@ class SubscriptionControllerTest {
   @ParameterizedTest
   @CsvSource({"5, P45D", "201, P13D"})
   public void createReceiptCredential(long level, Duration expectedExpirationWindow)
-      throws InvalidInputException, VerificationFailedException, SubscriptionException.ChargeFailurePaymentRequired, SubscriptionException.ReceiptRequestedForOpenPayment {
+      throws InvalidInputException, VerificationFailedException, SubscriptionChargeFailurePaymentRequiredException, SubscriptionReceiptRequestedForOpenPaymentException {
     final byte[] subscriberUserAndKey = new byte[32];
     Arrays.fill(subscriberUserAndKey, (byte) 1);
     final String subscriberId = Base64.getEncoder().encodeToString(subscriberUserAndKey);
@@ -1218,7 +1231,7 @@ class SubscriptionControllerTest {
     });
 
     assertThat(response.backup().levels()).containsOnlyKeys("201").extractingByKey("201").satisfies(configuration -> {
-      assertThat(configuration.storageAllowanceBytes()).isEqualTo(BackupManager.MAX_TOTAL_BACKUP_MEDIA_BYTES);
+      assertThat(configuration.storageAllowanceBytes()).isEqualTo(MAX_TOTAL_BACKUP_MEDIA_BYTES);
       assertThat(configuration.playProductId()).isEqualTo("testPlayProductId");
       assertThat(configuration.mediaTtlDays()).isEqualTo(40);
     });

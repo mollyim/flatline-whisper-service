@@ -17,6 +17,7 @@ import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
@@ -40,12 +41,15 @@ import org.whispersystems.textsecuregcm.attachments.TusAttachmentGenerator;
 import org.whispersystems.textsecuregcm.auth.AuthenticatedBackupUser;
 import org.whispersystems.textsecuregcm.auth.ExternalServiceCredentials;
 import org.whispersystems.textsecuregcm.auth.ExternalServiceCredentialsGenerator;
+import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicBackupConfiguration;
+import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicConfiguration;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
 import org.whispersystems.textsecuregcm.metrics.MetricsUtil;
 import org.whispersystems.textsecuregcm.metrics.UserAgentTagUtil;
 // FLT(uoemai): Secure value recovery is disabled in the prototype.
 // import org.whispersystems.textsecuregcm.securevaluerecovery.SecureValueRecoveryClient;
 import org.whispersystems.textsecuregcm.securevaluerecovery.ValueRecoveryClient;
+import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.util.AsyncTimerUtil;
 import org.whispersystems.textsecuregcm.util.ExceptionUtils;
 import org.whispersystems.textsecuregcm.util.Pair;
@@ -59,23 +63,8 @@ import reactor.core.scheduler.Scheduler;
 public class BackupManager {
 
   static final String MESSAGE_BACKUP_NAME = "messageBackup";
-  public static final long MAX_TOTAL_BACKUP_MEDIA_BYTES = DataSize.gibibytes(100).toBytes();
   public static final long MAX_MESSAGE_BACKUP_OBJECT_SIZE = DataSize.mebibytes(101).toBytes();
   public static final long MAX_MEDIA_OBJECT_SIZE = DataSize.mebibytes(101).toBytes();
-
-  // If the last media usage recalculation is over MAX_QUOTA_STALENESS, force a recalculation before quota enforcement.
-  static final Duration MAX_QUOTA_STALENESS = Duration.ofDays(1);
-
-  // How many cdn object deletion requests can be outstanding at a time per backup deletion operation
-  private static final int DELETION_CONCURRENCY = 10;
-
-  // How many cdn object copy requests can be outstanding at a time per batch copy-to-backup operation
-  private static final int COPY_CONCURRENCY = 10;
-
-  // How often we should persist the current usage
-  @VisibleForTesting
-  static int USAGE_CHECKPOINT_COUNT = 10;
-
 
   private static final String ZK_AUTHN_COUNTER_NAME = MetricsUtil.name(BackupManager.class, "authentication");
   private static final String ZK_AUTHZ_FAILURE_COUNTER_NAME = MetricsUtil.name(BackupManager.class,
@@ -86,6 +75,10 @@ public class BackupManager {
       "deleteCount");
   private static final Timer SYNCHRONOUS_DELETE_TIMER =
       Metrics.timer(MetricsUtil.name(BackupManager.class, "synchronousDelete"));
+
+  private static final String NUM_OBJECTS_SUMMARY_NAME = MetricsUtil.name(BackupsDb.class, "numObjects");
+  private static final String BYTES_USED_SUMMARY_NAME = MetricsUtil.name(BackupsDb.class, "bytesUsed");
+  private static final String BACKUPS_COUNTER_NAME = MetricsUtil.name(BackupsDb.class, "backups");
 
   private static final String SUCCESS_TAG_NAME = "success";
   private static final String FAILURE_REASON_TAG_NAME = "reason";
@@ -104,6 +97,7 @@ public class BackupManager {
   // private final SecureValueRecoveryClient secureValueRecoveryBClient;
   private final ValueRecoveryClient secureValueRecoveryBClient;
   private final Clock clock;
+  private final DynamicConfigurationManager<DynamicConfiguration> dynamicConfigurationManager;
 
   public BackupManager(
       final BackupsDb backupsDb,
@@ -116,7 +110,8 @@ public class BackupManager {
       // FLT(uoemai): Secure value recovery is disabled in the prototype.
       // final SecureValueRecoveryClient secureValueRecoveryBClient,
       final ValueRecoveryClient secureValueRecoveryBClient,
-      final Clock clock) {
+      final Clock clock,
+      final DynamicConfigurationManager<DynamicConfiguration> dynamicConfigurationManager) {
     this.backupsDb = backupsDb;
     this.serverSecretParams = serverSecretParams;
     this.rateLimiters = rateLimiters;
@@ -126,6 +121,7 @@ public class BackupManager {
     this.secureValueRecoveryBClient = secureValueRecoveryBClient;
     this.clock = clock;
     this.secureValueRecoveryBCredentialsGenerator = secureValueRecoveryBCredentialsGenerator;
+    this.dynamicConfigurationManager = dynamicConfigurationManager;
   }
 
 
@@ -175,11 +171,42 @@ public class BackupManager {
       final AuthenticatedBackupUser backupUser) {
     checkBackupLevel(backupUser, BackupLevel.FREE);
     checkBackupCredentialType(backupUser, BackupCredentialType.MESSAGES);
+    final Instant today = clock.instant().truncatedTo(ChronoUnit.DAYS);
+    final long maxTotalMediaSize =
+        dynamicConfigurationManager.getConfiguration().getBackupConfiguration().maxTotalMediaSize();
 
     // this could race with concurrent updates, but the only effect would be last-writer-wins on the timestamp
     return backupsDb
         .addMessageBackup(backupUser)
-        .thenApply(result -> cdn3BackupCredentialGenerator.generateUpload(cdnMessageBackupName(backupUser)));
+        .thenApply(storedBackupAttributes -> {
+          final Instant previousRefreshTime = storedBackupAttributes.lastRefresh();
+          // Only publish a metric update once per day
+          if (previousRefreshTime.isBefore(today)) {
+            final Tags tags = Tags.of(
+                UserAgentTagUtil.getPlatformTag(backupUser.userAgent()),
+                Tag.of("tier", backupUser.backupLevel().name()));
+
+            DistributionSummary.builder(NUM_OBJECTS_SUMMARY_NAME)
+                .tags(tags)
+                .publishPercentileHistogram()
+                .register(Metrics.globalRegistry)
+                .record(storedBackupAttributes.numObjects());
+            DistributionSummary.builder(BYTES_USED_SUMMARY_NAME)
+                .tags(tags)
+                .publishPercentileHistogram()
+                .register(Metrics.globalRegistry)
+                .record(storedBackupAttributes.bytesUsed());
+
+            // Report that the backup is out of quota if it cannot store a max size media object
+            final boolean quotaExhausted = storedBackupAttributes.bytesUsed() >=
+                (maxTotalMediaSize - BackupManager.MAX_MEDIA_OBJECT_SIZE);
+
+            Metrics.counter(BACKUPS_COUNTER_NAME,
+                    tags.and("quotaExhausted", String.valueOf(quotaExhausted)))
+                .increment();
+          }
+          return cdn3BackupCredentialGenerator.generateUpload(cdnMessageBackupName(backupUser));
+        });
   }
 
   public CompletableFuture<BackupUploadDescriptor> createTemporaryAttachmentUploadDescriptor(
@@ -244,6 +271,9 @@ public class BackupManager {
     checkBackupLevel(backupUser, BackupLevel.PAID);
     checkBackupCredentialType(backupUser, BackupCredentialType.MEDIA);
 
+    final DynamicBackupConfiguration backupConfiguration =
+        dynamicConfigurationManager.getConfiguration().getBackupConfiguration();
+
     return Mono.fromFuture(() -> allowedCopies(backupUser, toCopy))
         .flatMapMany(quotaResult -> Flux.concat(
 
@@ -253,7 +283,7 @@ public class BackupManager {
             Flux.fromIterable(quotaResult.requestsToCopy())
 
                 // Update the usage in reasonable chunk sizes to bound how out of sync our claimed and actual usage gets
-                .buffer(USAGE_CHECKPOINT_COUNT)
+                .buffer(backupConfiguration.usageCheckpointCount())
                 .concatMap(copyParameters -> {
                   final long quotaToConsume = copyParameters.stream()
                       .mapToLong(CopyParameters::destinationObjectSize)
@@ -271,7 +301,7 @@ public class BackupManager {
                               .fromFuture(this.backupsDb.trackMedia(backupUser, -1, -copyParams.destinationObjectSize()))
                               .thenReturn(copyResult);
                         }),
-                    COPY_CONCURRENCY, 1),
+                    backupConfiguration.copyConcurrency(), 1),
 
             // There wasn't enough quota remaining to perform these copies
             Flux.fromIterable(quotaResult.requestsToReject())
@@ -323,11 +353,16 @@ public class BackupManager {
         })
         .sum();
 
+    final DynamicBackupConfiguration backupConfiguration =
+        dynamicConfigurationManager.getConfiguration().getBackupConfiguration();
+    final Duration maxQuotaStaleness = backupConfiguration.maxQuotaStaleness();
+    final long maxTotalMediaSize = backupConfiguration.maxTotalMediaSize();
+
     return backupsDb.getMediaUsage(backupUser)
         .thenComposeAsync(info -> {
-          long remainingQuota = MAX_TOTAL_BACKUP_MEDIA_BYTES - info.usageInfo().bytesUsed();
+          long remainingQuota = maxTotalMediaSize - info.usageInfo().bytesUsed();
           final boolean canStore = remainingQuota >= totalBytesAdded;
-          if (canStore || info.lastRecalculationTime().isAfter(clock.instant().minus(MAX_QUOTA_STALENESS))) {
+          if (canStore || info.lastRecalculationTime().isAfter(clock.instant().minus(maxQuotaStaleness))) {
             return CompletableFuture.completedFuture(remainingQuota);
           }
 
@@ -344,7 +379,7 @@ public class BackupManager {
                     Tag.of("usageChanged", String.valueOf(usageChanged))))
                     .increment();
               })
-              .thenApply(newUsage -> MAX_TOTAL_BACKUP_MEDIA_BYTES - newUsage.bytesUsed());
+              .thenApply(newUsage -> maxTotalMediaSize - newUsage.bytesUsed());
         })
         .thenApply(remainingQuota -> {
           // Figure out how many of the requested objects fit in the remaining quota
@@ -462,6 +497,9 @@ public class BackupManager {
   public CompletableFuture<Void> deleteEntireBackup(final AuthenticatedBackupUser backupUser) {
     checkBackupLevel(backupUser, BackupLevel.FREE);
 
+    final int deletionConcurrency =
+        dynamicConfigurationManager.getConfiguration().getBackupConfiguration().deletionConcurrency();
+
     // Clients only include SVRB data with their messages backup-id
     final CompletableFuture<Void> svrbRemoval = switch(backupUser.credentialType()) {
       case BackupCredentialType.MESSAGES -> secureValueRecoveryBClient.removeData(svrbIdentifier(backupUser));
@@ -473,7 +511,7 @@ public class BackupManager {
         // If there was already a pending swap, try to delete the cdn objects directly
         .exceptionallyCompose(ExceptionUtils.exceptionallyHandler(BackupsDb.PendingDeletionException.class, e ->
             AsyncTimerUtil.record(SYNCHRONOUS_DELETE_TIMER, () ->
-                deletePrefix(backupUser.backupDir(), DELETION_CONCURRENCY)))));
+                deletePrefix(backupUser.backupDir(), deletionConcurrency)))));
   }
 
 
@@ -488,11 +526,13 @@ public class BackupManager {
           .withDescription("unsupported media cdn provided")
           .asRuntimeException();
     }
+    final DynamicBackupConfiguration backupConfiguration =
+        dynamicConfigurationManager.getConfiguration().getBackupConfiguration();
 
     return Flux.usingWhen(
 
         // Gather usage updates into the UsageBatcher so we don't have to update our backup record on every delete
-        Mono.just(new UsageBatcher()),
+        Mono.just(new UsageBatcher(backupConfiguration.usageCheckpointCount())),
 
         // Deletes the objects, returning their former location. Tracks bytes removed so the quota can be updated on
         // completion
@@ -501,7 +541,7 @@ public class BackupManager {
             // Delete the objects, allowing DELETION_CONCURRENCY operations out at a time
             .flatMapSequential(
                 sd -> Mono.fromCompletionStage(remoteStorageManager.delete(cdnMediaPath(backupUser, sd.key()))),
-                DELETION_CONCURRENCY)
+                backupConfiguration.deletionConcurrency())
             .zipWithIterable(storageDescriptors)
 
             // Track how much the remote storage manager indicated was deleted as part of the operation
@@ -537,8 +577,13 @@ public class BackupManager {
    */
   private static class UsageBatcher {
 
+    private final int usageCheckpointCount;
     private long runningCountDelta = 0;
     private long runningBytesDelta = 0;
+
+    UsageBatcher(int usageCheckpointCount) {
+      this.usageCheckpointCount = usageCheckpointCount;
+    }
 
     record UsageUpdate(long countDelta, long bytesDelta) {}
 
@@ -552,7 +597,7 @@ public class BackupManager {
     boolean update(long bytesDelta) {
       this.runningCountDelta += Long.signum(bytesDelta);
       this.runningBytesDelta += bytesDelta;
-      return Math.abs(runningCountDelta) >= USAGE_CHECKPOINT_COUNT;
+      return Math.abs(runningCountDelta) >= usageCheckpointCount;
     }
 
     /**
@@ -628,11 +673,10 @@ public class BackupManager {
    * List all backups stored in the backups table
    *
    * @param segments  Number of segments to read in parallel from the underlying backup database
-   * @param scheduler Scheduler for running downstream operations
    * @return Flux of {@link StoredBackupAttributes} for each backup record in the backups table
    */
-  public Flux<StoredBackupAttributes> listBackupAttributes(final int segments, final Scheduler scheduler) {
-    return this.backupsDb.listBackupAttributes(segments, scheduler);
+  public Flux<StoredBackupAttributes> listBackupAttributes(final int segments) {
+    return this.backupsDb.listBackupAttributes(segments);
   }
 
   /**
