@@ -267,6 +267,7 @@ import org.whispersystems.textsecuregcm.workers.BackupMetricsCommand;
 import org.whispersystems.textsecuregcm.workers.BackupUsageRecalculationCommand;
 import org.whispersystems.textsecuregcm.workers.CertificateCommand;
 import org.whispersystems.textsecuregcm.workers.CheckDynamicConfigurationCommand;
+import org.whispersystems.textsecuregcm.workers.ClearIssuedReceiptRedemptionsCommand;
 import org.whispersystems.textsecuregcm.workers.DeleteUserCommand;
 import org.whispersystems.textsecuregcm.workers.IdleDeviceNotificationSchedulerFactory;
 import org.whispersystems.textsecuregcm.workers.MessagePersisterServiceCommand;
@@ -336,6 +337,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     bootstrap.addCommand(new BackupUsageRecalculationCommand());
     bootstrap.addCommand(new RemoveExpiredLinkedDevicesCommand());
     bootstrap.addCommand(new NotifyIdleDevicesCommand());
+    bootstrap.addCommand(new ClearIssuedReceiptRedemptionsCommand());
 
     bootstrap.addCommand(new ProcessScheduledJobsServiceCommand("process-idle-device-notification-jobs",
         "Processes scheduled jobs to send notifications to idle devices",
@@ -822,7 +824,8 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         // FLT(uoemai): Secure value recovery is disabled in the prototype.
         // secureValueRecoveryBClient
         insecureValueRecoveryBClient,
-        clock);
+        clock,
+        dynamicConfigurationManager);
 
     final AppleDeviceChecks appleDeviceChecks = new AppleDeviceChecks(
         dynamoDbClient,
@@ -1160,7 +1163,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     //       zkReceiptOperations, issuedReceiptsManager);
     //   commonControllers.add(new SubscriptionController(clock, config.getSubscription(), config.getOneTimeDonations(),
     //       subscriptionManager, stripeManager, braintreeManager, googlePlayBillingManager, appleAppStoreManager,
-    //       profileBadgeConverter, bankMandateTranslator));
+    //       profileBadgeConverter, bankMandateTranslator, dynamicConfigurationManager));
     //   commonControllers.add(new OneTimeDonationController(clock, config.getOneTimeDonations(), stripeManager, braintreeManager,
     //       zkReceiptOperations, issuedReceiptsManager, oneTimeDonationsManager));
     // }

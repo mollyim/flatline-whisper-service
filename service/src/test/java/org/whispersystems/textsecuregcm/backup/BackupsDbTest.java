@@ -16,10 +16,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
-import java.util.stream.Stream;
-import org.assertj.core.util.Streams;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -236,7 +233,7 @@ public class BackupsDbTest {
     backupsDb.trackMedia(users.get(1), 10, 100).join();
     backupsDb.trackMedia(users.get(2), 1, 1000).join();
 
-    final List<StoredBackupAttributes> sbms = backupsDb.listBackupAttributes(1, Schedulers.immediate())
+    final List<StoredBackupAttributes> sbms = backupsDb.listBackupAttributes(1)
         .sort(Comparator.comparing(StoredBackupAttributes::lastRefresh))
         .collectList()
         .block();

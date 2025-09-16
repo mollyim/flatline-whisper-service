@@ -65,14 +65,16 @@ import org.whispersystems.textsecuregcm.configuration.OneTimeDonationConfigurati
 import org.whispersystems.textsecuregcm.configuration.OneTimeDonationCurrencyConfiguration;
 import org.whispersystems.textsecuregcm.configuration.SubscriptionConfiguration;
 import org.whispersystems.textsecuregcm.configuration.SubscriptionLevelConfiguration;
+import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicConfiguration;
 import org.whispersystems.textsecuregcm.entities.Badge;
 import org.whispersystems.textsecuregcm.entities.PurchasableBadge;
 import org.whispersystems.textsecuregcm.mappers.SubscriptionExceptionMapper;
 import org.whispersystems.textsecuregcm.metrics.MetricsUtil;
 import org.whispersystems.textsecuregcm.metrics.UserAgentTagUtil;
+import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.PaymentTime;
 import org.whispersystems.textsecuregcm.storage.SubscriberCredentials;
-import org.whispersystems.textsecuregcm.storage.SubscriptionException;
+import org.whispersystems.textsecuregcm.subscriptions.SubscriptionException;
 import org.whispersystems.textsecuregcm.storage.SubscriptionManager;
 import org.whispersystems.textsecuregcm.storage.Subscriptions;
 import org.whispersystems.textsecuregcm.subscriptions.AppleAppStoreManager;
@@ -86,6 +88,10 @@ import org.whispersystems.textsecuregcm.subscriptions.PaymentMethod;
 import org.whispersystems.textsecuregcm.subscriptions.PaymentProvider;
 import org.whispersystems.textsecuregcm.subscriptions.ProcessorCustomer;
 import org.whispersystems.textsecuregcm.subscriptions.StripeManager;
+import org.whispersystems.textsecuregcm.subscriptions.SubscriptionInvalidArgumentsException;
+import org.whispersystems.textsecuregcm.subscriptions.SubscriptionInvalidLevelException;
+import org.whispersystems.textsecuregcm.subscriptions.SubscriptionPaymentRequiresActionException;
+import org.whispersystems.textsecuregcm.subscriptions.SubscriptionReceiptRequestedForOpenPaymentException;
 import org.whispersystems.textsecuregcm.util.HeaderUtils;
 import org.whispersystems.textsecuregcm.util.ua.ClientPlatform;
 import org.whispersystems.textsecuregcm.util.ua.UnrecognizedUserAgentException;
@@ -105,6 +111,7 @@ public class SubscriptionController {
   private final AppleAppStoreManager appleAppStoreManager;
   private final BadgeTranslator badgeTranslator;
   private final BankMandateTranslator bankMandateTranslator;
+  private final DynamicConfigurationManager<DynamicConfiguration> dynamicConfigurationManager;
   static final String RECEIPT_ISSUED_COUNTER_NAME = MetricsUtil.name(SubscriptionController.class, "receiptIssued");
   static final String PROCESSOR_TAG_NAME = "processor";
   static final String TYPE_TAG_NAME = "type";
@@ -120,7 +127,8 @@ public class SubscriptionController {
       @Nonnull GooglePlayBillingManager googlePlayBillingManager,
       @Nonnull AppleAppStoreManager appleAppStoreManager,
       @Nonnull BadgeTranslator badgeTranslator,
-      @Nonnull BankMandateTranslator bankMandateTranslator) {
+      @Nonnull BankMandateTranslator bankMandateTranslator,
+      @NotNull DynamicConfigurationManager<DynamicConfiguration> dynamicConfigurationManager) {
     this.subscriptionManager = subscriptionManager;
     this.clock = Objects.requireNonNull(clock);
     this.subscriptionConfiguration = Objects.requireNonNull(subscriptionConfiguration);
@@ -131,6 +139,7 @@ public class SubscriptionController {
     this.appleAppStoreManager = appleAppStoreManager;
     this.badgeTranslator = Objects.requireNonNull(badgeTranslator);
     this.bankMandateTranslator = Objects.requireNonNull(bankMandateTranslator);
+    this.dynamicConfigurationManager = dynamicConfigurationManager;
   }
 
   private Map<String, CurrencyConfiguration> buildCurrencyConfiguration() {
@@ -203,12 +212,14 @@ public class SubscriptionController {
                 giftBadge,
                 oneTimeDonationConfiguration.gift().expiration())));
 
+    final long maxTotalBackupMediaBytes =
+        dynamicConfigurationManager.getConfiguration().getBackupConfiguration().maxTotalMediaSize();
     final Map<String, BackupLevelConfiguration> backupLevels = subscriptionConfiguration.getBackupLevels()
         .entrySet().stream()
         .collect(Collectors.toMap(
             e -> String.valueOf(e.getKey()),
             e -> new BackupLevelConfiguration(
-                BackupManager.MAX_TOTAL_BACKUP_MEDIA_BYTES,
+                maxTotalBackupMediaBytes,
                 e.getValue().playProductId(),
                 e.getValue().mediaTtl().toDays())));
 
@@ -415,19 +426,19 @@ public class SubscriptionController {
       subscriptionManager.updateSubscriptionLevelForCustomer(subscriberCredentials, record, manager, level,
           currency, idempotencyKey, subscriptionTemplateId, this::subscriptionsAreSameType);
       return new SetSubscriptionLevelSuccessResponse(level);
-    } catch (SubscriptionException.InvalidLevel e) {
+    } catch (SubscriptionInvalidLevelException e) {
       throw new BadRequestException(Response.status(Response.Status.BAD_REQUEST)
           .entity(new SubscriptionController.SetSubscriptionLevelErrorResponse(List.of(
               new SubscriptionController.SetSubscriptionLevelErrorResponse.Error(
                   SubscriptionController.SetSubscriptionLevelErrorResponse.Error.Type.UNSUPPORTED_LEVEL,
                   null))))
           .build());
-    } catch (SubscriptionException.PaymentRequiresAction e) {
+    } catch (SubscriptionPaymentRequiresActionException e) {
       throw new BadRequestException(Response.status(Response.Status.BAD_REQUEST)
           .entity(new SetSubscriptionLevelErrorResponse(List.of(new SetSubscriptionLevelErrorResponse.Error(
               SetSubscriptionLevelErrorResponse.Error.Type.PAYMENT_REQUIRES_ACTION, null))))
           .build());
-    } catch (SubscriptionException.InvalidArguments e) {
+    } catch (SubscriptionInvalidArgumentsException e) {
       throw new BadRequestException(Response.status(Response.Status.BAD_REQUEST)
           .entity(new SetSubscriptionLevelErrorResponse(List.of(new SetSubscriptionLevelErrorResponse.Error(
               SetSubscriptionLevelErrorResponse.Error.Type.INVALID_ARGUMENTS, e.getMessage()))))
@@ -768,7 +779,7 @@ public class SubscriptionController {
                   UserAgentTagUtil.getPlatformTag(userAgent)))
           .increment();
       return Response.ok(new GetReceiptCredentialsResponse(receiptCredentialResponse.serialize())).build();
-    } catch (SubscriptionException.ReceiptRequestedForOpenPayment e) {
+    } catch (SubscriptionReceiptRequestedForOpenPaymentException e) {
       return Response.noContent().build();
     }
   }
@@ -802,7 +813,7 @@ public class SubscriptionController {
 
       manager
           .setDefaultPaymentMethodForCustomer(processorCustomer.customerId(), paymentMethodId, record.subscriptionId);
-    } catch (SubscriptionException.InvalidArguments e) {
+    } catch (SubscriptionInvalidArgumentsException e) {
       // Here, invalid arguments must mean that the client has made requests out of order, and needs to finish
       // setting up the paymentMethod first
       throw new ClientErrorException(Status.CONFLICT);
