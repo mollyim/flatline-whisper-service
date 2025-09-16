@@ -9,10 +9,7 @@ package org.whispersystems.textsecuregcm.securevaluerecovery;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-public class InsecureValueRecovery2Client implements ValueRecovery2Client {
-  public InsecureValueRecovery2Client(){};
-
-  public CompletableFuture<Void> deleteBackups(final UUID accountUuid) {
-    return null;
-  }
+public interface ValueRecoveryClient {
+  CompletableFuture<Void> removeData(UUID accountUuid);
+  CompletableFuture<Void> removeData(String userIdentifier);
 }

@@ -53,6 +53,13 @@
       <groupId>io.swagger.core.v3</groupId>
       <artifactId>swagger-jaxrs2-jakarta</artifactId>
       <version>${swagger.version}</version>
+      <exclusions>
+        <!-- conflicts with jackson-dataformat-yaml -->
+        <exclusion>
+          <groupId>org.yaml</groupId>
+          <artifactId>snakeyaml</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>jakarta.servlet</groupId>
@@ -320,6 +327,10 @@
       <artifactId>micrometer-registry-statsd</artifactId>
     </dependency>
     <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-otlp</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.coursera</groupId>
       <artifactId>dropwizard-metrics-datadog</artifactId>
     </dependency>
@@ -474,8 +485,8 @@
     </dependency>
 
     <dependency>
-      <groupId>org.signal</groupId>
-      <artifactId>embedded-redis</artifactId>
+      <groupId>com.redis</groupId>
+      <artifactId>testcontainers-redis</artifactId>
       <scope>test</scope>
     </dependency>
 
@@ -483,12 +494,6 @@
       <groupId>com.fasterxml.uuid</groupId>
       <artifactId>java-uuid-generator</artifactId>
       <version>${java-uuid-generator.version}</version>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>DynamoDBLocal</artifactId>
       <scope>test</scope>
     </dependency>
 
@@ -761,6 +766,12 @@
               <goal>filter-sources</goal>
             </goals>
           </execution>
+          <execution>
+            <id>filter-test-src</id>
+            <goals>
+              <goal>filter-test-sources</goal>
+            </goals>
+          </execution>
         </executions>
       </plugin>
 
@@ -770,9 +781,6 @@
         <configuration>
           <!-- add-opens: work around PATCH not being a supported method on HttpUrlConnection -->
           <argLine>-javaagent:${org.mockito:mockito-core:jar} --add-opens=java.base/java.net=ALL-UNNAMED</argLine>
-          <systemPropertyVariables>
-            <localstackImage>${localstack.image}</localstackImage>
-          </systemPropertyVariables>
         </configuration>
       </plugin>
 
