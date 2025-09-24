@@ -294,6 +294,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
+import software.amazon.awssdk.services.s3.S3Configuration;
 
 public class WhisperServerService extends Application<WhisperServerConfiguration> {
 
@@ -417,6 +418,8 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         .credentialsProvider(cdnCredentialsProvider)
         .region(Region.of(config.getCdnConfiguration().region()))
         .endpointOverride(config.getCdnConfiguration().endpointOverride())
+        // FLT(uoemai): Do not use bucket name as subdomain.
+        .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
         .build();
 
     BlockingQueue<Runnable> messageDeletionQueue = new LinkedBlockingQueue<>();
@@ -449,6 +452,8 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         .credentialsProvider(awsCredentialsProvider)
         .region(Region.of(config.getPagedSingleUseKEMPreKeyStore().region()))
         .endpointOverride(config.getPagedSingleUseKEMPreKeyStore().endpointOverride())
+        // FLT(uoemai): Do not use bucket name as subdomain.
+        .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
         .build();
     KeysManager keysManager = new KeysManager(
         new SingleUseECPreKeyStore(dynamoDbAsyncClient, config.getDynamoDbTables().getEcKeys().getTableName()),
