@@ -30,6 +30,7 @@ import java.util.Map;
 import org.assertj.core.api.Assertions;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.whispersystems.textsecuregcm.attachments.GcsAttachmentGenerator;
@@ -118,6 +119,7 @@ class AttachmentControllerV4Test {
     assertThat(descriptor.key()).isEqualTo(filename);
   }
 
+  @Disabled("FLT(uoemai): Attachments always use CDN3 in Flatline.")
   @Test
   void testV4GcsForm() throws MalformedURLException {
     AttachmentDescriptorV3 descriptor = resources.getJerseyTest()
