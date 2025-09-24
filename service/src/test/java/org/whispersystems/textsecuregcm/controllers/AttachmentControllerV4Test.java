@@ -119,7 +119,7 @@ class AttachmentControllerV4Test {
     assertThat(descriptor.key()).isEqualTo(filename);
   }
 
-  @Disabled("FLT(uoemai): Attachments always use CDN3 in Flatline.")
+  @Disabled("FLT(uoemai): Attachments only use CDN3 in Flatline.")
   @Test
   void testV4GcsForm() throws MalformedURLException {
     AttachmentDescriptorV3 descriptor = resources.getJerseyTest()
