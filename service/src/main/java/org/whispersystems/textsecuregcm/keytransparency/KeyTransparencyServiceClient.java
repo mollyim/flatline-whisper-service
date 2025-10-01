@@ -5,6 +5,7 @@ import io.dropwizard.lifecycle.Managed;
 import io.grpc.ChannelCredentials;
 import io.grpc.Deadline;
 import io.grpc.Grpc;
+import io.grpc.InsecureChannelCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.TlsChannelCredentials;
 import io.micrometer.core.instrument.Metrics;
@@ -46,7 +47,8 @@ public class KeyTransparencyServiceClient implements Managed {
 
   private final String host;
   private final int port;
-  private final ChannelCredentials tlsChannelCredentials;
+  // FLT(uoemai): Use unauthenticated plaintext GRPC API in prototype.
+  // private final ChannelCredentials tlsChannelCredentials;
   private ManagedChannel channel;
   private KeyTransparencyQueryServiceGrpc.KeyTransparencyQueryServiceBlockingStub stub;
 
@@ -59,6 +61,8 @@ public class KeyTransparencyServiceClient implements Managed {
   ) throws IOException {
     this.host = host;
     this.port = port;
+    // FLT(uoemai): Use unauthenticated plaintext GRPC API in prototype.
+    /*
     try (final ByteArrayInputStream certificateInputStream = new ByteArrayInputStream(
         tlsCertificate.getBytes(StandardCharsets.UTF_8));
         final ByteArrayInputStream clientCertificateInputStream = new ByteArrayInputStream(
@@ -74,6 +78,7 @@ public class KeyTransparencyServiceClient implements Managed {
       configureClientCertificateMetrics(clientCertificate);
 
     }
+    */
   }
 
   private void configureClientCertificateMetrics(String clientCertificate) {
@@ -180,7 +185,10 @@ public class KeyTransparencyServiceClient implements Managed {
 
   @Override
   public void start() throws Exception {
-    channel = Grpc.newChannelBuilderForAddress(host, port, tlsChannelCredentials)
+    // FLT(uoemai): Use unauthenticated plaintext GRPC API in prototype.
+    // channel = Grpc.newChannelBuilderForAddress(host, port, tlsChannelCredentials)
+    ChannelCredentials creds = InsecureChannelCredentials.create();
+    channel = Grpc.newChannelBuilderForAddress(host, port, creds)
         .idleTimeout(1, TimeUnit.MINUTES)
         .build();
     stub = KeyTransparencyQueryServiceGrpc.newBlockingStub(channel);
