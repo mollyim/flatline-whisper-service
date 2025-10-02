@@ -8,6 +8,7 @@ package org.whispersystems.textsecuregcm.s3;
 import java.nio.charset.StandardCharsets;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
 import java.util.Base64;
 import org.whispersystems.textsecuregcm.util.Pair;
 
@@ -27,7 +28,12 @@ public class PostPolicyGenerator {
   }
 
   public Pair<String, String> createFor(final ZonedDateTime now, final String object, final int maxSizeInBytes) {
-    final String expiration = now.plusMinutes(30).format(DateTimeFormatter.ISO_INSTANT);
+    // FLT(uoemai): Limit fractional second precision to conform with LocalStack expectations.
+    // final String expiration = now.plusMinutes(30).format(DateTimeFormatter.ISO_INSTANT);
+    DateTimeFormatter f = new DateTimeFormatterBuilder()
+      .appendInstant(4)
+      .toFormatter();
+    String expiration = now.plusMinutes(30).format(f);
     final String credentialDate = now.format(CREDENTIAL_DATE);
     final String requestDate = now.format(AWS_DATE_TIME);
     final String credential = String.format("%s/%s/%s/s3/aws4_request", awsAccessId, credentialDate, region);
