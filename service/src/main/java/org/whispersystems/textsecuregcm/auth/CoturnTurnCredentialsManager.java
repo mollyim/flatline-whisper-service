@@ -72,11 +72,9 @@ public class CoturnTurnCredentialsManager {
     String username = UUID.randomUUID().toString();
     long timestamp = Instant.now().getEpochSecond() + credentialTtl.getSeconds();
     String coturnTurnUser = timestamp + ":" + username;
-    logger.warn("Using user: {}", coturnTurnUser);
     byte[] key = coturnTurnSecret.getBytes(StandardCharsets.UTF_8);
     HmacUtils mac = new HmacUtils("HmacSHA1", key);
     String coturnTurnPassword = Base64.encodeBase64String(mac.hmac(coturnTurnUser));
-    logger.warn("Using password: {}", coturnTurnPassword);
 
     return new TurnToken(
         coturnTurnUser,
