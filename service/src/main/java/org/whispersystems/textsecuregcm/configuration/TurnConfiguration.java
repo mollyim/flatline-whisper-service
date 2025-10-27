@@ -5,6 +5,6 @@
 
 package org.whispersystems.textsecuregcm.configuration;
 // FLT(uoemai): The Flatline prototype uses Coturn as a self-hosted replacement for Cloudflare.
-// Original: public record TurnConfiguration(CloudflareTurnConfiguration cloudflare) {
+// public record TurnConfiguration(CloudflareTurnConfiguration cloudflare) {
 public record TurnConfiguration(CoturnTurnConfiguration coturn) {
 }

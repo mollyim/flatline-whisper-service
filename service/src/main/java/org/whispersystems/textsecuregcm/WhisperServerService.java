@@ -567,6 +567,12 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         .workQueue(new SynchronousQueue<>())
         .keepAliveTime(io.dropwizard.util.Duration.seconds(60L))
         .build();
+    // FLT(uoemai): The Flatline prototype uses Coturn as a self-hosted replacement for Cloudflare.
+    //              The Coturn integration does not require making any network requests to generate credentials.
+    // ExecutorService cloudflareTurnHttpExecutor = ExecutorServiceBuilder.of(environment, "cloudflareTurn")
+    //     .maxThreads(2)
+    //     .minThreads(2)
+    //     .build();
 
     ExecutorService subscriptionProcessorExecutor = ManagedExecutors.newVirtualThreadPerTaskExecutor(
         "subscriptionProcessor",
@@ -581,6 +587,9 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         config.getVirtualThreadConfiguration().maxConcurrentThreadsPerExecutor(),
         environment);
 
+    // FLT(uoemai): The Flatline prototype uses Coturn as a self-hosted replacement for Cloudflare.
+    //              The Coturn integration does not require making any network requests to generate credentials.
+    // ScheduledExecutorService cloudflareTurnRetryExecutor = ScheduledExecutorServiceBuilder.of(environment, "cloudflareTurnRetry").threads(1).build();
     ScheduledExecutorService messagePollExecutor = ScheduledExecutorServiceBuilder.of(environment, "messagePollExecutor").threads(1).build();
     ScheduledExecutorService provisioningWebsocketTimeoutExecutor = ScheduledExecutorServiceBuilder.of(environment, "provisioningWebsocketTimeout").threads(1).build();
 
