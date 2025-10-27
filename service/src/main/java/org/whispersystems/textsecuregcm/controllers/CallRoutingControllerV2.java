@@ -19,7 +19,7 @@ import jakarta.ws.rs.core.MediaType;
 import java.io.IOException;
 import java.util.List;
 import org.whispersystems.textsecuregcm.auth.AuthenticatedDevice;
-import org.whispersystems.textsecuregcm.auth.CloudflareTurnCredentialsManager;
+import org.whispersystems.textsecuregcm.auth.CoturnTurnCredentialsManager;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
 
 @io.swagger.v3.oas.annotations.tags.Tag(name = "Calling")
@@ -27,17 +27,18 @@ import org.whispersystems.textsecuregcm.limits.RateLimiters;
 public class CallRoutingControllerV2 {
 
   private final RateLimiters rateLimiters;
-  private final CloudflareTurnCredentialsManager cloudflareTurnCredentialsManager;
+  // FLT(uoemai): The Flatline prototype uses Coturn as a self-hosted replacement for Cloudflare.
+  private final CoturnTurnCredentialsManager coturnTurnCredentialsManager;
 
-  private static final Counter CLOUDFLARE_TURN_ERROR_COUNTER =
-      Metrics.counter(name(CallRoutingControllerV2.class, "cloudflareTurnError"));
+  private static final Counter COTURN_TURN_ERROR_COUNTER =
+      Metrics.counter(name(CallRoutingControllerV2.class, "coturnTurnError"));
 
   public CallRoutingControllerV2(
       final RateLimiters rateLimiters,
-      final CloudflareTurnCredentialsManager cloudflareTurnCredentialsManager) {
+      final CoturnTurnCredentialsManager coturnTurnCredentialsManager) {
 
     this.rateLimiters = rateLimiters;
-    this.cloudflareTurnCredentialsManager = cloudflareTurnCredentialsManager;
+    this.coturnTurnCredentialsManager = coturnTurnCredentialsManager;
   }
 
   @GET
@@ -60,9 +61,9 @@ public class CallRoutingControllerV2 {
     rateLimiters.getCallEndpointLimiter().validate(auth.accountIdentifier());
 
     try {
-      return new GetCallingRelaysResponse(List.of(cloudflareTurnCredentialsManager.retrieveFromCloudflare()));
+      return new GetCallingRelaysResponse(List.of(coturnTurnCredentialsManager.generateForCoturn()));
     } catch (final Exception e) {
-      CLOUDFLARE_TURN_ERROR_COUNTER.increment();
+      COTURN_TURN_ERROR_COUNTER.increment();
       throw e;
     }
   }

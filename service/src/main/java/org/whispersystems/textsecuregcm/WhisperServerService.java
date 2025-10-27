@@ -79,7 +79,9 @@ import org.whispersystems.textsecuregcm.attachments.TusAttachmentGenerator;
 import org.whispersystems.textsecuregcm.auth.AccountAuthenticator;
 import org.whispersystems.textsecuregcm.auth.AuthenticatedDevice;
 import org.whispersystems.textsecuregcm.auth.CertificateGenerator;
-import org.whispersystems.textsecuregcm.auth.CloudflareTurnCredentialsManager;
+// FLT(uoemai): The Flatline prototype uses Coturn as a self-hosted replacement for Cloudflare.
+// import org.whispersystems.textsecuregcm.auth.CloudflareTurnCredentialsManager;
+import org.whispersystems.textsecuregcm.auth.CoturnTurnCredentialsManager;
 import org.whispersystems.textsecuregcm.auth.DisconnectionRequestManager;
 import org.whispersystems.textsecuregcm.auth.ExternalServiceCredentialsGenerator;
 import org.whispersystems.textsecuregcm.auth.IdlePrimaryDeviceAuthenticatedWebSocketUpgradeFilter;
@@ -419,7 +421,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         .region(Region.of(config.getCdnConfiguration().region()))
         .endpointOverride(config.getCdnConfiguration().endpointOverride())
         // FLT(uoemai): Do not use bucket name as subdomain.
-        .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+        .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(Boolean.TRUE).build())
         .build();
 
     BlockingQueue<Runnable> messageDeletionQueue = new LinkedBlockingQueue<>();
@@ -453,7 +455,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         .region(Region.of(config.getPagedSingleUseKEMPreKeyStore().region()))
         .endpointOverride(config.getPagedSingleUseKEMPreKeyStore().endpointOverride())
         // FLT(uoemai): Do not use bucket name as subdomain.
-        .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+        .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(Boolean.TRUE).build())
         .build();
     KeysManager keysManager = new KeysManager(
         new SingleUseECPreKeyStore(dynamoDbAsyncClient, config.getDynamoDbTables().getEcKeys().getTableName()),
@@ -565,10 +567,6 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         .workQueue(new SynchronousQueue<>())
         .keepAliveTime(io.dropwizard.util.Duration.seconds(60L))
         .build();
-    ExecutorService cloudflareTurnHttpExecutor = ExecutorServiceBuilder.of(environment, "cloudflareTurn")
-        .maxThreads(2)
-        .minThreads(2)
-        .build();
 
     ExecutorService subscriptionProcessorExecutor = ManagedExecutors.newVirtualThreadPerTaskExecutor(
         "subscriptionProcessor",
@@ -583,12 +581,13 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         config.getVirtualThreadConfiguration().maxConcurrentThreadsPerExecutor(),
         environment);
 
-    ScheduledExecutorService cloudflareTurnRetryExecutor = ScheduledExecutorServiceBuilder.of(environment, "cloudflareTurnRetry").threads(1).build();
     ScheduledExecutorService messagePollExecutor = ScheduledExecutorServiceBuilder.of(environment, "messagePollExecutor").threads(1).build();
     ScheduledExecutorService provisioningWebsocketTimeoutExecutor = ScheduledExecutorServiceBuilder.of(environment, "provisioningWebsocketTimeout").threads(1).build();
 
     final ManagedNioEventLoopGroup dnsResolutionEventLoopGroup = new ManagedNioEventLoopGroup();
-    final DnsNameResolver cloudflareDnsResolver = new DnsNameResolverBuilder(dnsResolutionEventLoopGroup.next())
+    // FLT(uoemai): The Flatline prototype uses Coturn as a self-hosted replacement for Cloudflare.
+    // final DnsNameResolver cloudflareDnsResolver = new DnsNameResolverBuilder(dnsResolutionEventLoopGroup.next())
+    final DnsNameResolver coturnDnsResolver = new DnsNameResolverBuilder(dnsResolutionEventLoopGroup.next())
             .resolvedAddressTypes(ResolvedAddressTypes.IPV6_PREFERRED)
             .completeOncePreferredResolved(false)
             .channelType(NioDatagramChannel.class)
@@ -707,20 +706,30 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
 
     final MessageSender messageSender = new MessageSender(messagesManager, pushNotificationManager);
     final ReceiptSender receiptSender = new ReceiptSender(accountsManager, messageSender, receiptSenderExecutor);
-    final CloudflareTurnCredentialsManager cloudflareTurnCredentialsManager = new CloudflareTurnCredentialsManager(
-        config.getTurnConfiguration().cloudflare().apiToken().value(),
-        config.getTurnConfiguration().cloudflare().endpoint(),
-        config.getTurnConfiguration().cloudflare().requestedCredentialTtl(),
-        config.getTurnConfiguration().cloudflare().clientCredentialTtl(),
-        config.getTurnConfiguration().cloudflare().urls(),
-        config.getTurnConfiguration().cloudflare().urlsWithIps(),
-        config.getTurnConfiguration().cloudflare().hostname(),
-        config.getTurnConfiguration().cloudflare().numHttpClients(),
-        config.getTurnConfiguration().cloudflare().circuitBreakerConfigurationName(),
-        cloudflareTurnHttpExecutor,
-        config.getTurnConfiguration().cloudflare().retryConfigurationName(),
-        cloudflareTurnRetryExecutor,
-        cloudflareDnsResolver
+    // FLT(uoemai): The Flatline prototype uses Coturn as a self-hosted replacement for Cloudflare.
+    // final CloudflareTurnCredentialsManager cloudflareTurnCredentialsManager = new CloudflareTurnCredentialsManager(
+    //    config.getTurnConfiguration().cloudflare().apiToken().value(),
+    //    config.getTurnConfiguration().cloudflare().endpoint(),
+    //    config.getTurnConfiguration().cloudflare().requestedCredentialTtl(),
+    //    config.getTurnConfiguration().cloudflare().clientCredentialTtl(),
+    //    config.getTurnConfiguration().cloudflare().urls(),
+    //    config.getTurnConfiguration().cloudflare().urlsWithIps(),
+    //    config.getTurnConfiguration().cloudflare().hostname(),
+    //    config.getTurnConfiguration().cloudflare().numHttpClients(),
+    //    config.getTurnConfiguration().cloudflare().circuitBreakerConfigurationName(),
+    //    cloudflareTurnHttpExecutor,
+    //    config.getTurnConfiguration().cloudflare().retryConfigurationName(),
+    //    cloudflareTurnRetryExecutor,
+    //    cloudflareDnsResolver
+    //    );
+    final CoturnTurnCredentialsManager coturnTurnCredentialsManager = new CoturnTurnCredentialsManager(
+        config.getTurnConfiguration().coturn().secret().value(),
+        config.getTurnConfiguration().coturn().credentialTtl(),
+        config.getTurnConfiguration().coturn().clientCredentialTtl(),
+        config.getTurnConfiguration().coturn().urls(),
+        config.getTurnConfiguration().coturn().urlsWithIps(),
+        config.getTurnConfiguration().coturn().hostname(),
+        coturnDnsResolver
         );
 
     final CardinalityEstimator messageByteLimitCardinalityEstimator = new CardinalityEstimator(
@@ -1119,7 +1128,9 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         new AttachmentControllerV4(rateLimiters, gcsAttachmentGenerator, tusAttachmentGenerator,
             experimentEnrollmentManager),
         new ArchiveController(accountsManager, backupAuthManager, backupManager, backupMetrics),
-        new CallRoutingControllerV2(rateLimiters, cloudflareTurnCredentialsManager),
+        // FLT(uoemai): The Flatline prototype uses Coturn as a self-hosted replacement for Cloudflare.
+        // new CallRoutingControllerV2(rateLimiters, cloudflareTurnCredentialsManager),
+        new CallRoutingControllerV2(rateLimiters, coturnTurnCredentialsManager),
         new CallLinkController(rateLimiters, callingGenericZkSecretParams),
         new CertificateController(accountsManager, new CertificateGenerator(config.getDeliveryCertificate().certificate(),
             config.getDeliveryCertificate().ecPrivateKey(), config.getDeliveryCertificate().expiresDays()),
