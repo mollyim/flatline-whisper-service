@@ -508,10 +508,9 @@ keyTransparencyService:
   clientPrivateKey: secret://keyTransparencyService.clientPrivateKey
 
 turn:
-  cloudflare:
-    apiToken: secret://turn.cloudflare.apiToken
-    endpoint: https://rtc.live.cloudflare.com/v1/turn/keys/LMNOP/credentials/generate
-    requestedCredentialTtl: PT24H
+  coturn:
+    secret: secret://turn.coturn.secret
+    credentialTtl: PT24H
     clientCredentialTtl: PT12H
     urls:
       - turn:turn.example.com:80
@@ -519,7 +518,7 @@ turn:
       - turn:%s
       - turn:%s:80?transport=tcp
       - turns:%s:443?transport=tcp
-    hostname: turn.cloudflare.example.com
+    hostname: turn.example.com
     numHttpClients: 1
 
 linkDevice:

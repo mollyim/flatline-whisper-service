@@ -522,7 +522,7 @@ turn:
       - turns:%s:443?transport=tcp
     credentialTtl: PT24H
     clientCredentialTtl: PT12H
-    hostname: turn.cloudflare.example.com
+    hostname: turn.example.com
 
 linkDevice:
   secret: secret://linkDevice.secret
