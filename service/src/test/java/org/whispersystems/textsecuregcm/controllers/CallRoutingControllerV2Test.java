@@ -23,7 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.whispersystems.textsecuregcm.auth.AuthenticatedDevice;
-import org.whispersystems.textsecuregcm.auth.CloudflareTurnCredentialsManager;
+import org.whispersystems.textsecuregcm.auth.CoturnTurnCredentialsManager;
 import org.whispersystems.textsecuregcm.auth.TurnToken;
 import org.whispersystems.textsecuregcm.limits.RateLimiter;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
@@ -37,18 +37,19 @@ class CallRoutingControllerV2Test {
 
   private static final String GET_CALL_RELAYS_PATH = "v2/calling/relays";
   private static final String REMOTE_ADDRESS = "123.123.123.1";
-  private static final TurnToken CLOUDFLARE_TURN_TOKEN = new TurnToken(
+  // FLT(uoemai): The Flatline prototype uses Coturn as a self-hosted replacement for Cloudflare.
+  private static final TurnToken COTURN_TURN_TOKEN = new TurnToken(
       "ABC",
       "XYZ",
       43_200,
-      List.of("turn:cloudflare.example.com:3478?transport=udp"),
+      List.of("turn:turn.example.com:3478?transport=udp"),
       null,
-      "cf.example.com");
+      "turn.example.com");
 
   private static final RateLimiters rateLimiters = mock(RateLimiters.class);
   private static final RateLimiter getCallEndpointLimiter = mock(RateLimiter.class);
-  private static final CloudflareTurnCredentialsManager cloudflareTurnCredentialsManager =
-      mock(CloudflareTurnCredentialsManager.class);
+  private static final CoturnTurnCredentialsManager coturnTurnCredentialsManager =
+      mock(CoturnTurnCredentialsManager.class);
 
   private static final ResourceExtension resources = ResourceExtension.builder()
       .addProvider(AuthHelper.getAuthFilter())
@@ -57,7 +58,7 @@ class CallRoutingControllerV2Test {
       .addProvider(new TestRemoteAddressFilterProvider(REMOTE_ADDRESS))
       .setMapper(SystemMapper.jsonMapper())
       .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
-      .addResource(new CallRoutingControllerV2(rateLimiters, cloudflareTurnCredentialsManager))
+      .addResource(new CallRoutingControllerV2(rateLimiters, coturnTurnCredentialsManager))
       .build();
 
   @BeforeEach
@@ -72,7 +73,7 @@ class CallRoutingControllerV2Test {
 
   @Test
   void testGetRelaysBothRouting() throws IOException {
-    when(cloudflareTurnCredentialsManager.retrieveFromCloudflare()).thenReturn(CLOUDFLARE_TURN_TOKEN);
+    when(coturnTurnCredentialsManager.generateForCoturn()).thenReturn(COTURN_TURN_TOKEN);
 
     try (final Response rawResponse = resources.getJerseyTest()
         .target(GET_CALL_RELAYS_PATH)
@@ -83,7 +84,7 @@ class CallRoutingControllerV2Test {
       assertThat(rawResponse.getStatus()).isEqualTo(200);
 
       assertThat(rawResponse.readEntity(GetCallingRelaysResponse.class).relays())
-          .isEqualTo(List.of(CLOUDFLARE_TURN_TOKEN));
+          .isEqualTo(List.of(COTURN_TURN_TOKEN));
     }
   }
 
