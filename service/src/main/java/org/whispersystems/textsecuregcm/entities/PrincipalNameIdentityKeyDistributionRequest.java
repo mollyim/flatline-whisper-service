@@ -18,7 +18,7 @@ import javax.annotation.Nullable;
 import org.signal.libsignal.protocol.IdentityKey;
 import org.whispersystems.textsecuregcm.util.IdentityKeyAdapter;
 
-public record PhoneNumberIdentityKeyDistributionRequest(
+public record PrincipalNameIdentityKeyDistributionRequest(
     @NotNull
     @JsonDeserialize(using = IdentityKeyAdapter.Deserializer.class)
     @Schema(description="the new identity key for this account's phone-number identity")

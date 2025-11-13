@@ -68,7 +68,7 @@ public class KeyTransparencyController {
 
           The username hash search response field is populated if it is found in the log and its mapped value matches
           the provided ACI. The E164 search response is populated similarly, with some additional requirements:
-          - The account associated with the provided ACI must be discoverable by phone number.
+          - The account associated with the provided ACI must be discoverable by principal.
           - The provided unidentified access key must match the one on the account.
 
           Enforced unauthenticated endpoint.

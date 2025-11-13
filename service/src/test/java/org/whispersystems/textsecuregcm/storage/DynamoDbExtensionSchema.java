@@ -107,10 +107,10 @@ public final class DynamoDbExtensionSchema {
         List.of(), List.of()),
 
     NUMBERS("numbers_test",
-        Accounts.ATTR_ACCOUNT_E164,
+        Accounts.ATTR_ACCOUNT_PRINCIPAL,
         null,
         List.of(AttributeDefinition.builder()
-              .attributeName(Accounts.ATTR_ACCOUNT_E164)
+              .attributeName(Accounts.ATTR_ACCOUNT_PRINCIPAL)
               .attributeType(ScalarAttributeType.S)
             .build()),
         List.of(), List.of()),
@@ -200,24 +200,24 @@ public final class DynamoDbExtensionSchema {
         List.of(), List.of()),
 
     PNI("pni_test",
-        PhoneNumberIdentifiers.KEY_E164,
+        PrincipalNameIdentifiers.KEY_PRINCIPAL,
         null,
         List.of(
             AttributeDefinition.builder()
-                .attributeName(PhoneNumberIdentifiers.KEY_E164)
+                .attributeName(PrincipalNameIdentifiers.KEY_PRINCIPAL)
                 .attributeType(ScalarAttributeType.S)
                 .build(),
             AttributeDefinition.builder()
-                .attributeName(PhoneNumberIdentifiers.ATTR_PHONE_NUMBER_IDENTIFIER)
+                .attributeName(PrincipalNameIdentifiers.ATTR_PRINCIPAL_NAME_IDENTIFIER)
                 .attributeType(ScalarAttributeType.B)
                 .build()),
         List.of(GlobalSecondaryIndex.builder()
-            .indexName(PhoneNumberIdentifiers.INDEX_NAME)
+            .indexName(PrincipalNameIdentifiers.INDEX_NAME)
             .projection(Projection.builder()
                 .projectionType(ProjectionType.KEYS_ONLY)
                 .build())
             .keySchema(KeySchemaElement.builder().keyType(KeyType.HASH)
-                .attributeName(PhoneNumberIdentifiers.ATTR_PHONE_NUMBER_IDENTIFIER)
+                .attributeName(PrincipalNameIdentifiers.ATTR_PRINCIPAL_NAME_IDENTIFIER)
                 .build())
             .provisionedThroughput(ProvisionedThroughput.builder().readCapacityUnits(10L).writeCapacityUnits(10L).build())
             .build()),

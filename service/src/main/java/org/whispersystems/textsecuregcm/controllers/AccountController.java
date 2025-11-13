@@ -258,7 +258,7 @@ public class AccountController {
       a.setRegistrationLockFromAttributes(attributes);
       a.setUnidentifiedAccessKey(attributes.getUnidentifiedAccessKey());
       a.setUnrestrictedUnidentifiedAccess(attributes.isUnrestrictedUnidentifiedAccess());
-      a.setDiscoverableByPhoneNumber(attributes.isDiscoverableByPhoneNumber());
+      a.setDiscoverableByPrincipal(attributes.isDiscoverableByPrincipal());
     });
 
     // if registration recovery password was sent to us, store it (or refresh its expiration)

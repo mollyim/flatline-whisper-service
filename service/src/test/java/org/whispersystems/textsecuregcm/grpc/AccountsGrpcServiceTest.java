@@ -133,8 +133,8 @@ class AccountsGrpcServiceTest extends SimpleBaseGrpcTest<AccountsGrpcService, Ac
 
     final Account account = mock(Account.class);
     when(account.getUuid()).thenReturn(AUTHENTICATED_ACI);
-    when(account.getPhoneNumberIdentifier()).thenReturn(phoneNumberIdentifier);
-    when(account.getNumber()).thenReturn(e164);
+    when(account.getPrincipalNameIdentifier()).thenReturn(phoneNumberIdentifier);
+    when(account.getPrincipal()).thenReturn(e164);
     when(account.getUsernameHash()).thenReturn(Optional.of(usernameHash));
 
     when(accountsManager.getByAccountIdentifierAsync(AUTHENTICATED_ACI))
@@ -680,7 +680,7 @@ class AccountsGrpcServiceTest extends SimpleBaseGrpcTest<AccountsGrpcService, Ac
             .setDiscoverableByPhoneNumber(discoverableByPhoneNumber)
             .build()));
 
-    verify(account).setDiscoverableByPhoneNumber(discoverableByPhoneNumber);
+    verify(account).setDiscoverableByPrincipal(discoverableByPhoneNumber);
   }
 
   @Test

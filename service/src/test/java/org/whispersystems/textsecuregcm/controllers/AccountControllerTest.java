@@ -78,9 +78,9 @@ import org.whispersystems.textsecuregcm.identity.PniServiceIdentifier;
 import org.whispersystems.textsecuregcm.limits.RateLimitByIpFilter;
 import org.whispersystems.textsecuregcm.limits.RateLimiter;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
-import org.whispersystems.textsecuregcm.mappers.ImpossiblePhoneNumberExceptionMapper;
+import org.whispersystems.textsecuregcm.mappers.ImpossiblePrincipalExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.JsonMappingExceptionMapper;
-import org.whispersystems.textsecuregcm.mappers.NonNormalizedPhoneNumberExceptionMapper;
+import org.whispersystems.textsecuregcm.mappers.NonNormalizedPrincipalExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.RateLimitExceededExceptionMapper;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountBadge;
@@ -101,14 +101,14 @@ import org.whispersystems.textsecuregcm.util.UsernameHashZkProofVerifier;
 
 @ExtendWith(DropwizardExtensionsSupport.class)
 class AccountControllerTest {
-  private static final String SENDER             = "+14152222222";
-  private static final String SENDER_OLD         = "+14151111111";
-  private static final String SENDER_PIN         = "+14153333333";
-  private static final String SENDER_OVER_PIN    = "+14154444444";
-  private static final String SENDER_PREAUTH     = "+14157777777";
-  private static final String SENDER_REG_LOCK    = "+14158888888";
-  private static final String SENDER_HAS_STORAGE = "+14159999999";
-  private static final String SENDER_TRANSFER    = "+14151111112";
+  private static final String SENDER             = "user2@example.com";
+  private static final String SENDER_OLD         = "user1@example.com";
+  private static final String SENDER_PIN         = "user3@example.com";
+  private static final String SENDER_OVER_PIN    = "user4@example.com";
+  private static final String SENDER_PREAUTH     = "user7@example.com";
+  private static final String SENDER_REG_LOCK    = "user8@example.com";
+  private static final String SENDER_HAS_STORAGE = "user9@example.com";
+  private static final String SENDER_TRANSFER    = "user5@example.com";
   private static final String BASE_64_URL_USERNAME_HASH_1 = "9p6Tip7BFefFOJzv4kv4GyXEYsBVfk_WbjNejdlOvQE";
   private static final String BASE_64_URL_USERNAME_HASH_2 = "NLUom-CHwtemcdvOTTXdmXmzRIV7F05leS8lwkVK_vc";
   private static final String BASE_64_URL_ENCRYPTED_USERNAME_1 = "md1votbj9r794DsqTNrBqA";
@@ -148,8 +148,8 @@ class AccountControllerTest {
       .addProvider(new AuthValueFactoryProvider.Binder<>(AuthenticatedDevice.class))
       .addProvider(new JsonMappingExceptionMapper())
       .addProvider(new RateLimitExceededExceptionMapper())
-      .addProvider(new ImpossiblePhoneNumberExceptionMapper())
-      .addProvider(new NonNormalizedPhoneNumberExceptionMapper())
+      .addProvider(new ImpossiblePrincipalExceptionMapper())
+      .addProvider(new NonNormalizedPrincipalExceptionMapper())
       .addProvider(TEST_REMOTE_ADDRESS_FILTER_PROVIDER)
       .addProvider(new RateLimitByIpFilter(rateLimiters))
       .setMapper(SystemMapper.jsonMapper())
@@ -195,21 +195,21 @@ class AccountControllerTest {
             Optional.of(registrationLockCredentials.salt()), Instant.ofEpochMilli(System.currentTimeMillis())));
     when(senderRegLockAccount.getLastSeen()).thenReturn(System.currentTimeMillis());
     when(senderRegLockAccount.getUuid()).thenReturn(SENDER_REG_LOCK_UUID);
-    when(senderRegLockAccount.getNumber()).thenReturn(SENDER_REG_LOCK);
+    when(senderRegLockAccount.getPrincipal()).thenReturn(SENDER_REG_LOCK);
 
     when(senderTransfer.getRegistrationLock()).thenReturn(
         new StoredRegistrationLock(Optional.empty(), Optional.empty(), Instant.ofEpochMilli(System.currentTimeMillis())));
     when(senderTransfer.getUuid()).thenReturn(SENDER_TRANSFER_UUID);
-    when(senderTransfer.getNumber()).thenReturn(SENDER_TRANSFER);
+    when(senderTransfer.getPrincipal()).thenReturn(SENDER_TRANSFER);
 
-    when(accountsManager.getByE164(eq(SENDER_PIN))).thenReturn(Optional.of(senderPinAccount));
-    when(accountsManager.getByE164(eq(SENDER_REG_LOCK))).thenReturn(Optional.of(senderRegLockAccount));
-    when(accountsManager.getByE164(eq(SENDER_OVER_PIN))).thenReturn(Optional.of(senderPinAccount));
-    when(accountsManager.getByE164(eq(SENDER))).thenReturn(Optional.empty());
-    when(accountsManager.getByE164(eq(SENDER_OLD))).thenReturn(Optional.empty());
-    when(accountsManager.getByE164(eq(SENDER_PREAUTH))).thenReturn(Optional.empty());
-    when(accountsManager.getByE164(eq(SENDER_HAS_STORAGE))).thenReturn(Optional.of(senderHasStorage));
-    when(accountsManager.getByE164(eq(SENDER_TRANSFER))).thenReturn(Optional.of(senderTransfer));
+    when(accountsManager.getByPrincipal(eq(SENDER_PIN))).thenReturn(Optional.of(senderPinAccount));
+    when(accountsManager.getByPrincipal(eq(SENDER_REG_LOCK))).thenReturn(Optional.of(senderRegLockAccount));
+    when(accountsManager.getByPrincipal(eq(SENDER_OVER_PIN))).thenReturn(Optional.of(senderPinAccount));
+    when(accountsManager.getByPrincipal(eq(SENDER))).thenReturn(Optional.empty());
+    when(accountsManager.getByPrincipal(eq(SENDER_OLD))).thenReturn(Optional.empty());
+    when(accountsManager.getByPrincipal(eq(SENDER_PREAUTH))).thenReturn(Optional.empty());
+    when(accountsManager.getByPrincipal(eq(SENDER_HAS_STORAGE))).thenReturn(Optional.of(senderHasStorage));
+    when(accountsManager.getByPrincipal(eq(SENDER_TRANSFER))).thenReturn(Optional.of(senderTransfer));
 
     when(accountsManager.getByAccountIdentifier(AuthHelper.VALID_UUID)).thenReturn(Optional.of(AuthHelper.VALID_ACCOUNT));
     when(accountsManager.getByAccountIdentifier(AuthHelper.VALID_UUID_TWO)).thenReturn(Optional.of(AuthHelper.VALID_ACCOUNT_TWO));
@@ -874,11 +874,11 @@ class AccountControllerTest {
     final Account account = mock(Account.class);
 
     final UUID accountIdentifier = UUID.randomUUID();
-    final UUID phoneNumberIdentifier = UUID.randomUUID();
+    final UUID principalNameIdentifier = UUID.randomUUID();
 
     when(accountsManager.getByServiceIdentifier(any())).thenReturn(Optional.empty());
     when(accountsManager.getByServiceIdentifier(new AciServiceIdentifier(accountIdentifier))).thenReturn(Optional.of(account));
-    when(accountsManager.getByServiceIdentifier(new PniServiceIdentifier(phoneNumberIdentifier))).thenReturn(Optional.of(account));
+    when(accountsManager.getByServiceIdentifier(new PniServiceIdentifier(principalNameIdentifier))).thenReturn(Optional.of(account));
 
     when(rateLimiters.getCheckAccountExistenceLimiter()).thenReturn(mock(RateLimiter.class));
 
@@ -891,7 +891,7 @@ class AccountControllerTest {
     }
 
     try (final Response response = resources.getJerseyTest()
-        .target(String.format("/v1/accounts/account/PNI:%s", phoneNumberIdentifier))
+        .target(String.format("/v1/accounts/account/PNI:%s", principalNameIdentifier))
         .request()
         .head()) {
 

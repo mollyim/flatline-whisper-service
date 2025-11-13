@@ -117,7 +117,7 @@ class WebSocketConnectionIntegrationTest {
     webSocketClient = mock(WebSocketClient.class);
     clientReleaseManager = mock(ClientReleaseManager.class);
 
-    when(account.getNumber()).thenReturn("+18005551234");
+    when(account.getPrincipal()).thenReturn("+18005551234");
     when(account.getIdentifier(IdentityType.ACI)).thenReturn(UUID.randomUUID());
     when(device.getId()).thenReturn(Device.PRIMARY_ID);
 

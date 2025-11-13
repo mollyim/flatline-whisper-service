@@ -34,11 +34,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Optional;
 import org.whispersystems.textsecuregcm.auth.BasicAuthorizationHeader;
-import org.whispersystems.textsecuregcm.auth.PhoneVerificationTokenManager;
+import org.whispersystems.textsecuregcm.auth.PrincipalVerificationTokenManager;
 import org.whispersystems.textsecuregcm.auth.RegistrationLockVerificationManager;
 import org.whispersystems.textsecuregcm.entities.AccountCreationResponse;
 import org.whispersystems.textsecuregcm.entities.AccountIdentityResponse;
-import org.whispersystems.textsecuregcm.entities.PhoneVerificationRequest;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationRequest;
 import org.whispersystems.textsecuregcm.entities.RegistrationLockFailure;
 import org.whispersystems.textsecuregcm.entities.RegistrationRequest;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
@@ -66,17 +66,17 @@ public class RegistrationController {
   private static final String VERIFICATION_TYPE_TAG_NAME = "verification";
 
   private final AccountsManager accounts;
-  private final PhoneVerificationTokenManager phoneVerificationTokenManager;
+  private final PrincipalVerificationTokenManager principalVerificationTokenManager;
   private final RegistrationLockVerificationManager registrationLockVerificationManager;
   private final RateLimiters rateLimiters;
 
   public RegistrationController(final AccountsManager accounts,
-                                final PhoneVerificationTokenManager phoneVerificationTokenManager,
+                                final PrincipalVerificationTokenManager principalVerificationTokenManager,
                                 final RegistrationLockVerificationManager registrationLockVerificationManager,
                                 final RateLimiters rateLimiters) {
 
     this.accounts = accounts;
-    this.phoneVerificationTokenManager = phoneVerificationTokenManager;
+    this.principalVerificationTokenManager = principalVerificationTokenManager;
     this.registrationLockVerificationManager = registrationLockVerificationManager;
     this.rateLimiters = rateLimiters;
   }
@@ -116,10 +116,10 @@ public class RegistrationController {
 
     rateLimiters.getRegistrationLimiter().validate(number);
 
-    final PhoneVerificationRequest.VerificationType verificationType = phoneVerificationTokenManager.verify(
+    final PrincipalVerificationRequest.VerificationType verificationType = principalVerificationTokenManager.verify(
         requestContext, number, registrationRequest);
 
-    final Optional<Account> existingAccount = accounts.getByE164(number);
+    final Optional<Account> existingAccount = accounts.getByPrincipal(number);
 
     existingAccount.ifPresent(account -> {
       final Instant accountLastSeen = Instant.ofEpochMilli(account.getLastSeen());
@@ -150,7 +150,7 @@ public class RegistrationController {
             signalAgent,
             registrationRequest.accountAttributes().getCapabilities(),
             registrationRequest.accountAttributes().getRegistrationId(),
-            registrationRequest.accountAttributes().getPhoneNumberIdentityRegistrationId(),
+            registrationRequest.accountAttributes().getPrincipalNameIdentityRegistrationId(),
             registrationRequest.accountAttributes().getFetchesMessages(),
             registrationRequest.deviceActivationRequest().apnToken(),
             registrationRequest.deviceActivationRequest().gcmToken(),

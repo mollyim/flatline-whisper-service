@@ -51,7 +51,7 @@ public @interface E164 {
       }
       try {
         Util.requireNormalizedNumber(value);
-      } catch (final ImpossiblePhoneNumberException | NonNormalizedPhoneNumberException e) {
+      } catch (final ImpossiblePhoneNumberException | NonNormalizedPrincipalException e) {
         return false;
       }
       return true;

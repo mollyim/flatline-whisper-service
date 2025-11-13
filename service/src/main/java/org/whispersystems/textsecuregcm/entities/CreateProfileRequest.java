@@ -67,7 +67,7 @@ public record CreateProfileRequest(
   @JsonSerialize(using = ByteArrayBase64WithPaddingAdapter.Serializing.class)
   @JsonDeserialize(using = ByteArrayBase64WithPaddingAdapter.Deserializing.class)
   @ExactlySize({0, 29})
-  byte[] phoneNumberSharing
+  byte[] principalSharing
 ) {
 
   public enum AvatarChange {

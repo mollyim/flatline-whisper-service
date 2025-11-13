@@ -178,7 +178,7 @@ public class ProfileGrpcServiceTest extends SimpleBaseGrpcTest<ProfileGrpcServic
     when(dynamicConfiguration.getPaymentsConfiguration()).thenReturn(dynamicPaymentsConfiguration);
 
     when(account.getUuid()).thenReturn(AUTHENTICATED_ACI);
-    when(account.getNumber()).thenReturn(phoneNumber);
+    when(account.getPrincipal()).thenReturn(phoneNumber);
     when(account.getBadges()).thenReturn(Collections.emptyList());
 
     when(profile.paymentAddress()).thenReturn(null);
@@ -366,7 +366,7 @@ public class ProfileGrpcServiceTest extends SimpleBaseGrpcTest<ProfileGrpcServic
         .build();
     final String disallowedCountryCode = String.format("+%d", disallowedPhoneNumber.getCountryCode());
     when(dynamicPaymentsConfiguration.getDisallowedPrefixes()).thenReturn(List.of(disallowedCountryCode));
-    when(account.getNumber()).thenReturn(PhoneNumberUtil.getInstance().format(
+    when(account.getPrincipal()).thenReturn(PhoneNumberUtil.getInstance().format(
         disallowedPhoneNumber,
         PhoneNumberUtil.PhoneNumberFormat.E164));
     when(profilesManager.get(any(), anyString())).thenReturn(Optional.of(profile));

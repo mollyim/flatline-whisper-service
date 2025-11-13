@@ -209,7 +209,7 @@ class KeysControllerTest {
 
     when(existsAccount.getUuid()).thenReturn(EXISTS_UUID);
     when(existsAccount.isIdentifiedBy(new AciServiceIdentifier(EXISTS_UUID))).thenReturn(true);
-    when(existsAccount.getPhoneNumberIdentifier()).thenReturn(EXISTS_PNI);
+    when(existsAccount.getPrincipalNameIdentifier()).thenReturn(EXISTS_PNI);
     when(existsAccount.isIdentifiedBy(new PniServiceIdentifier(EXISTS_PNI))).thenReturn(true);
     when(existsAccount.getIdentifier(IdentityType.ACI)).thenReturn(EXISTS_UUID);
     when(existsAccount.getIdentifier(IdentityType.PNI)).thenReturn(EXISTS_PNI);
@@ -217,7 +217,7 @@ class KeysControllerTest {
     when(existsAccount.getDevices()).thenReturn(List.of(sampleDevice));
     when(existsAccount.getIdentityKey(IdentityType.ACI)).thenReturn(IDENTITY_KEY);
     when(existsAccount.getIdentityKey(IdentityType.PNI)).thenReturn(PNI_IDENTITY_KEY);
-    when(existsAccount.getNumber()).thenReturn(EXISTS_NUMBER);
+    when(existsAccount.getPrincipal()).thenReturn(EXISTS_NUMBER);
     when(existsAccount.getUnidentifiedAccessKey()).thenReturn(Optional.of("1337".getBytes()));
 
     when(accounts.getByServiceIdentifier(any())).thenReturn(Optional.empty());

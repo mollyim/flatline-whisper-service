@@ -120,13 +120,13 @@ class AccountsManagerConcurrentModificationIntegrationTest {
         return CompletableFuture.completedFuture(null);
       });
 
-      final PhoneNumberIdentifiers phoneNumberIdentifiers = mock(PhoneNumberIdentifiers.class);
-      when(phoneNumberIdentifiers.getPhoneNumberIdentifier(anyString()))
+      final PrincipalNameIdentifiers principalNameIdentifiers = mock(PrincipalNameIdentifiers.class);
+      when(principalNameIdentifiers.getPrincipalNameIdentifier(anyString()))
           .thenAnswer((Answer<CompletableFuture<UUID>>) invocation -> CompletableFuture.completedFuture(UUID.randomUUID()));
 
       accountsManager = new AccountsManager(
           accounts,
-          phoneNumberIdentifiers,
+              principalNameIdentifiers,
           RedisClusterHelper.builder().stringCommands(commands).build(),
           mock(FaultTolerantRedisClient.class),
           accountLockManager,
@@ -196,7 +196,7 @@ class AccountsManagerConcurrentModificationIntegrationTest {
     final long lastSeen = Instant.now().getEpochSecond();
 
     CompletableFuture.allOf(
-        modifyAccount(uuid, account -> account.setDiscoverableByPhoneNumber(discoverableByPhoneNumber)),
+        modifyAccount(uuid, account -> account.setDiscoverableByPrincipal(discoverableByPhoneNumber)),
         modifyAccount(uuid, account -> account.setCurrentProfileVersion(currentProfileVersion)),
         modifyAccount(uuid, account -> account.setIdentityKey(identityKey)),
         modifyAccount(uuid, account -> account.setUnidentifiedAccessKey(unidentifiedAccessKey)),
@@ -232,7 +232,7 @@ class AccountsManagerConcurrentModificationIntegrationTest {
   private void verifyAccount(final String name, final Account account, final boolean discoverableByPhoneNumber, final String currentProfileVersion, final IdentityKey identityKey, final byte[] unidentifiedAccessKey, final String pin, final String clientRegistrationLock, final boolean unrestrictedUnidentifiedAccess, final long lastSeen) {
 
     assertAll(name,
-        () -> assertEquals(discoverableByPhoneNumber, account.isDiscoverableByPhoneNumber()),
+        () -> assertEquals(discoverableByPhoneNumber, account.isDiscoverableByPrincipal()),
         () -> assertEquals(currentProfileVersion, account.getCurrentProfileVersion().orElseThrow()),
         () -> assertEquals(identityKey, account.getIdentityKey(IdentityType.ACI)),
         () -> assertArrayEquals(unidentifiedAccessKey, account.getUnidentifiedAccessKey().orElseThrow()),

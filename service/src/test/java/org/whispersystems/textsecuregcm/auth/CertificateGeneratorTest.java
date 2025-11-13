@@ -43,7 +43,7 @@ class CertificateGeneratorTest {
 
     when(account.getIdentityKey(IdentityType.ACI)).thenReturn(IDENTITY_KEY);
     when(account.getUuid()).thenReturn(UUID.randomUUID());
-    when(account.getNumber()).thenReturn("+18005551234");
+    when(account.getPrincipal()).thenReturn("+18005551234");
 
     assertTrue(certificateGenerator.createFor(account, deviceId, true).length > 0);
     assertTrue(certificateGenerator.createFor(account, deviceId, false).length > 0);

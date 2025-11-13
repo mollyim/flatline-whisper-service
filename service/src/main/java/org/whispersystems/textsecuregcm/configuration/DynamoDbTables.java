@@ -63,7 +63,7 @@ public class DynamoDbTables {
   private final Table pagedKemKeys;
   private final TableWithExpiration messages;
   private final TableWithExpiration onetimeDonations;
-  private final Table phoneNumberIdentifiers;
+  private final Table principalNameIdentifiers;
   private final Table profiles;
   private final Table pushChallenge;
   private final Table pushNotificationExperimentSamples;
@@ -92,7 +92,7 @@ public class DynamoDbTables {
       @JsonProperty("pagedPqKeys") final Table pagedKemKeys,
       @JsonProperty("messages") final TableWithExpiration messages,
       @JsonProperty("onetimeDonations") final TableWithExpiration onetimeDonations,
-      @JsonProperty("phoneNumberIdentifiers") final Table phoneNumberIdentifiers,
+      @JsonProperty("principalNameIdentifiers") final Table principalNameIdentifiers,
       @JsonProperty("profiles") final Table profiles,
       @JsonProperty("pushChallenge") final Table pushChallenge,
       @JsonProperty("pushNotificationExperimentSamples") final Table pushNotificationExperimentSamples,
@@ -120,7 +120,7 @@ public class DynamoDbTables {
     this.kemLastResortKeys = kemLastResortKeys;
     this.messages = messages;
     this.onetimeDonations = onetimeDonations;
-    this.phoneNumberIdentifiers = phoneNumberIdentifiers;
+    this.principalNameIdentifiers = principalNameIdentifiers;
     this.profiles = profiles;
     this.pushChallenge = pushChallenge;
     this.pushNotificationExperimentSamples = pushNotificationExperimentSamples;
@@ -231,8 +231,8 @@ public class DynamoDbTables {
 
   @NotNull
   @Valid
-  public Table getPhoneNumberIdentifiers() {
-    return phoneNumberIdentifiers;
+  public Table getPrincipalNameIdentifiers() {
+    return principalNameIdentifiers;
   }
 
   @NotNull

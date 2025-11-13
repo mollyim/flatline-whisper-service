@@ -46,7 +46,6 @@ import org.whispersystems.textsecuregcm.entities.ApnRegistrationId;
 import org.whispersystems.textsecuregcm.entities.ECSignedPreKey;
 import org.whispersystems.textsecuregcm.entities.GcmRegistrationId;
 import org.whispersystems.textsecuregcm.entities.KEMSignedPreKey;
-import org.whispersystems.textsecuregcm.experiment.ExperimentEnrollmentManager;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
 import org.whispersystems.textsecuregcm.redis.FaultTolerantRedisClient;
 import org.whispersystems.textsecuregcm.redis.RedisClusterExtension;
@@ -138,8 +137,8 @@ public class AccountCreationDeletionIntegrationTest {
     final SecureValueRecoveryClient svr2Client = mock(SecureValueRecoveryClient.class);
     when(svr2Client.removeData(any(UUID.class))).thenReturn(CompletableFuture.completedFuture(null));
 
-    final PhoneNumberIdentifiers phoneNumberIdentifiers =
-        new PhoneNumberIdentifiers(DYNAMO_DB_EXTENSION.getDynamoDbAsyncClient(),
+    final PrincipalNameIdentifiers principalNameIdentifiers =
+        new PrincipalNameIdentifiers(DYNAMO_DB_EXTENSION.getDynamoDbAsyncClient(),
             DynamoDbExtensionSchema.Tables.PNI.tableName());
 
     final MessagesManager messagesManager = mock(MessagesManager.class);
@@ -159,7 +158,7 @@ public class AccountCreationDeletionIntegrationTest {
 
     accountsManager = new AccountsManager(
         accounts,
-        phoneNumberIdentifiers,
+        principalNameIdentifiers,
         CACHE_CLUSTER_EXTENSION.getRedisCluster(),
         mock(FaultTolerantRedisClient.class),
         accountLockManager,
@@ -276,9 +275,9 @@ public class AccountCreationDeletionIntegrationTest {
         pniPqLastResortPreKey);
 
     assertEquals(Optional.of(aciSignedPreKey), keysManager.getEcSignedPreKey(account.getUuid(), Device.PRIMARY_ID).join());
-    assertEquals(Optional.of(pniSignedPreKey), keysManager.getEcSignedPreKey(account.getPhoneNumberIdentifier(), Device.PRIMARY_ID).join());
+    assertEquals(Optional.of(pniSignedPreKey), keysManager.getEcSignedPreKey(account.getPrincipalNameIdentifier(), Device.PRIMARY_ID).join());
     assertEquals(Optional.of(aciPqLastResortPreKey), keysManager.getLastResort(account.getUuid(), Device.PRIMARY_ID).join());
-    assertEquals(Optional.of(pniPqLastResortPreKey), keysManager.getLastResort(account.getPhoneNumberIdentifier(), Device.PRIMARY_ID).join());
+    assertEquals(Optional.of(pniPqLastResortPreKey), keysManager.getLastResort(account.getPrincipalNameIdentifier(), Device.PRIMARY_ID).join());
   }
 
   @SuppressWarnings("unused")
@@ -488,9 +487,9 @@ public class AccountCreationDeletionIntegrationTest {
 
     assertFalse(accountsManager.getByAccountIdentifier(aci).isPresent());
     assertFalse(keysManager.getEcSignedPreKey(account.getUuid(), Device.PRIMARY_ID).join().isPresent());
-    assertFalse(keysManager.getEcSignedPreKey(account.getPhoneNumberIdentifier(), Device.PRIMARY_ID).join().isPresent());
+    assertFalse(keysManager.getEcSignedPreKey(account.getPrincipalNameIdentifier(), Device.PRIMARY_ID).join().isPresent());
     assertFalse(keysManager.getLastResort(account.getUuid(), Device.PRIMARY_ID).join().isPresent());
-    assertFalse(keysManager.getLastResort(account.getPhoneNumberIdentifier(), Device.PRIMARY_ID).join().isPresent());
+    assertFalse(keysManager.getLastResort(account.getPrincipalNameIdentifier(), Device.PRIMARY_ID).join().isPresent());
     assertFalse(clientPublicKeysManager.findPublicKey(account.getUuid(), Device.PRIMARY_ID).join().isPresent());
 
     verify(disconnectionRequestManager).requestDisconnection(account);
@@ -518,13 +517,13 @@ public class AccountCreationDeletionIntegrationTest {
 
     final Device primaryDevice = account.getPrimaryDevice();
 
-    assertEquals(number, account.getNumber());
+    assertEquals(number, account.getPrincipal());
     assertEquals(signalAgent, primaryDevice.getUserAgent());
     assertEquals(deliveryChannels.fetchesMessages(), primaryDevice.getFetchesMessages());
     assertEquals(registrationId, primaryDevice.getRegistrationId(IdentityType.ACI));
     assertEquals(pniRegistrationId, primaryDevice.getRegistrationId(IdentityType.PNI));
     assertArrayEquals(deviceName, primaryDevice.getName());
-    assertEquals(discoverableByPhoneNumber, account.isDiscoverableByPhoneNumber());
+    assertEquals(discoverableByPhoneNumber, account.isDiscoverableByPrincipal());
     assertEquals(deviceCapabilities, primaryDevice.getCapabilities());
     assertEquals(badges, account.getBadges());
 

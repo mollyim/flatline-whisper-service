@@ -64,22 +64,22 @@ import org.mockito.stubbing.Answer;
 import org.signal.libsignal.protocol.IdentityKey;
 import org.signal.libsignal.protocol.ecc.ECKeyPair;
 import org.whispersystems.textsecuregcm.auth.AuthenticatedDevice;
-import org.whispersystems.textsecuregcm.auth.PhoneVerificationTokenManager;
+import org.whispersystems.textsecuregcm.auth.PrincipalVerificationTokenManager;
 import org.whispersystems.textsecuregcm.auth.RegistrationLockError;
 import org.whispersystems.textsecuregcm.auth.RegistrationLockVerificationManager;
 import org.whispersystems.textsecuregcm.auth.SaltedTokenHash;
 import org.whispersystems.textsecuregcm.entities.AccountDataReportResponse;
 import org.whispersystems.textsecuregcm.entities.AccountIdentityResponse;
-import org.whispersystems.textsecuregcm.entities.ChangeNumberRequest;
+import org.whispersystems.textsecuregcm.entities.ChangePrincipalRequest;
 import org.whispersystems.textsecuregcm.entities.ECSignedPreKey;
 import org.whispersystems.textsecuregcm.entities.KEMSignedPreKey;
-import org.whispersystems.textsecuregcm.entities.PhoneNumberDiscoverabilityRequest;
+import org.whispersystems.textsecuregcm.entities.PrincipalDiscoverabilityRequest;
 import org.whispersystems.textsecuregcm.entities.RegistrationServiceSession;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
 import org.whispersystems.textsecuregcm.limits.RateLimiter;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
-import org.whispersystems.textsecuregcm.mappers.ImpossiblePhoneNumberExceptionMapper;
-import org.whispersystems.textsecuregcm.mappers.NonNormalizedPhoneNumberExceptionMapper;
+import org.whispersystems.textsecuregcm.mappers.ImpossiblePrincipalExceptionMapper;
+import org.whispersystems.textsecuregcm.mappers.NonNormalizedPrincipalExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.RateLimitExceededExceptionMapper;
 import org.whispersystems.textsecuregcm.push.MessageTooLargeException;
 import org.whispersystems.textsecuregcm.registration.RegistrationServiceClient;
@@ -87,9 +87,9 @@ import org.whispersystems.textsecuregcm.spam.RegistrationRecoveryChecker;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountBadge;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
-import org.whispersystems.textsecuregcm.storage.ChangeNumberManager;
+import org.whispersystems.textsecuregcm.storage.ChangePrincipalManager;
 import org.whispersystems.textsecuregcm.storage.Device;
-import org.whispersystems.textsecuregcm.storage.PhoneNumberIdentifiers;
+import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
 import org.whispersystems.textsecuregcm.tests.util.AccountsHelper;
 import org.whispersystems.textsecuregcm.tests.util.AuthHelper;
@@ -110,8 +110,8 @@ class AccountControllerV2Test {
       PhoneNumberUtil.PhoneNumberFormat.E164);
 
   private final AccountsManager accountsManager = mock(AccountsManager.class);
-  private final ChangeNumberManager changeNumberManager = mock(ChangeNumberManager.class);
-  private final PhoneNumberIdentifiers phoneNumberIdentifiers = mock(PhoneNumberIdentifiers.class);
+  private final ChangePrincipalManager changePrincipalManager = mock(ChangePrincipalManager.class);
+  private final PrincipalNameIdentifiers principalNameIdentifiers = mock(PrincipalNameIdentifiers.class);
   private final RegistrationServiceClient registrationServiceClient = mock(RegistrationServiceClient.class);
   private final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager = mock(
       RegistrationRecoveryPasswordsManager.class);
@@ -126,13 +126,13 @@ class AccountControllerV2Test {
       .addProvider(AuthHelper.getAuthFilter())
       .addProvider(new AuthValueFactoryProvider.Binder<>(AuthenticatedDevice.class))
       .addProvider(new RateLimitExceededExceptionMapper())
-      .addProvider(new ImpossiblePhoneNumberExceptionMapper())
-      .addProvider(new NonNormalizedPhoneNumberExceptionMapper())
+      .addProvider(new ImpossiblePrincipalExceptionMapper())
+      .addProvider(new NonNormalizedPrincipalExceptionMapper())
       .setMapper(SystemMapper.jsonMapper())
       .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
       .addResource(
-          new AccountControllerV2(accountsManager, changeNumberManager,
-              new PhoneVerificationTokenManager(phoneNumberIdentifiers, registrationServiceClient,
+          new AccountControllerV2(accountsManager, changePrincipalManager,
+              new PrincipalVerificationTokenManager(principalNameIdentifiers, registrationServiceClient,
                   registrationRecoveryPasswordsManager, registrationRecoveryChecker),
               registrationLockVerificationManager, rateLimiters))
       .build();
@@ -146,7 +146,7 @@ class AccountControllerV2Test {
 
       when(accountsManager.getByAccountIdentifier(AuthHelper.VALID_UUID)).thenReturn(Optional.of(AuthHelper.VALID_ACCOUNT));
 
-      when(changeNumberManager.changeNumber(any(), any(), any(), any(), any(), any(), any(), any())).thenAnswer(
+      when(changePrincipalManager.changePrincipal(any(), any(), any(), any(), any(), any(), any(), any())).thenAnswer(
           (Answer<Account>) invocation -> {
             final Account account = invocation.getArgument(0);
             final String number = invocation.getArgument(1);
@@ -157,12 +157,12 @@ class AccountControllerV2Test {
 
             final Account updatedAccount = mock(Account.class);
             when(updatedAccount.getUuid()).thenReturn(uuid);
-            when(updatedAccount.getNumber()).thenReturn(number);
+            when(updatedAccount.getPrincipal()).thenReturn(number);
             when(updatedAccount.getIdentityKey(IdentityType.PNI)).thenReturn(pniIdentityKey);
-            if (number.equals(account.getNumber())) {
-              when(updatedAccount.getPhoneNumberIdentifier()).thenReturn(AuthHelper.VALID_PNI);
+            if (number.equals(account.getPrincipal())) {
+              when(updatedAccount.getPrincipalNameIdentifier()).thenReturn(AuthHelper.VALID_PNI);
             } else {
-              when(updatedAccount.getPhoneNumberIdentifier()).thenReturn(UUID.randomUUID());
+              when(updatedAccount.getPrincipalNameIdentifier()).thenReturn(UUID.randomUUID());
             }
             when(updatedAccount.getDevices()).thenReturn(devices);
 
@@ -190,14 +190,14 @@ class AccountControllerV2Test {
               .header(HttpHeaders.AUTHORIZATION,
                   AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
               .put(Entity.entity(
-                  new ChangeNumberRequest(encodeSessionId("session"), null, NEW_NUMBER, "123", IDENTITY_KEY,
+                  new ChangePrincipalRequest(encodeSessionId("session"), null, NEW_NUMBER, "123", IDENTITY_KEY,
                       Collections.emptyList(),
                       Map.of(Device.PRIMARY_ID, KeysHelper.signedECPreKey(1, IDENTITY_KEY_PAIR)),
                       Map.of(Device.PRIMARY_ID, KeysHelper.signedKEMPreKey(2, IDENTITY_KEY_PAIR)),
                       Map.of(Device.PRIMARY_ID, 17)),
                   MediaType.APPLICATION_JSON_TYPE), AccountIdentityResponse.class);
 
-      verify(changeNumberManager).changeNumber(eq(AuthHelper.VALID_ACCOUNT), eq(NEW_NUMBER), any(), any(), any(),
+      verify(changePrincipalManager).changePrincipal(eq(AuthHelper.VALID_ACCOUNT), eq(NEW_NUMBER), any(), any(), any(),
           any(), any(), any());
 
       assertEquals(AuthHelper.VALID_UUID, accountIdentityResponse.uuid());
@@ -214,14 +214,14 @@ class AccountControllerV2Test {
               .header(HttpHeaders.AUTHORIZATION,
                   AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
               .put(Entity.entity(
-                  new ChangeNumberRequest(encodeSessionId("session"), null, AuthHelper.VALID_NUMBER, null, IDENTITY_KEY,
+                  new ChangePrincipalRequest(encodeSessionId("session"), null, AuthHelper.VALID_NUMBER, null, IDENTITY_KEY,
                       Collections.emptyList(),
                       Map.of(Device.PRIMARY_ID, KeysHelper.signedECPreKey(1, IDENTITY_KEY_PAIR)),
                       Map.of(Device.PRIMARY_ID, KeysHelper.signedKEMPreKey(2, IDENTITY_KEY_PAIR)),
                       Map.of(Device.PRIMARY_ID, 17)),
                   MediaType.APPLICATION_JSON_TYPE), AccountIdentityResponse.class);
 
-      verify(changeNumberManager).changeNumber(eq(AuthHelper.VALID_ACCOUNT), eq(AuthHelper.VALID_NUMBER), any(), any(), any(),
+      verify(changePrincipalManager).changePrincipal(eq(AuthHelper.VALID_ACCOUNT), eq(AuthHelper.VALID_NUMBER), any(), any(), any(),
           any(), any(), any());
 
       assertEquals(AuthHelper.VALID_UUID, accountIdentityResponse.uuid());
@@ -238,7 +238,7 @@ class AccountControllerV2Test {
               AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
           .put(Entity.entity(
               // +4407700900111 is a valid number but not normalized - it has an optional '0' after the country code
-              new ChangeNumberRequest(encodeSessionId("session"), null, "+4407700900111", null,
+              new ChangePrincipalRequest(encodeSessionId("session"), null, "+4407700900111", null,
                   new IdentityKey(ECKeyPair.generate().getPublicKey()),
                   Collections.emptyList(),
                   Collections.emptyMap(), null, Collections.emptyMap()),
@@ -299,7 +299,7 @@ class AccountControllerV2Test {
           .thenReturn(CompletableFuture.completedFuture(
               Optional.of(new RegistrationServiceSession(new byte[16], NEW_NUMBER, true, null, null, null,
                   SESSION_EXPIRATION_SECONDS))));
-      final ChangeNumberRequest changeNumberRequest = new ChangeNumberRequest(encodeSessionId("session"), null, NEW_NUMBER, "123", IDENTITY_KEY,
+      final ChangePrincipalRequest changePrincipalRequest = new ChangePrincipalRequest(encodeSessionId("session"), null, NEW_NUMBER, "123", IDENTITY_KEY,
           Collections.emptyList(),
           Map.of(Device.PRIMARY_ID, KeysHelper.signedECPreKey(1, IDENTITY_KEY_PAIR)),
           Map.of(Device.PRIMARY_ID, KeysHelper.signedKEMPreKey(2, IDENTITY_KEY_PAIR)),
@@ -310,7 +310,7 @@ class AccountControllerV2Test {
           .request()
           .header(HttpHeaders.AUTHORIZATION,
               AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
-          .put(Entity.entity(changeNumberRequest, MediaType.APPLICATION_JSON_TYPE))) {
+          .put(Entity.entity(changePrincipalRequest, MediaType.APPLICATION_JSON_TYPE))) {
 
         assertEquals(expectedStatusCode, response.getStatus());
       }
@@ -396,7 +396,7 @@ class AccountControllerV2Test {
                   Optional.of(new RegistrationServiceSession(new byte[16], NEW_NUMBER, true, null, null, null,
                       SESSION_EXPIRATION_SECONDS))));
 
-      when(accountsManager.getByE164(any())).thenReturn(Optional.of(mock(Account.class)));
+      when(accountsManager.getByPrincipal(any())).thenReturn(Optional.of(mock(Account.class)));
 
       final Exception e = switch (error) {
         case MISMATCH -> new WebApplicationException(error.getExpectedStatus());
@@ -417,7 +417,7 @@ class AccountControllerV2Test {
 
     @Test
     void recoveryPasswordManagerVerificationTrue() throws Exception {
-      when(phoneNumberIdentifiers.getPhoneNumberIdentifier(any()))
+      when(principalNameIdentifiers.getPrincipalNameIdentifier(any()))
           .thenReturn(CompletableFuture.completedFuture(UUID.randomUUID()));
       when(registrationRecoveryPasswordsManager.verify(any(), any()))
           .thenReturn(CompletableFuture.completedFuture(true));
@@ -435,7 +435,7 @@ class AccountControllerV2Test {
 
         final AccountIdentityResponse accountIdentityResponse = response.readEntity(AccountIdentityResponse.class);
 
-        verify(changeNumberManager).changeNumber(eq(AuthHelper.VALID_ACCOUNT), eq(NEW_NUMBER), any(), any(), any(),
+        verify(changePrincipalManager).changePrincipal(eq(AuthHelper.VALID_ACCOUNT), eq(NEW_NUMBER), any(), any(), any(),
             any(), any(), any());
 
         assertEquals(AuthHelper.VALID_UUID, accountIdentityResponse.uuid());
@@ -461,7 +461,7 @@ class AccountControllerV2Test {
 
     @Test
     void registrationRecoveryCheckerAllowsAttempt() {
-      when(phoneNumberIdentifiers.getPhoneNumberIdentifier(any()))
+      when(principalNameIdentifiers.getPrincipalNameIdentifier(any()))
           .thenReturn(CompletableFuture.completedFuture(UUID.randomUUID()));
       when(registrationRecoveryChecker.checkRegistrationRecoveryAttempt(any(), any())).thenReturn(true);
       when(registrationRecoveryPasswordsManager.verify(any(), any()))
@@ -503,8 +503,8 @@ class AccountControllerV2Test {
               Optional.of(new RegistrationServiceSession(new byte[16], NEW_NUMBER, true, null, null, null,
                   SESSION_EXPIRATION_SECONDS))));
 
-      reset(changeNumberManager);
-      when(changeNumberManager.changeNumber(any(), any(), any(), any(), any(), any(), any(), any()))
+      reset(changePrincipalManager);
+      when(changePrincipalManager.changePrincipal(any(), any(), any(), any(), any(), any(), any(), any()))
           .thenThrow(MessageTooLargeException.class);
 
       try (final Response response = resources.getJerseyTest()
@@ -513,7 +513,7 @@ class AccountControllerV2Test {
               .header(HttpHeaders.AUTHORIZATION,
                   AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
               .put(Entity.entity(
-                  new ChangeNumberRequest(encodeSessionId("session"), null, NEW_NUMBER, "123", IDENTITY_KEY,
+                  new ChangePrincipalRequest(encodeSessionId("session"), null, NEW_NUMBER, "123", IDENTITY_KEY,
                       Collections.emptyList(),
                       Map.of(Device.PRIMARY_ID, KeysHelper.signedECPreKey(1, IDENTITY_KEY_PAIR)),
                       Map.of(Device.PRIMARY_ID, KeysHelper.signedKEMPreKey(2, IDENTITY_KEY_PAIR)),
@@ -571,7 +571,7 @@ class AccountControllerV2Test {
     }
 
     /**
-     * Request JSON in the shape of {@link org.whispersystems.textsecuregcm.entities.ChangeNumberRequest}, but that
+     * Request JSON in the shape of {@link ChangePrincipalRequest}, but that
      * fails validation
      */
     private static String invalidRequestJson() {
@@ -584,7 +584,7 @@ class AccountControllerV2Test {
 
     /**
      * Request JSON that cannot be marshalled into
-     * {@link org.whispersystems.textsecuregcm.entities.ChangeNumberRequest}
+     * {@link ChangePrincipalRequest}
      */
     private static String unprocessableJson() {
       return """
@@ -618,12 +618,12 @@ class AccountControllerV2Test {
           .target("/v2/accounts/phone_number_discoverability")
           .request()
           .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
-          .put(Entity.json(new PhoneNumberDiscoverabilityRequest(true)));
+          .put(Entity.json(new PrincipalDiscoverabilityRequest(true)));
 
       assertThat(response.getStatus()).isEqualTo(204);
 
       ArgumentCaptor<Boolean> discoverabilityCapture = ArgumentCaptor.forClass(Boolean.class);
-      verify(AuthHelper.VALID_ACCOUNT).setDiscoverableByPhoneNumber(discoverabilityCapture.capture());
+      verify(AuthHelper.VALID_ACCOUNT).setDiscoverableByPrincipal(discoverabilityCapture.capture());
       assertThat(discoverabilityCapture.getValue()).isTrue();
     }
 
@@ -641,7 +641,7 @@ class AccountControllerV2Test {
                   """));
 
       assertThat(response.getStatus()).isEqualTo(422);
-      verify(AuthHelper.VALID_ACCOUNT, never()).setDiscoverableByPhoneNumber(anyBoolean());
+      verify(AuthHelper.VALID_ACCOUNT, never()).setDiscoverableByPrincipal(anyBoolean());
     }
 
     @ParameterizedTest
@@ -663,8 +663,8 @@ class AccountControllerV2Test {
       final AccountDataReportResponse structuredResponse = SystemMapper.jsonMapper()
           .readValue(stringResponse, AccountDataReportResponse.class);
 
-      assertEquals(account.getNumber(), structuredResponse.data().account().phoneNumber());
-      assertEquals(account.isDiscoverableByPhoneNumber(),
+      assertEquals(account.getPrincipal(), structuredResponse.data().account().phoneNumber());
+      assertEquals(account.isDiscoverableByPrincipal(),
           structuredResponse.data().account().findAccountByPhoneNumber());
       assertEquals(account.isUnrestrictedUnidentifiedAccess(),
           structuredResponse.data().account().allowSealedSenderFromAnyone());
@@ -689,9 +689,9 @@ class AccountControllerV2Test {
     }
 
     static Stream<Arguments> testGetAccountDataReport() {
-      final String exampleNumber1 = toE164(PhoneNumberUtil.getInstance().getExampleNumber("ES"));
-      final String account2PhoneNumber = toE164(PhoneNumberUtil.getInstance().getExampleNumber("AU"));
-      final String account3PhoneNumber = toE164(PhoneNumberUtil.getInstance().getExampleNumber("IN"));
+      final String examplePrincipal1 = "account.principal@example.com"; // Email address as principal.
+      final String account2Principal = "second.account.principal"; // Account name as principal.
+      final String account3Principal = toE164(PhoneNumberUtil.getInstance().getExampleNumber("IN")); // Phone number as principal.
 
       final Instant account1Device1Created = Instant.ofEpochSecond(1669323142); // 2022-11-24T20:52:22Z
       final Instant account1Device2Created = Instant.ofEpochSecond(1679155122); // 2023-03-18T15:58:42Z
@@ -709,16 +709,16 @@ class AccountControllerV2Test {
 
       return Stream.of(
           Arguments.of(
-              buildTestAccountForDataReport(UUID.randomUUID(), exampleNumber1,
+              buildTestAccountForDataReport(UUID.randomUUID(), examplePrincipal1,
                   true, true,
                   Collections.emptyList(),
                   List.of(new DeviceData(Device.PRIMARY_ID, account1Device1LastSeen, account1Device1Created, null),
                       new DeviceData((byte) 2, account1Device2LastSeen, account1Device2Created, "OWP"))),
               String.format("""
                       # Account
-                      Phone number: %s
+                      Principal: %s
                       Allow sealed sender from anyone: true
-                      Find account by phone number: true
+                      Find account by principal: true
                       Badges: None
                                         
                       # Devices
@@ -731,19 +731,19 @@ class AccountControllerV2Test {
                         Last seen: 2023-03-15T00:00:00Z
                         User-agent: OWP
                       """,
-                  exampleNumber1,
+                  examplePrincipal1,
                   account1Device1LastSeen)
           ),
           Arguments.of(
-              buildTestAccountForDataReport(UUID.randomUUID(), account2PhoneNumber,
+              buildTestAccountForDataReport(UUID.randomUUID(), account2Principal,
                   false, true,
                   List.of(new AccountBadge("badge_a", badgeAExpiration, true)),
                   List.of(new DeviceData(Device.PRIMARY_ID, account2Device1LastSeen, account2Device1Created, "OWI"))),
               String.format("""
                       # Account
-                      Phone number: %s
+                      Principal: %s
                       Allow sealed sender from anyone: false
-                      Find account by phone number: true
+                      Find account by principal: true
                       Badges:
                       - ID: badge_a
                         Expiration: %s
@@ -754,12 +754,12 @@ class AccountControllerV2Test {
                         Created: 2022-07-29T19:30:01Z
                         Last seen: %s
                         User-agent: OWI
-                      """, account2PhoneNumber,
+                      """, account2Principal,
                   badgeAExpiration,
                   account2Device1LastSeen)
           ),
           Arguments.of(
-              buildTestAccountForDataReport(UUID.randomUUID(), account3PhoneNumber,
+              buildTestAccountForDataReport(UUID.randomUUID(), account3Principal,
                   true, false,
                   List.of(
                       new AccountBadge("badge_b", badgeBExpiration, true),
@@ -767,9 +767,9 @@ class AccountControllerV2Test {
                   List.of(new DeviceData(Device.PRIMARY_ID, account3Device1LastSeen, account3Device1Created, "OWA"))),
               String.format("""
                       # Account
-                      Phone number: %s
+                      Principal: %s
                       Allow sealed sender from anyone: true
-                      Find account by phone number: false
+                      Find account by principal: false
                       Badges:
                       - ID: badge_b
                         Expiration: %s
@@ -783,7 +783,7 @@ class AccountControllerV2Test {
                         Created: 2021-12-19T14:18:07Z
                         Last seen: %s
                         User-agent: OWA
-                      """, account3PhoneNumber,
+                      """, account3Principal,
                   badgeBExpiration,
                   badgeCExpiration,
                   account3Device1LastSeen)
@@ -797,8 +797,8 @@ class AccountControllerV2Test {
      * <p>
      * Note: All devices will have a {@link SaltedTokenHash} for "password"
      */
-    static Account buildTestAccountForDataReport(final UUID aci, final String number,
-        final boolean unrestrictedUnidentifiedAccess, final boolean discoverableByPhoneNumber,
+    static Account buildTestAccountForDataReport(final UUID aci, final String principal,
+        final boolean unrestrictedUnidentifiedAccess, final boolean discoverableByPrincipal,
         List<AccountBadge> badges, List<DeviceData> devices) {
 
       final ECKeyPair aciIdentityKeyPair = ECKeyPair.generate();
@@ -806,12 +806,12 @@ class AccountControllerV2Test {
 
       final Account account = new Account();
       account.setUuid(aci);
-      account.setNumber(number, UUID.randomUUID());
+      account.setPrincipal(principal, UUID.randomUUID());
       account.setUnrestrictedUnidentifiedAccess(unrestrictedUnidentifiedAccess);
-      account.setDiscoverableByPhoneNumber(discoverableByPhoneNumber);
+      account.setDiscoverableByPrincipal(discoverableByPrincipal);
       account.setBadges(Clock.systemUTC(), new ArrayList<>(badges));
       account.setIdentityKey(new IdentityKey(aciIdentityKeyPair.getPublicKey()));
-      account.setPhoneNumberIdentityKey(new IdentityKey(pniIdentityKeyPair.getPublicKey()));
+      account.setPrincipalIdentityKey(new IdentityKey(pniIdentityKeyPair.getPublicKey()));
 
       assert !devices.isEmpty();
 

@@ -8,12 +8,11 @@ package org.signal.integration;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import org.signal.integration.config.Config;
 import org.whispersystems.textsecuregcm.metrics.NoopAwsSdkMetricPublisher;
 import org.whispersystems.textsecuregcm.registration.VerificationSession;
-import org.whispersystems.textsecuregcm.storage.PhoneNumberIdentifiers;
+import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswords;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
 import org.whispersystems.textsecuregcm.storage.VerificationSessionManager;
@@ -28,7 +27,7 @@ public class IntegrationTools {
 
   private final VerificationSessionManager verificationSessionManager;
 
-  private final PhoneNumberIdentifiers phoneNumberIdentifiers;
+  private final PrincipalNameIdentifiers principalNameIdentifiers;
 
 
   public static IntegrationTools create(final Config config) {
@@ -46,22 +45,22 @@ public class IntegrationTools {
     return new IntegrationTools(
         new RegistrationRecoveryPasswordsManager(registrationRecoveryPasswords),
         new VerificationSessionManager(verificationSessions),
-        new PhoneNumberIdentifiers(dynamoDbAsyncClient, config.dynamoDbTables().phoneNumberIdentifiers())
+        new PrincipalNameIdentifiers(dynamoDbAsyncClient, config.dynamoDbTables().phoneNumberIdentifiers())
     );
   }
 
   private IntegrationTools(
       final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager,
       final VerificationSessionManager verificationSessionManager,
-      final PhoneNumberIdentifiers phoneNumberIdentifiers) {
+      final PrincipalNameIdentifiers principalNameIdentifiers) {
     this.registrationRecoveryPasswordsManager = registrationRecoveryPasswordsManager;
     this.verificationSessionManager = verificationSessionManager;
-    this.phoneNumberIdentifiers = phoneNumberIdentifiers;
+    this.principalNameIdentifiers = principalNameIdentifiers;
   }
 
   public CompletableFuture<Void> populateRecoveryPassword(final String phoneNumber, final byte[] password) {
-    return phoneNumberIdentifiers
-        .getPhoneNumberIdentifier(phoneNumber)
+    return principalNameIdentifiers
+        .getPrincipalNameIdentifier(phoneNumber)
         .thenCompose(pni -> registrationRecoveryPasswordsManager.store(pni, password));
   }
 

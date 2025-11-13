@@ -63,7 +63,7 @@ public class IdleWakeupEligibilityCheckerTest {
 
     final Account account = mock(Account.class);
     when(account.getIdentifier(IdentityType.ACI)).thenReturn(UUID.randomUUID());
-    when(account.getNumber()).thenReturn(PhoneNumberUtil.getInstance().format(
+    when(account.getPrincipal()).thenReturn(PhoneNumberUtil.getInstance().format(
         PhoneNumberUtil.getInstance().getExampleNumber("US"), PhoneNumberUtil.PhoneNumberFormat.E164));
 
     {

@@ -93,7 +93,7 @@ public class SecureValueRecovery2ControllerTest {
     @BeforeEach
     public void before() throws Exception {
       Mockito.reset(ACCOUNTS_MANAGER);
-      Mockito.when(ACCOUNTS_MANAGER.getByE164(E164_VALID)).thenReturn(Optional.of(account(USER_1)));
+      Mockito.when(ACCOUNTS_MANAGER.getByPrincipal(E164_VALID)).thenReturn(Optional.of(account(USER_1)));
     }
 
     protected SecureValueRecoveryControllerBaseTest(final String pathPrefix) {

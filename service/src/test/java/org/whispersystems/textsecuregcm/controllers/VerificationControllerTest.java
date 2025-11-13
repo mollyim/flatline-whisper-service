@@ -64,8 +64,8 @@ import org.whispersystems.textsecuregcm.entities.RegistrationServiceSession;
 import org.whispersystems.textsecuregcm.entities.VerificationSessionResponse;
 import org.whispersystems.textsecuregcm.limits.RateLimiter;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
-import org.whispersystems.textsecuregcm.mappers.ImpossiblePhoneNumberExceptionMapper;
-import org.whispersystems.textsecuregcm.mappers.NonNormalizedPhoneNumberExceptionMapper;
+import org.whispersystems.textsecuregcm.mappers.ImpossiblePrincipalExceptionMapper;
+import org.whispersystems.textsecuregcm.mappers.NonNormalizedPrincipalExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.ObsoletePhoneNumberFormatExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.RateLimitExceededExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.RegistrationServiceSenderExceptionMapper;
@@ -80,7 +80,7 @@ import org.whispersystems.textsecuregcm.spam.RegistrationFraudChecker;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
-import org.whispersystems.textsecuregcm.storage.PhoneNumberIdentifiers;
+import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
 import org.whispersystems.textsecuregcm.storage.VerificationSessionManager;
 import org.whispersystems.textsecuregcm.util.SystemMapper;
@@ -103,7 +103,7 @@ class VerificationControllerTest {
   private final RegistrationCaptchaManager registrationCaptchaManager = mock(RegistrationCaptchaManager.class);
   private final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager = mock(
       RegistrationRecoveryPasswordsManager.class);
-  private final PhoneNumberIdentifiers phoneNumberIdentifiers = mock(PhoneNumberIdentifiers.class);
+  private final PrincipalNameIdentifiers principalNameIdentifiers = mock(PrincipalNameIdentifiers.class);
   private final RateLimiters rateLimiters = mock(RateLimiters.class);
   private final AccountsManager accountsManager = mock(AccountsManager.class);
   private final Clock clock = Clock.systemUTC();
@@ -117,8 +117,8 @@ class VerificationControllerTest {
   private final ResourceExtension resources = ResourceExtension.builder()
       .addProperty(ServerProperties.UNWRAP_COMPLETION_STAGE_IN_WRITER_ENABLE, Boolean.TRUE)
       .addProvider(new RateLimitExceededExceptionMapper())
-      .addProvider(new ImpossiblePhoneNumberExceptionMapper())
-      .addProvider(new NonNormalizedPhoneNumberExceptionMapper())
+      .addProvider(new ImpossiblePrincipalExceptionMapper())
+      .addProvider(new NonNormalizedPrincipalExceptionMapper())
       .addProvider(new ObsoletePhoneNumberFormatExceptionMapper())
       .addProvider(new RegistrationServiceSenderExceptionMapper())
       .addProvider(new TestRemoteAddressFilterProvider("127.0.0.1"))
@@ -126,7 +126,7 @@ class VerificationControllerTest {
       .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
       .addResource(
           new VerificationController(registrationServiceClient, verificationSessionManager, pushNotificationManager,
-              registrationCaptchaManager, registrationRecoveryPasswordsManager, phoneNumberIdentifiers, rateLimiters, accountsManager,
+              registrationCaptchaManager, registrationRecoveryPasswordsManager, principalNameIdentifiers, rateLimiters, accountsManager,
               RegistrationFraudChecker.noop(), dynamicConfigurationManager, clock))
       .build();
 
@@ -136,13 +136,13 @@ class VerificationControllerTest {
         .thenReturn(captchaLimiter);
     when(rateLimiters.getVerificationPushChallengeLimiter())
         .thenReturn(pushChallengeLimiter);
-    when(accountsManager.getByE164(any()))
+    when(accountsManager.getByPrincipal(any()))
         .thenReturn(Optional.empty());
     when(dynamicConfiguration.getRegistrationConfiguration())
         .thenReturn(new DynamicRegistrationConfiguration(false));
     when(dynamicConfigurationManager.getConfiguration())
         .thenReturn(dynamicConfiguration);
-    when(phoneNumberIdentifiers.getPhoneNumberIdentifier(NUMBER))
+    when(principalNameIdentifiers.getPrincipalNameIdentifier(NUMBER))
         .thenReturn(CompletableFuture.completedFuture(PNI));
   }
 
@@ -326,7 +326,7 @@ class VerificationControllerTest {
     when(verificationSessionManager.insert(any(), any()))
         .thenReturn(CompletableFuture.completedFuture(null));
 
-    when(accountsManager.getByE164(NUMBER))
+    when(accountsManager.getByPrincipal(NUMBER))
         .thenReturn(isReregistration ? Optional.of(mock(Account.class)) : Optional.empty());
 
     final Invocation.Builder request = resources.getJerseyTest()

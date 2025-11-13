@@ -37,16 +37,16 @@ import java.util.Optional;
 import java.util.UUID;
 import javax.annotation.Nullable;
 import org.whispersystems.textsecuregcm.auth.AuthenticatedDevice;
-import org.whispersystems.textsecuregcm.auth.ChangesPhoneNumber;
-import org.whispersystems.textsecuregcm.auth.PhoneVerificationTokenManager;
+import org.whispersystems.textsecuregcm.auth.ChangesPrincipal;
+import org.whispersystems.textsecuregcm.auth.PrincipalVerificationTokenManager;
 import org.whispersystems.textsecuregcm.auth.RegistrationLockVerificationManager;
 import org.whispersystems.textsecuregcm.entities.AccountDataReportResponse;
 import org.whispersystems.textsecuregcm.entities.AccountIdentityResponse;
-import org.whispersystems.textsecuregcm.entities.ChangeNumberRequest;
+import org.whispersystems.textsecuregcm.entities.ChangePrincipalRequest;
 import org.whispersystems.textsecuregcm.entities.MismatchedDevicesResponse;
-import org.whispersystems.textsecuregcm.entities.PhoneNumberDiscoverabilityRequest;
-import org.whispersystems.textsecuregcm.entities.PhoneNumberIdentityKeyDistributionRequest;
-import org.whispersystems.textsecuregcm.entities.PhoneVerificationRequest;
+import org.whispersystems.textsecuregcm.entities.PrincipalDiscoverabilityRequest;
+import org.whispersystems.textsecuregcm.entities.PrincipalNameIdentityKeyDistributionRequest;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationRequest;
 import org.whispersystems.textsecuregcm.entities.RegistrationLockFailure;
 import org.whispersystems.textsecuregcm.entities.StaleDevicesResponse;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
@@ -54,42 +54,42 @@ import org.whispersystems.textsecuregcm.metrics.UserAgentTagUtil;
 import org.whispersystems.textsecuregcm.push.MessageTooLargeException;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
-import org.whispersystems.textsecuregcm.storage.ChangeNumberManager;
+import org.whispersystems.textsecuregcm.storage.ChangePrincipalManager;
 import org.whispersystems.textsecuregcm.storage.Device;
 
 @Path("/v2/accounts")
 @io.swagger.v3.oas.annotations.tags.Tag(name = "Account")
 public class AccountControllerV2 {
 
-  private static final String CHANGE_NUMBER_COUNTER_NAME = name(AccountControllerV2.class, "changeNumber");
+  private static final String CHANGE_PRINCIPAL_COUNTER_NAME = name(AccountControllerV2.class, "changePrincipal");
   private static final String VERIFICATION_TYPE_TAG_NAME = "verification";
 
   private final AccountsManager accountsManager;
-  private final ChangeNumberManager changeNumberManager;
-  private final PhoneVerificationTokenManager phoneVerificationTokenManager;
+  private final ChangePrincipalManager changePrincipalManager;
+  private final PrincipalVerificationTokenManager principalVerificationTokenManager;
   private final RegistrationLockVerificationManager registrationLockVerificationManager;
   private final RateLimiters rateLimiters;
 
   public AccountControllerV2(final AccountsManager accountsManager,
-      final ChangeNumberManager changeNumberManager,
-      final PhoneVerificationTokenManager phoneVerificationTokenManager,
+      final ChangePrincipalManager changePrincipalManager,
+      final PrincipalVerificationTokenManager principalVerificationTokenManager,
       final RegistrationLockVerificationManager registrationLockVerificationManager,
       final RateLimiters rateLimiters) {
 
     this.accountsManager = accountsManager;
-    this.changeNumberManager = changeNumberManager;
-    this.phoneVerificationTokenManager = phoneVerificationTokenManager;
+    this.changePrincipalManager = changePrincipalManager;
+    this.principalVerificationTokenManager = principalVerificationTokenManager;
     this.registrationLockVerificationManager = registrationLockVerificationManager;
     this.rateLimiters = rateLimiters;
   }
 
   @PUT
-  @Path("/number")
+  @Path("/principal")
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
-  @ChangesPhoneNumber
-  @Operation(summary = "Change number", description = "Changes a phone number for an existing account.")
-  @ApiResponse(responseCode = "200", description = "The phone number associated with the authenticated account was changed successfully", useReturnTypeSchema = true)
+  @ChangesPrincipal
+  @Operation(summary = "Change principal", description = "Changes a principal for an existing account.")
+  @ApiResponse(responseCode = "200", description = "The principal associated with the authenticated account was changed successfully", useReturnTypeSchema = true)
   @ApiResponse(responseCode = "401", description = "Account authentication check failed.")
   @ApiResponse(responseCode = "403", description = "Verification failed for the provided Registration Recovery Password")
   @ApiResponse(responseCode = "409", description = "Mismatched number of devices or device ids in 'devices to notify' list", content = @Content(schema = @Schema(implementation = MismatchedDevicesResponse.class)))
@@ -100,8 +100,8 @@ public class AccountControllerV2 {
   @ApiResponse(responseCode = "429", description = "Too many attempts", headers = @Header(
       name = "Retry-After",
       description = "If present, an positive integer indicating the number of seconds before a subsequent attempt could succeed"))
-  public AccountIdentityResponse changeNumber(@Auth final AuthenticatedDevice authenticatedDevice,
-      @NotNull @Valid final ChangeNumberRequest request,
+  public AccountIdentityResponse changePrincipal(@Auth final AuthenticatedDevice authenticatedDevice,
+      @NotNull @Valid final ChangePrincipalRequest request,
       @HeaderParam(HttpHeaders.USER_AGENT) final String userAgentString,
       @Context final ContainerRequestContext requestContext) throws RateLimitExceededException, InterruptedException {
 
@@ -113,36 +113,36 @@ public class AccountControllerV2 {
       throw new WebApplicationException("Invalid signature", 422);
     }
 
-    final String number = request.number();
+    final String principal = request.principal();
 
     final Account account = accountsManager.getByAccountIdentifier(authenticatedDevice.accountIdentifier())
         .orElseThrow(() -> new WebApplicationException(Response.Status.UNAUTHORIZED));
 
     // Only verify and check reglock if there's a data change to be made...
-    if (!account.getNumber().equals(number)) {
+    if (!account.getPrincipal().equals(principal)) {
 
-      rateLimiters.getRegistrationLimiter().validate(number);
+      rateLimiters.getRegistrationLimiter().validate(principal);
 
-      final PhoneVerificationRequest.VerificationType verificationType = phoneVerificationTokenManager.verify(
-          requestContext, number, request);
+      final PrincipalVerificationRequest.VerificationType verificationType = principalVerificationTokenManager.verify(
+          requestContext, principal, request);
 
-      final Optional<Account> existingAccount = accountsManager.getByE164(number);
+      final Optional<Account> existingAccount = accountsManager.getByPrincipal(principal);
 
       if (existingAccount.isPresent()) {
         registrationLockVerificationManager.verifyRegistrationLock(existingAccount.get(), request.registrationLock(),
-            userAgentString, RegistrationLockVerificationManager.Flow.CHANGE_NUMBER, verificationType);
+            userAgentString, RegistrationLockVerificationManager.Flow.CHANGE_PRINCIPAL, verificationType);
       }
 
-      Metrics.counter(CHANGE_NUMBER_COUNTER_NAME, Tags.of(UserAgentTagUtil.getPlatformTag(userAgentString),
+      Metrics.counter(CHANGE_PRINCIPAL_COUNTER_NAME, Tags.of(UserAgentTagUtil.getPlatformTag(userAgentString),
               Tag.of(VERIFICATION_TYPE_TAG_NAME, verificationType.name())))
           .increment();
     }
 
     // ...but always attempt to make the change in case a client retries and needs to re-send messages
     try {
-      final Account updatedAccount = changeNumberManager.changeNumber(
+      final Account updatedAccount = changePrincipalManager.changePrincipal(
           account,
-          request.number(),
+          request.principal(),
           request.pniIdentityKey(),
           request.devicePniSignedPrekeys(),
           request.devicePniPqLastResortPrekeys(),
@@ -174,19 +174,19 @@ public class AccountControllerV2 {
   // TODO Remove entirely on or after 2025-10-08
   @Deprecated(forRemoval = true)
   @PUT
-  @Path("/phone_number_identity_key_distribution")
+  @Path("/principal_name_identity_key_distribution")
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
-  @Operation(summary = "Set phone-number identity keys",
-      description = "Updates key material for the phone-number identity for all devices and sends a synchronization message to companion devices")
+  @Operation(summary = "Set principal-name identity keys",
+      description = "Updates key material for the principal-name identity for all devices and sends a synchronization message to companion devices")
   @ApiResponse(responseCode = "200", description = "Indicates the transaction was successful and returns basic information about this account.", useReturnTypeSchema = true)
   @ApiResponse(responseCode = "401", description = "Account authentication check failed.")
   @ApiResponse(responseCode = "403", description = "This endpoint can only be invoked from the account's primary device.")
   @ApiResponse(responseCode = "422", description = "The request body failed validation.")
-  public AccountIdentityResponse distributePhoneNumberIdentityKeys(
+  public AccountIdentityResponse distributePrincipalNameIdentityKeys(
       @Auth final AuthenticatedDevice authenticatedDevice,
       @HeaderParam(HttpHeaders.USER_AGENT) @Nullable final String userAgentString,
-      @NotNull @Valid final PhoneNumberIdentityKeyDistributionRequest request) {
+      @NotNull @Valid final PrincipalNameIdentityKeyDistributionRequest request) {
 
     if (authenticatedDevice.deviceId() != Device.PRIMARY_ID) {
       throw new ForbiddenException();
@@ -201,20 +201,20 @@ public class AccountControllerV2 {
   }
 
   @PUT
-  @Path("/phone_number_discoverability")
+  @Path("/principal_discoverability")
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
-  @Operation(summary = "Sets whether the account should be discoverable by phone number in the directory.")
+  @Operation(summary = "Sets whether the account should be discoverable by principal in the directory.")
   @ApiResponse(responseCode = "204", description = "The setting was successfully updated.")
-  public void setPhoneNumberDiscoverability(
+  public void setPrincipalDiscoverability(
       @Auth AuthenticatedDevice auth,
-      @NotNull @Valid PhoneNumberDiscoverabilityRequest phoneNumberDiscoverability) {
+      @NotNull @Valid PrincipalDiscoverabilityRequest principalDiscoverability) {
 
     final Account account = accountsManager.getByAccountIdentifier(auth.accountIdentifier())
         .orElseThrow(() -> new WebApplicationException(Response.Status.UNAUTHORIZED));
 
-    accountsManager.update(account, a -> a.setDiscoverableByPhoneNumber(
-        phoneNumberDiscoverability.discoverableByPhoneNumber()));
+    accountsManager.update(account, a -> a.setDiscoverableByPrincipal(
+        principalDiscoverability.discoverableByPrincipal()));
   }
 
   @GET
@@ -232,10 +232,10 @@ public class AccountControllerV2 {
     return new AccountDataReportResponse(UUID.randomUUID(), Instant.now(),
         new AccountDataReportResponse.AccountAndDevicesDataReport(
             new AccountDataReportResponse.AccountDataReport(
-                account.getNumber(),
+                account.getPrincipal(),
                 account.getBadges().stream().map(AccountDataReportResponse.BadgeDataReport::new).toList(),
                 account.isUnrestrictedUnidentifiedAccess(),
-                account.isDiscoverableByPhoneNumber()),
+                account.isDiscoverableByPrincipal()),
             account.getDevices().stream().map(device ->
                 new AccountDataReportResponse.DeviceDataReport(
                     device.getId(),

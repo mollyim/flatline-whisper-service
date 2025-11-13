@@ -157,31 +157,31 @@ public class AuthHelper {
     when(UNDISCOVERABLE_ACCOUNT.getDevices()).thenReturn(List.of(UNDISCOVERABLE_DEVICE));
     when(VALID_ACCOUNT_3.getDevices()).thenReturn(List.of(VALID_DEVICE_3_PRIMARY, VALID_DEVICE_3_LINKED));
 
-    when(VALID_ACCOUNT.getNumber()).thenReturn(VALID_NUMBER);
+    when(VALID_ACCOUNT.getPrincipal()).thenReturn(VALID_NUMBER);
     when(VALID_ACCOUNT.getUuid()).thenReturn(VALID_UUID);
-    when(VALID_ACCOUNT.getPhoneNumberIdentifier()).thenReturn(VALID_PNI);
+    when(VALID_ACCOUNT.getPrincipalNameIdentifier()).thenReturn(VALID_PNI);
     when(VALID_ACCOUNT.getIdentifier(IdentityType.ACI)).thenReturn(VALID_UUID);
     when(VALID_ACCOUNT.getIdentifier(IdentityType.PNI)).thenReturn(VALID_PNI);
-    when(VALID_ACCOUNT_TWO.getNumber()).thenReturn(VALID_NUMBER_TWO);
+    when(VALID_ACCOUNT_TWO.getPrincipal()).thenReturn(VALID_NUMBER_TWO);
     when(VALID_ACCOUNT_TWO.getUuid()).thenReturn(VALID_UUID_TWO);
-    when(VALID_ACCOUNT_TWO.getPhoneNumberIdentifier()).thenReturn(VALID_PNI_TWO);
+    when(VALID_ACCOUNT_TWO.getPrincipalNameIdentifier()).thenReturn(VALID_PNI_TWO);
     when(VALID_ACCOUNT_TWO.getIdentifier(IdentityType.ACI)).thenReturn(VALID_UUID_TWO);
-    when(VALID_ACCOUNT_TWO.getPhoneNumberIdentifier()).thenReturn(VALID_PNI_TWO);
-    when(UNDISCOVERABLE_ACCOUNT.getNumber()).thenReturn(UNDISCOVERABLE_NUMBER);
+    when(VALID_ACCOUNT_TWO.getPrincipalNameIdentifier()).thenReturn(VALID_PNI_TWO);
+    when(UNDISCOVERABLE_ACCOUNT.getPrincipal()).thenReturn(UNDISCOVERABLE_NUMBER);
     when(UNDISCOVERABLE_ACCOUNT.getUuid()).thenReturn(UNDISCOVERABLE_UUID);
-    when(UNDISCOVERABLE_ACCOUNT.getPhoneNumberIdentifier()).thenReturn(UNDISCOVERABLE_PNI);
+    when(UNDISCOVERABLE_ACCOUNT.getPrincipalNameIdentifier()).thenReturn(UNDISCOVERABLE_PNI);
     when(UNDISCOVERABLE_ACCOUNT.getIdentifier(IdentityType.ACI)).thenReturn(UNDISCOVERABLE_UUID);
     when(UNDISCOVERABLE_ACCOUNT.getIdentifier(IdentityType.PNI)).thenReturn(UNDISCOVERABLE_PNI);
-    when(VALID_ACCOUNT_3.getNumber()).thenReturn(VALID_NUMBER_3);
+    when(VALID_ACCOUNT_3.getPrincipal()).thenReturn(VALID_NUMBER_3);
     when(VALID_ACCOUNT_3.getUuid()).thenReturn(VALID_UUID_3);
-    when(VALID_ACCOUNT_3.getPhoneNumberIdentifier()).thenReturn(VALID_PNI_3);
+    when(VALID_ACCOUNT_3.getPrincipalNameIdentifier()).thenReturn(VALID_PNI_3);
     when(VALID_ACCOUNT_3.getIdentifier(IdentityType.ACI)).thenReturn(VALID_UUID_3);
     when(VALID_ACCOUNT_3.getIdentifier(IdentityType.PNI)).thenReturn(VALID_PNI_3);
 
-    when(VALID_ACCOUNT.isDiscoverableByPhoneNumber()).thenReturn(true);
-    when(VALID_ACCOUNT_TWO.isDiscoverableByPhoneNumber()).thenReturn(true);
-    when(UNDISCOVERABLE_ACCOUNT.isDiscoverableByPhoneNumber()).thenReturn(false);
-    when(VALID_ACCOUNT_3.isDiscoverableByPhoneNumber()).thenReturn(true);
+    when(VALID_ACCOUNT.isDiscoverableByPrincipal()).thenReturn(true);
+    when(VALID_ACCOUNT_TWO.isDiscoverableByPrincipal()).thenReturn(true);
+    when(UNDISCOVERABLE_ACCOUNT.isDiscoverableByPrincipal()).thenReturn(false);
+    when(VALID_ACCOUNT_3.isDiscoverableByPrincipal()).thenReturn(true);
 
     when(VALID_ACCOUNT.isIdentifiedBy(new AciServiceIdentifier(VALID_UUID))).thenReturn(true);
     when(VALID_ACCOUNT.isIdentifiedBy(new PniServiceIdentifier(VALID_PNI))).thenReturn(true);
@@ -196,20 +196,20 @@ public class AuthHelper {
 
     reset(ACCOUNTS_MANAGER);
 
-    when(ACCOUNTS_MANAGER.getByE164(VALID_NUMBER)).thenReturn(Optional.of(VALID_ACCOUNT));
+    when(ACCOUNTS_MANAGER.getByPrincipal(VALID_NUMBER)).thenReturn(Optional.of(VALID_ACCOUNT));
     when(ACCOUNTS_MANAGER.getByAccountIdentifier(VALID_UUID)).thenReturn(Optional.of(VALID_ACCOUNT));
-    when(ACCOUNTS_MANAGER.getByPhoneNumberIdentifier(VALID_PNI)).thenReturn(Optional.of(VALID_ACCOUNT));
+    when(ACCOUNTS_MANAGER.getByPrincipalNameIdentifier(VALID_PNI)).thenReturn(Optional.of(VALID_ACCOUNT));
 
-    when(ACCOUNTS_MANAGER.getByE164(VALID_NUMBER_TWO)).thenReturn(Optional.of(VALID_ACCOUNT_TWO));
+    when(ACCOUNTS_MANAGER.getByPrincipal(VALID_NUMBER_TWO)).thenReturn(Optional.of(VALID_ACCOUNT_TWO));
     when(ACCOUNTS_MANAGER.getByAccountIdentifier(VALID_UUID_TWO)).thenReturn(Optional.of(VALID_ACCOUNT_TWO));
-    when(ACCOUNTS_MANAGER.getByPhoneNumberIdentifier(VALID_PNI_TWO)).thenReturn(Optional.of(VALID_ACCOUNT_TWO));
+    when(ACCOUNTS_MANAGER.getByPrincipalNameIdentifier(VALID_PNI_TWO)).thenReturn(Optional.of(VALID_ACCOUNT_TWO));
 
-    when(ACCOUNTS_MANAGER.getByE164(UNDISCOVERABLE_NUMBER)).thenReturn(Optional.of(UNDISCOVERABLE_ACCOUNT));
+    when(ACCOUNTS_MANAGER.getByPrincipal(UNDISCOVERABLE_NUMBER)).thenReturn(Optional.of(UNDISCOVERABLE_ACCOUNT));
     when(ACCOUNTS_MANAGER.getByAccountIdentifier(UNDISCOVERABLE_UUID)).thenReturn(Optional.of(UNDISCOVERABLE_ACCOUNT));
 
-    when(ACCOUNTS_MANAGER.getByE164(VALID_NUMBER_3)).thenReturn(Optional.of(VALID_ACCOUNT_3));
+    when(ACCOUNTS_MANAGER.getByPrincipal(VALID_NUMBER_3)).thenReturn(Optional.of(VALID_ACCOUNT_3));
     when(ACCOUNTS_MANAGER.getByAccountIdentifier(VALID_UUID_3)).thenReturn(Optional.of(VALID_ACCOUNT_3));
-    when(ACCOUNTS_MANAGER.getByPhoneNumberIdentifier(VALID_PNI_3)).thenReturn(Optional.of(VALID_ACCOUNT_3));
+    when(ACCOUNTS_MANAGER.getByPrincipalNameIdentifier(VALID_PNI_3)).thenReturn(Optional.of(VALID_ACCOUNT_3));
 
     AccountsHelper.setupMockUpdateForAuthHelper(ACCOUNTS_MANAGER);
 
@@ -274,16 +274,16 @@ public class AuthHelper {
       when(device.getId()).thenReturn(Device.PRIMARY_ID);
       when(account.getDevice(Device.PRIMARY_ID)).thenReturn(Optional.of(device));
       when(account.getPrimaryDevice()).thenReturn(device);
-      when(account.getNumber()).thenReturn(number);
+      when(account.getPrincipal()).thenReturn(number);
       when(account.getUuid()).thenReturn(uuid);
       when(account.getIdentifier(IdentityType.ACI)).thenReturn(uuid);
-      when(accountsManager.getByE164(number)).thenReturn(Optional.of(account));
+      when(accountsManager.getByPrincipal(number)).thenReturn(Optional.of(account));
       when(accountsManager.getByAccountIdentifier(uuid)).thenReturn(Optional.of(account));
     }
 
     private void teardown(final AccountsManager accountsManager) {
       when(accountsManager.getByAccountIdentifier(uuid)).thenReturn(Optional.empty());
-      when(accountsManager.getByE164(number)).thenReturn(Optional.empty());
+      when(accountsManager.getByPrincipal(number)).thenReturn(Optional.empty());
     }
   }
 

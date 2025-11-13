@@ -56,12 +56,12 @@ public class SetUserDiscoverabilityCommand extends AbstractCommandWithDependenci
       try {
         maybeAccount = accountsManager.getByAccountIdentifier(UUID.fromString(namespace.getString("user")));
       } catch (final IllegalArgumentException e) {
-        maybeAccount = accountsManager.getByE164(namespace.getString("user"));
+        maybeAccount = accountsManager.getByPrincipal(namespace.getString("user"));
       }
 
       maybeAccount.ifPresentOrElse(account -> {
-            final boolean initiallyDiscoverable = account.isDiscoverableByPhoneNumber();
-            accountsManager.update(account, a -> a.setDiscoverableByPhoneNumber(namespace.getBoolean("discoverable")));
+            final boolean initiallyDiscoverable = account.isDiscoverableByPrincipal();
+            accountsManager.update(account, a -> a.setDiscoverableByPrincipal(namespace.getBoolean("discoverable")));
 
             System.out.format("Set discoverability flag for %s to %s (was previously %s)\n",
                 namespace.getString("user"),

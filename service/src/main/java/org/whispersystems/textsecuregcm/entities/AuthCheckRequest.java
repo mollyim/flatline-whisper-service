@@ -15,7 +15,7 @@ import jakarta.validation.constraints.Size;
 import org.whispersystems.textsecuregcm.util.E164;
 
 public record AuthCheckRequest(@Schema(description = "The e164-formatted phone number.")
-                               @NotNull @E164 String number,
+                               @NotNull String principal,
                                @Schema(description = """
                                A list of SVR tokens, previously retrieved from `backup/auth`. Tokens should be the
                                of the form "username:password". May contain at most 10 tokens.""")

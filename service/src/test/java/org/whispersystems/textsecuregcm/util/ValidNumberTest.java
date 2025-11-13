@@ -61,6 +61,6 @@ class ValidNumberTest {
       "+1 415)123-1234",
       " +14151231234"})
   void requireNormalizedNumberNonNormalized(final String number) {
-    assertThrows(NonNormalizedPhoneNumberException.class, () -> Util.requireNormalizedNumber(number));
+    assertThrows(NonNormalizedPrincipalException.class, () -> Util.requireNormalizedNumber(number));
   }
 }

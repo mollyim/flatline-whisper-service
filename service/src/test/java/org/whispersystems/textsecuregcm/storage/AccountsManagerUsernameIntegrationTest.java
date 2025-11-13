@@ -138,8 +138,8 @@ class AccountsManagerUsernameIntegrationTest {
       return CompletableFuture.completedFuture(null);
     });
 
-    final PhoneNumberIdentifiers phoneNumberIdentifiers =
-        new PhoneNumberIdentifiers(DYNAMO_DB_EXTENSION.getDynamoDbAsyncClient(), Tables.PNI.tableName());
+    final PrincipalNameIdentifiers principalNameIdentifiers =
+        new PrincipalNameIdentifiers(DYNAMO_DB_EXTENSION.getDynamoDbAsyncClient(), Tables.PNI.tableName());
 
     final MessagesManager messageManager = mock(MessagesManager.class);
     final ProfilesManager profileManager = mock(ProfilesManager.class);
@@ -151,7 +151,7 @@ class AccountsManagerUsernameIntegrationTest {
 
     accountsManager = new AccountsManager(
         accounts,
-        phoneNumberIdentifiers,
+            principalNameIdentifiers,
         CACHE_CLUSTER_EXTENSION.getRedisCluster(),
         mock(FaultTolerantRedisClient.class),
         accountLockManager,
@@ -384,7 +384,7 @@ class AccountsManagerUsernameIntegrationTest {
     // making some unrelated change and updating account to check that username link data is still there
     final Optional<Account> accountToChange = accountsManager.getByAccountIdentifier(account.getUuid());
     assertTrue(accountToChange.isPresent());
-    accountsManager.update(accountToChange.get(), a -> a.setDiscoverableByPhoneNumber(!a.isDiscoverableByPhoneNumber()));
+    accountsManager.update(accountToChange.get(), a -> a.setDiscoverableByPrincipal(!a.isDiscoverableByPrincipal()));
     final Optional<Account> accountAfterChange = accountsManager.getByUsernameLinkHandle(linkHandle).join();
     assertTrue(accountAfterChange.isPresent());
     assertTrue(accountAfterChange.get().getEncryptedUsername().isPresent());

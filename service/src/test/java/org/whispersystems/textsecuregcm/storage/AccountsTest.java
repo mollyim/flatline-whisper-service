@@ -188,17 +188,17 @@ class AccountsTest {
     boolean freshUser = createAccount(account);
 
     assertThat(freshUser).isTrue();
-    verifyStoredState("+14151112222", account.getUuid(), account.getPhoneNumberIdentifier(), null, account, true);
+    verifyStoredState("+14151112222", account.getUuid(), account.getPrincipalNameIdentifier(), null, account, true);
 
     assertPhoneNumberConstraintExists("+14151112222", account.getUuid());
-    assertPhoneNumberIdentifierConstraintExists(account.getPhoneNumberIdentifier(), account.getUuid());
+    assertPhoneNumberIdentifierConstraintExists(account.getPrincipalNameIdentifier(), account.getUuid());
 
     freshUser = createAccount(account);
     assertThat(freshUser).isTrue();
-    verifyStoredState("+14151112222", account.getUuid(), account.getPhoneNumberIdentifier(), null, account, true);
+    verifyStoredState("+14151112222", account.getUuid(), account.getPrincipalNameIdentifier(), null, account, true);
 
     assertPhoneNumberConstraintExists("+14151112222", account.getUuid());
-    assertPhoneNumberIdentifierConstraintExists(account.getPhoneNumberIdentifier(), account.getUuid());
+    assertPhoneNumberIdentifierConstraintExists(account.getPrincipalNameIdentifier(), account.getUuid());
   }
 
   @Test
@@ -211,22 +211,22 @@ class AccountsTest {
     boolean freshUser = createAccount(account);
 
     assertThat(freshUser).isTrue();
-    verifyStoredState("+14151112222", account.getUuid(), account.getPhoneNumberIdentifier(), null, account, true);
+    verifyStoredState("+14151112222", account.getUuid(), account.getPrincipalNameIdentifier(), null, account, true);
 
     assertPhoneNumberConstraintExists("+14151112222", account.getUuid());
-    assertPhoneNumberIdentifierConstraintExists(account.getPhoneNumberIdentifier(), account.getUuid());
+    assertPhoneNumberIdentifierConstraintExists(account.getPrincipalNameIdentifier(), account.getUuid());
 
     accounts.delete(originalUuid, Collections.emptyList()).join();
-    assertThat(accounts.findRecentlyDeletedAccountIdentifier(account.getPhoneNumberIdentifier())).hasValue(originalUuid);
+    assertThat(accounts.findRecentlyDeletedAccountIdentifier(account.getPrincipalNameIdentifier())).hasValue(originalUuid);
 
     freshUser = createAccount(account);
     assertThat(freshUser).isTrue();
-    verifyStoredState("+14151112222", account.getUuid(), account.getPhoneNumberIdentifier(), null, account, true);
+    verifyStoredState("+14151112222", account.getUuid(), account.getPrincipalNameIdentifier(), null, account, true);
 
     assertPhoneNumberConstraintExists("+14151112222", account.getUuid());
-    assertPhoneNumberIdentifierConstraintExists(account.getPhoneNumberIdentifier(), account.getUuid());
+    assertPhoneNumberIdentifierConstraintExists(account.getPrincipalNameIdentifier(), account.getUuid());
 
-    assertThat(accounts.findRecentlyDeletedAccountIdentifier(account.getPhoneNumberIdentifier())).isEmpty();
+    assertThat(accounts.findRecentlyDeletedAccountIdentifier(account.getPrincipalNameIdentifier())).isEmpty();
   }
 
   @Test
@@ -236,10 +236,10 @@ class AccountsTest {
 
     createAccount(account);
 
-    verifyStoredState("+14151112222", account.getUuid(), account.getPhoneNumberIdentifier(), null, account, true);
+    verifyStoredState("+14151112222", account.getUuid(), account.getPrincipalNameIdentifier(), null, account, true);
 
     assertPhoneNumberConstraintExists("+14151112222", account.getUuid());
-    assertPhoneNumberIdentifierConstraintExists(account.getPhoneNumberIdentifier(), account.getUuid());
+    assertPhoneNumberIdentifierConstraintExists(account.getPrincipalNameIdentifier(), account.getUuid());
   }
 
   @Test
@@ -250,12 +250,12 @@ class AccountsTest {
     boolean freshUser = createAccount(account);
 
     assertThat(freshUser).isTrue();
-    verifyStoredState("+14151112222", account.getUuid(), account.getPhoneNumberIdentifier(), null, account, true);
+    verifyStoredState("+14151112222", account.getUuid(), account.getPrincipalNameIdentifier(), null, account, true);
 
     assertPhoneNumberConstraintExists("+14151112222", account.getUuid());
-    assertPhoneNumberIdentifierConstraintExists(account.getPhoneNumberIdentifier(), account.getUuid());
+    assertPhoneNumberIdentifierConstraintExists(account.getPrincipalNameIdentifier(), account.getUuid());
 
-    account.setNumber("+14153334444", UUID.randomUUID());
+    account.setPrincipal("+14153334444", UUID.randomUUID());
     assertThrows(IllegalArgumentException.class, () -> createAccount(account),
         "Reusing ACI with different PNI should fail");
   }
@@ -268,13 +268,13 @@ class AccountsTest {
     boolean freshUser = createAccount(account1);
 
     assertThat(freshUser).isTrue();
-    verifyStoredState("+14151112222", account1.getUuid(), account1.getPhoneNumberIdentifier(), null, account1, true);
+    verifyStoredState("+14151112222", account1.getUuid(), account1.getPrincipalNameIdentifier(), null, account1, true);
 
     assertPhoneNumberConstraintExists("+14151112222", account1.getUuid());
-    assertPhoneNumberIdentifierConstraintExists(account1.getPhoneNumberIdentifier(), account1.getUuid());
+    assertPhoneNumberIdentifierConstraintExists(account1.getPrincipalNameIdentifier(), account1.getUuid());
 
     Device device2 = generateDevice(DEVICE_ID_1);
-    Account account2 = generateAccount("+14151112222", UUID.randomUUID(), account1.getPhoneNumberIdentifier(),
+    Account account2 = generateAccount("+14151112222", UUID.randomUUID(), account1.getPrincipalNameIdentifier(),
         List.of(device2));
 
     assertThrows(AccountAlreadyExistsException.class, () -> accounts.create(account2, Collections.emptyList()),
@@ -298,8 +298,8 @@ class AccountsTest {
     createAccount(accountFirst);
     createAccount(accountSecond);
 
-    Optional<Account> retrievedFirst = accounts.getByE164("+14151112222");
-    Optional<Account> retrievedSecond = accounts.getByE164("+14152221111");
+    Optional<Account> retrievedFirst = accounts.getByPrincipal("+14151112222");
+    Optional<Account> retrievedSecond = accounts.getByPrincipal("+14152221111");
 
     assertThat(retrievedFirst.isPresent()).isTrue();
     assertThat(retrievedSecond.isPresent()).isTrue();
@@ -316,8 +316,8 @@ class AccountsTest {
     verifyStoredState("+14151112222", uuidFirst, pniFirst, null, retrievedFirst.get(), accountFirst);
     verifyStoredState("+14152221111", uuidSecond, pniSecond, null, retrievedSecond.get(), accountSecond);
 
-    retrievedFirst = accounts.getByPhoneNumberIdentifier(pniFirst);
-    retrievedSecond = accounts.getByPhoneNumberIdentifier(pniSecond);
+    retrievedFirst = accounts.getByPrincipalNameIdentifier(pniFirst);
+    retrievedSecond = accounts.getByPrincipalNameIdentifier(pniSecond);
 
     assertThat(retrievedFirst.isPresent()).isTrue();
     assertThat(retrievedSecond.isPresent()).isTrue();
@@ -340,13 +340,13 @@ class AccountsTest {
               Put.builder()
                   .tableName(Tables.NUMBERS.tableName())
                   .item(Map.of(
-                      Accounts.ATTR_ACCOUNT_E164, AttributeValues.fromString(account.getNumber()),
+                      Accounts.ATTR_ACCOUNT_PRINCIPAL, AttributeValues.fromString(account.getPrincipal()),
                       Accounts.KEY_ACCOUNT_UUID, AttributeValues.fromUUID(account.getUuid())))
                   .conditionExpression(
                       "attribute_not_exists(#number) OR (attribute_exists(#number) AND #uuid = :uuid)")
                   .expressionAttributeNames(
                       Map.of("#uuid", Accounts.KEY_ACCOUNT_UUID,
-                          "#number", Accounts.ATTR_ACCOUNT_E164))
+                          "#number", Accounts.ATTR_ACCOUNT_PRINCIPAL))
                   .expressionAttributeValues(
                       Map.of(":uuid", AttributeValues.fromUUID(account.getUuid())))
                   .returnValuesOnConditionCheckFailure(ReturnValuesOnConditionCheckFailure.ALL_OLD)
@@ -357,14 +357,14 @@ class AccountsTest {
           .put(Put.builder()
               .tableName(Tables.ACCOUNTS.tableName())
               .conditionExpression("attribute_not_exists(#number) OR #number = :number")
-              .expressionAttributeNames(Map.of("#number", Accounts.ATTR_ACCOUNT_E164))
-              .expressionAttributeValues(Map.of(":number", AttributeValues.fromString(account.getNumber())))
+              .expressionAttributeNames(Map.of("#number", Accounts.ATTR_ACCOUNT_PRINCIPAL))
+              .expressionAttributeValues(Map.of(":number", AttributeValues.fromString(account.getPrincipal())))
               .item(Map.of(
                   Accounts.KEY_ACCOUNT_UUID, AttributeValues.fromUUID(uuid),
-                  Accounts.ATTR_ACCOUNT_E164, AttributeValues.fromString(account.getNumber()),
+                  Accounts.ATTR_ACCOUNT_PRINCIPAL, AttributeValues.fromString(account.getPrincipal()),
                   Accounts.ATTR_ACCOUNT_DATA, AttributeValues.fromByteArray(SystemMapper.jsonMapper().writeValueAsBytes(account)),
                   Accounts.ATTR_VERSION, AttributeValues.fromInt(account.getVersion()),
-                  Accounts.ATTR_CANONICALLY_DISCOVERABLE, AttributeValues.fromBool(account.isDiscoverableByPhoneNumber())))
+                  Accounts.ATTR_CANONICALLY_DISCOVERABLE, AttributeValues.fromBool(account.isDiscoverableByPrincipal())))
               .build())
           .build();
 
@@ -373,7 +373,7 @@ class AccountsTest {
           .build());
     }
 
-    Optional<Account> retrieved = accounts.getByE164("+14151112222");
+    Optional<Account> retrieved = accounts.getByPrincipal("+14151112222");
 
     assertThat(retrieved.isPresent()).isTrue();
     verifyStoredState("+14151112222", uuid, null, null, retrieved.get(), account);
@@ -457,8 +457,8 @@ class AccountsTest {
             () -> accounts.create(reregisteredAccount, Collections.emptyList()));
 
     reregisteredAccount.setUuid(accountAlreadyExistsException.getExistingAccount().getUuid());
-    reregisteredAccount.setNumber(accountAlreadyExistsException.getExistingAccount().getNumber(),
-        accountAlreadyExistsException.getExistingAccount().getPhoneNumberIdentifier());
+    reregisteredAccount.setPrincipal(accountAlreadyExistsException.getExistingAccount().getPrincipal(),
+        accountAlreadyExistsException.getExistingAccount().getPrincipalNameIdentifier());
 
     assertDoesNotThrow(() -> accounts.reclaimAccount(accountAlreadyExistsException.getExistingAccount(),
         reregisteredAccount,
@@ -508,7 +508,7 @@ class AccountsTest {
     accounts.confirmUsernameHash(existingAccount, usernameHash, encryptedUsername).join();
     final UUID usernameLinkHandle = existingAccount.getUsernameLinkHandle();
 
-    verifyStoredState(e164, existingAccount.getUuid(), existingAccount.getPhoneNumberIdentifier(), usernameHash, existingAccount, true);
+    verifyStoredState(e164, existingAccount.getUuid(), existingAccount.getPrincipalNameIdentifier(), usernameHash, existingAccount, true);
 
     assertPhoneNumberConstraintExists(e164, existingUuid);
     assertPhoneNumberIdentifierConstraintExists(existingPni, existingUuid);
@@ -564,24 +564,24 @@ class AccountsTest {
     createAccount(account);
 
     assertPhoneNumberConstraintExists("+14151112222", account.getUuid());
-    assertPhoneNumberIdentifierConstraintExists(account.getPhoneNumberIdentifier(), account.getUuid());
+    assertPhoneNumberIdentifierConstraintExists(account.getPrincipalNameIdentifier(), account.getUuid());
 
     device.setName("foobar".getBytes(StandardCharsets.UTF_8));
 
     accounts.update(account);
 
     assertPhoneNumberConstraintExists("+14151112222", account.getUuid());
-    assertPhoneNumberIdentifierConstraintExists(account.getPhoneNumberIdentifier(), account.getUuid());
+    assertPhoneNumberIdentifierConstraintExists(account.getPrincipalNameIdentifier(), account.getUuid());
 
-    Optional<Account> retrieved = accounts.getByE164("+14151112222");
+    Optional<Account> retrieved = accounts.getByPrincipal("+14151112222");
 
     assertThat(retrieved.isPresent()).isTrue();
-    verifyStoredState("+14151112222", account.getUuid(), account.getPhoneNumberIdentifier(), null, retrieved.get(), account);
+    verifyStoredState("+14151112222", account.getUuid(), account.getPrincipalNameIdentifier(), null, retrieved.get(), account);
 
     retrieved = accounts.getByAccountIdentifier(account.getUuid());
 
     assertThat(retrieved.isPresent()).isTrue();
-    verifyStoredState("+14151112222", account.getUuid(), account.getPhoneNumberIdentifier(), null, account, true);
+    verifyStoredState("+14151112222", account.getUuid(), account.getPrincipalNameIdentifier(), null, account, true);
 
     device = generateDevice(DEVICE_ID_1);
     Account unknownAccount = generateAccount("+14151113333", UUID.randomUUID(), UUID.randomUUID(), List.of(device));
@@ -592,7 +592,7 @@ class AccountsTest {
 
     assertThat(account.getVersion()).isEqualTo(2);
 
-    verifyStoredState("+14151112222", account.getUuid(), account.getPhoneNumberIdentifier(), null, account, true);
+    verifyStoredState("+14151112222", account.getUuid(), account.getPrincipalNameIdentifier(), null, account, true);
 
     account.setVersion(1);
 
@@ -602,7 +602,7 @@ class AccountsTest {
 
     accounts.update(account);
 
-    verifyStoredState("+14151112222", account.getUuid(), account.getPhoneNumberIdentifier(), null, account, true);
+    verifyStoredState("+14151112222", account.getUuid(), account.getPrincipalNameIdentifier(), null, account, true);
   }
 
   @ParameterizedTest
@@ -772,12 +772,12 @@ class AccountsTest {
     createAccount(deletedAccount);
     createAccount(retainedAccount);
 
-    assertThat(accounts.findRecentlyDeletedAccountIdentifier(deletedAccount.getPhoneNumberIdentifier())).isEmpty();
+    assertThat(accounts.findRecentlyDeletedAccountIdentifier(deletedAccount.getPrincipalNameIdentifier())).isEmpty();
 
     assertPhoneNumberConstraintExists("+14151112222", deletedAccount.getUuid());
-    assertPhoneNumberIdentifierConstraintExists(deletedAccount.getPhoneNumberIdentifier(), deletedAccount.getUuid());
+    assertPhoneNumberIdentifierConstraintExists(deletedAccount.getPrincipalNameIdentifier(), deletedAccount.getUuid());
     assertPhoneNumberConstraintExists("+14151112345", retainedAccount.getUuid());
-    assertPhoneNumberIdentifierConstraintExists(retainedAccount.getPhoneNumberIdentifier(), retainedAccount.getUuid());
+    assertPhoneNumberIdentifierConstraintExists(retainedAccount.getPrincipalNameIdentifier(), retainedAccount.getUuid());
 
     assertThat(accounts.getByAccountIdentifier(deletedAccount.getUuid())).isPresent();
     assertThat(accounts.getByAccountIdentifier(retainedAccount.getUuid())).isPresent();
@@ -785,27 +785,27 @@ class AccountsTest {
     accounts.delete(deletedAccount.getUuid(), Collections.emptyList()).join();
 
     assertThat(accounts.getByAccountIdentifier(deletedAccount.getUuid())).isNotPresent();
-    assertThat(accounts.findRecentlyDeletedAccountIdentifier(deletedAccount.getPhoneNumberIdentifier())).hasValue(deletedAccount.getUuid());
+    assertThat(accounts.findRecentlyDeletedAccountIdentifier(deletedAccount.getPrincipalNameIdentifier())).hasValue(deletedAccount.getUuid());
 
-    assertPhoneNumberConstraintDoesNotExist(deletedAccount.getNumber());
-    assertPhoneNumberIdentifierConstraintDoesNotExist(deletedAccount.getPhoneNumberIdentifier());
+    assertPhoneNumberConstraintDoesNotExist(deletedAccount.getPrincipal());
+    assertPhoneNumberIdentifierConstraintDoesNotExist(deletedAccount.getPrincipalNameIdentifier());
 
-    verifyStoredState(retainedAccount.getNumber(), retainedAccount.getUuid(), retainedAccount.getPhoneNumberIdentifier(),
+    verifyStoredState(retainedAccount.getPrincipal(), retainedAccount.getUuid(), retainedAccount.getPrincipalNameIdentifier(),
         null, accounts.getByAccountIdentifier(retainedAccount.getUuid()).orElseThrow(), retainedAccount);
 
     {
-      final Account recreatedAccount = generateAccount(deletedAccount.getNumber(), UUID.randomUUID(),
-          deletedAccount.getPhoneNumberIdentifier(), List.of(generateDevice(DEVICE_ID_1)));
+      final Account recreatedAccount = generateAccount(deletedAccount.getPrincipal(), UUID.randomUUID(),
+          deletedAccount.getPrincipalNameIdentifier(), List.of(generateDevice(DEVICE_ID_1)));
 
       final boolean freshUser = createAccount(recreatedAccount);
 
       assertThat(freshUser).isTrue();
       assertThat(accounts.getByAccountIdentifier(recreatedAccount.getUuid())).isPresent();
-      verifyStoredState(recreatedAccount.getNumber(), recreatedAccount.getUuid(), recreatedAccount.getPhoneNumberIdentifier(),
+      verifyStoredState(recreatedAccount.getPrincipal(), recreatedAccount.getUuid(), recreatedAccount.getPrincipalNameIdentifier(),
           null, accounts.getByAccountIdentifier(recreatedAccount.getUuid()).orElseThrow(), recreatedAccount);
 
-      assertPhoneNumberConstraintExists(recreatedAccount.getNumber(), recreatedAccount.getUuid());
-      assertPhoneNumberIdentifierConstraintExists(recreatedAccount.getPhoneNumberIdentifier(), recreatedAccount.getUuid());
+      assertPhoneNumberConstraintExists(recreatedAccount.getPrincipal(), recreatedAccount.getUuid());
+      assertPhoneNumberIdentifierConstraintExists(recreatedAccount.getPrincipalNameIdentifier(), recreatedAccount.getUuid());
     }
   }
 
@@ -816,7 +816,7 @@ class AccountsTest {
 
     createAccount(account);
 
-    Optional<Account> retrieved = accounts.getByE164("+11111111");
+    Optional<Account> retrieved = accounts.getByPrincipal("+11111111");
     assertThat(retrieved.isPresent()).isFalse();
 
     retrieved = accounts.getByAccountIdentifier(UUID.randomUUID());
@@ -836,50 +836,50 @@ class AccountsTest {
   }
 
   @Test
-  void getByPhoneNumberIdentifierAsync() {
-    assertThat(accounts.getByPhoneNumberIdentifierAsync(UUID.randomUUID()).join()).isEmpty();
+  void getByPrincipalNameIdentifierAsync() {
+    assertThat(accounts.getByPrincipalNameIdentifierAsync(UUID.randomUUID()).join()).isEmpty();
 
     final Account account =
         generateAccount("+14151112222", UUID.randomUUID(), UUID.randomUUID(), List.of(generateDevice(DEVICE_ID_1)));
 
     createAccount(account);
 
-    assertThat(accounts.getByPhoneNumberIdentifierAsync(account.getPhoneNumberIdentifier()).join()).isPresent();
+    assertThat(accounts.getByPrincipalNameIdentifierAsync(account.getPrincipalNameIdentifier()).join()).isPresent();
   }
 
   @Test
-  void getByE164Async() {
+  void getByPrincipalAsync() {
     final String e164 = "+14151112222";
 
-    assertThat(accounts.getByE164Async(e164).join()).isEmpty();
+    assertThat(accounts.getByPrincipalAsync(e164).join()).isEmpty();
 
     final Account account =
         generateAccount(e164, UUID.randomUUID(), UUID.randomUUID(), List.of(generateDevice(DEVICE_ID_1)));
 
     createAccount(account);
 
-    assertThat(accounts.getByE164Async(e164).join()).isPresent();
+    assertThat(accounts.getByPrincipalAsync(e164).join()).isPresent();
   }
 
   @Test
   void testCanonicallyDiscoverableSet() {
     Device device = generateDevice(DEVICE_ID_1);
     Account account = generateAccount("+14151112222", UUID.randomUUID(), UUID.randomUUID(), List.of(device));
-    account.setDiscoverableByPhoneNumber(false);
+    account.setDiscoverableByPrincipal(false);
     createAccount(account);
-    verifyStoredState("+14151112222", account.getUuid(), account.getPhoneNumberIdentifier(), null, account, false);
-    account.setDiscoverableByPhoneNumber(true);
+    verifyStoredState("+14151112222", account.getUuid(), account.getPrincipalNameIdentifier(), null, account, false);
+    account.setDiscoverableByPrincipal(true);
     accounts.update(account);
-    verifyStoredState("+14151112222", account.getUuid(), account.getPhoneNumberIdentifier(), null, account, true);
-    account.setDiscoverableByPhoneNumber(false);
+    verifyStoredState("+14151112222", account.getUuid(), account.getPrincipalNameIdentifier(), null, account, true);
+    account.setDiscoverableByPrincipal(false);
     accounts.update(account);
-    verifyStoredState("+14151112222", account.getUuid(), account.getPhoneNumberIdentifier(), null, account, false);
+    verifyStoredState("+14151112222", account.getUuid(), account.getPrincipalNameIdentifier(), null, account, false);
   }
 
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
   @ParameterizedTest
   @MethodSource
-  public void testChangeNumber(final Optional<UUID> maybeDisplacedAccountIdentifier) {
+  public void testChangePrincipal(final Optional<UUID> maybeDisplacedAccountIdentifier) {
     final String originalNumber = "+14151112222";
     final String targetNumber = "+14151113333";
 
@@ -891,21 +891,21 @@ class AccountsTest {
 
     createAccount(account);
 
-    assertThat(accounts.getByPhoneNumberIdentifier(originalPni)).isPresent();
+    assertThat(accounts.getByPrincipalNameIdentifier(originalPni)).isPresent();
 
     assertPhoneNumberConstraintExists(originalNumber, account.getUuid());
     assertPhoneNumberIdentifierConstraintExists(originalPni, account.getUuid());
 
     {
-      final Optional<Account> retrieved = accounts.getByE164(originalNumber);
+      final Optional<Account> retrieved = accounts.getByPrincipal(originalNumber);
       assertThat(retrieved).isPresent();
 
-      verifyStoredState(originalNumber, account.getUuid(), account.getPhoneNumberIdentifier(), null, retrieved.get(), account);
+      verifyStoredState(originalNumber, account.getUuid(), account.getPrincipalNameIdentifier(), null, retrieved.get(), account);
     }
 
-    accounts.changeNumber(account, targetNumber, targetPni, maybeDisplacedAccountIdentifier, Collections.emptyList());
+    accounts.changePrincipal(account, targetNumber, targetPni, maybeDisplacedAccountIdentifier, Collections.emptyList());
 
-    assertThat(accounts.getByE164(originalNumber)).isEmpty();
+    assertThat(accounts.getByPrincipal(originalNumber)).isEmpty();
     assertThat(accounts.getByAccountIdentifier(originalPni)).isEmpty();
 
     assertPhoneNumberConstraintDoesNotExist(originalNumber);
@@ -914,19 +914,19 @@ class AccountsTest {
     assertPhoneNumberIdentifierConstraintExists(targetPni, account.getUuid());
 
     {
-      final Optional<Account> retrieved = accounts.getByE164(targetNumber);
+      final Optional<Account> retrieved = accounts.getByPrincipal(targetNumber);
       assertThat(retrieved).isPresent();
 
-      verifyStoredState(targetNumber, account.getUuid(), account.getPhoneNumberIdentifier(), null, retrieved.get(), account);
+      verifyStoredState(targetNumber, account.getUuid(), account.getPrincipalNameIdentifier(), null, retrieved.get(), account);
 
-      assertThat(retrieved.get().getPhoneNumberIdentifier()).isEqualTo(targetPni);
-      assertThat(accounts.getByPhoneNumberIdentifier(targetPni)).isPresent();
+      assertThat(retrieved.get().getPrincipalNameIdentifier()).isEqualTo(targetPni);
+      assertThat(accounts.getByPrincipalNameIdentifier(targetPni)).isPresent();
     }
 
     assertThat(accounts.findRecentlyDeletedAccountIdentifier(originalPni)).isEqualTo(maybeDisplacedAccountIdentifier);
   }
 
-  private static Stream<Arguments> testChangeNumber() {
+  private static Stream<Arguments> testChangePrincipal() {
     return Stream.of(
         Arguments.of(Optional.empty()),
         Arguments.of(Optional.of(UUID.randomUUID()))
@@ -934,7 +934,7 @@ class AccountsTest {
   }
 
   @Test
-  public void testChangeNumberConflict() {
+  public void testChangePrincipalConflict() {
     final String originalNumber = "+14151112222";
     final String targetNumber = "+14151113333";
 
@@ -950,7 +950,7 @@ class AccountsTest {
     createAccount(account);
     createAccount(existingAccount);
 
-    assertThrows(TransactionCanceledException.class, () -> accounts.changeNumber(account, targetNumber, targetPni, Optional.of(existingAccount.getUuid()), Collections.emptyList()));
+    assertThrows(TransactionCanceledException.class, () -> accounts.changePrincipal(account, targetNumber, targetPni, Optional.of(existingAccount.getUuid()), Collections.emptyList()));
 
     assertPhoneNumberConstraintExists(originalNumber, account.getUuid());
     assertPhoneNumberIdentifierConstraintExists(originalPni, account.getUuid());
@@ -959,7 +959,7 @@ class AccountsTest {
   }
 
   @Test
-  public void testChangeNumberPhoneNumberIdentifierConflict() {
+  public void testChangeNumberPhonePrincipalIdentifierConflict() {
     final String originalNumber = "+14151112222";
     final String targetNumber = "+14151113333";
 
@@ -986,11 +986,11 @@ class AccountsTest {
             Map.of(":uuid", AttributeValues.fromUUID(existingAccountIdentifier)))
         .build());
 
-    assertThrows(TransactionCanceledException.class, () -> accounts.changeNumber(account, targetNumber, existingPhoneNumberIdentifier, Optional.empty(), Collections.emptyList()));
+    assertThrows(TransactionCanceledException.class, () -> accounts.changePrincipal(account, targetNumber, existingPhoneNumberIdentifier, Optional.empty(), Collections.emptyList()));
   }
 
   @Test
-  public void testChangeNumberContestedOptimisticLock() {
+  public void testChangePrincipalContestedOptimisticLock() {
     final String originalNumber = "+14151112222";
     final String targetNumber = "+14151113333";
 
@@ -1010,12 +1010,12 @@ class AccountsTest {
     accounts.update(firstAccountInstance);
 
     assertThrows(ContestedOptimisticLockException.class,
-        () -> accounts.changeNumber(secondAccountInstance, targetNumber, targetPni, Optional.empty(),
+        () -> accounts.changePrincipal(secondAccountInstance, targetNumber, targetPni, Optional.empty(),
             Collections.emptyList()), "Second account instance has stale version");
 
     final Account refreshedAccountInstance = accounts.getByAccountIdentifier(firstAccountInstance.getUuid())
         .orElseThrow();
-    accounts.changeNumber(refreshedAccountInstance, targetNumber, targetPni, Optional.empty(),
+    accounts.changePrincipal(refreshedAccountInstance, targetNumber, targetPni, Optional.empty(),
         Collections.emptyList());
 
     assertPhoneNumberConstraintDoesNotExist(originalNumber);
@@ -1037,10 +1037,10 @@ class AccountsTest {
 
     {
       final Optional<Account> maybeAccount = accounts.getByUsernameHash(USERNAME_HASH_1).join();
-      verifyStoredState(account.getNumber(), account.getUuid(), account.getPhoneNumberIdentifier(), USERNAME_HASH_1, maybeAccount.orElseThrow(), account);
+      verifyStoredState(account.getPrincipal(), account.getUuid(), account.getPrincipalNameIdentifier(), USERNAME_HASH_1, maybeAccount.orElseThrow(), account);
 
       final Optional<Account> maybeAccount2 = accounts.getByUsernameLinkHandle(oldHandle).join();
-      verifyStoredState(account.getNumber(), account.getUuid(), account.getPhoneNumberIdentifier(), USERNAME_HASH_1, maybeAccount2.orElseThrow(), account);
+      verifyStoredState(account.getPrincipal(), account.getUuid(), account.getPrincipalNameIdentifier(), USERNAME_HASH_1, maybeAccount2.orElseThrow(), account);
     }
 
     accounts.reserveUsernameHash(account, USERNAME_HASH_2, Duration.ofDays(1)).join();
@@ -1061,10 +1061,10 @@ class AccountsTest {
       final Optional<Account> maybeAccount = accounts.getByUsernameHash(USERNAME_HASH_2).join();
 
       assertThat(maybeAccount).isPresent();
-      verifyStoredState(account.getNumber(), account.getUuid(), account.getPhoneNumberIdentifier(),
+      verifyStoredState(account.getPrincipal(), account.getUuid(), account.getPrincipalNameIdentifier(),
           USERNAME_HASH_2, maybeAccount.orElseThrow(), account);
       final Optional<Account> maybeAccount2 = accounts.getByUsernameLinkHandle(newHandle).join();
-      verifyStoredState(account.getNumber(), account.getUuid(), account.getPhoneNumberIdentifier(),
+      verifyStoredState(account.getPrincipal(), account.getUuid(), account.getPrincipalNameIdentifier(),
           USERNAME_HASH_2, maybeAccount2.orElseThrow(), account);
     }
   }
@@ -1086,7 +1086,7 @@ class AccountsTest {
     final Optional<Account> maybeAccount = accounts.getByUsernameHash(USERNAME_HASH_1).join();
 
     assertThat(maybeAccount).isPresent();
-    verifyStoredState(firstAccount.getNumber(), firstAccount.getUuid(), firstAccount.getPhoneNumberIdentifier(), USERNAME_HASH_1, maybeAccount.get(), firstAccount);
+    verifyStoredState(firstAccount.getPrincipal(), firstAccount.getUuid(), firstAccount.getPrincipalNameIdentifier(), USERNAME_HASH_1, maybeAccount.get(), firstAccount);
 
     // throw an error if second account tries to reserve or confirm the same username hash
     CompletableFutureTestUtil.assertFailsWithCause(UsernameHashNotAvailableException.class,
@@ -1754,7 +1754,7 @@ class AccountsTest {
     // Check that constraints do what they should from a functional perspective
     {
       final Account conflictingNumberAccount = nextRandomAccount();
-      conflictingNumberAccount.setNumber(account.getNumber(), account.getIdentifier(IdentityType.PNI));
+      conflictingNumberAccount.setPrincipal(account.getPrincipal(), account.getIdentifier(IdentityType.PNI));
 
       assertThrows(AccountAlreadyExistsException.class,
           () -> accounts.create(conflictingNumberAccount, Collections.emptyList()));
@@ -1782,7 +1782,7 @@ class AccountsTest {
 
     // Check that bare constraint records are written as expected
     assertEquals(Optional.of(account.getIdentifier(IdentityType.ACI)),
-        getConstraintValue(Tables.NUMBERS.tableName(), Accounts.ATTR_ACCOUNT_E164, AttributeValues.fromString(account.getNumber())));
+        getConstraintValue(Tables.NUMBERS.tableName(), Accounts.ATTR_ACCOUNT_PRINCIPAL, AttributeValues.fromString(account.getPrincipal())));
 
     assertEquals(Optional.of(account.getIdentifier(IdentityType.ACI)),
         getConstraintValue(Tables.PNI_ASSIGNMENTS.tableName(), Accounts.ATTR_PNI_UUID, AttributeValues.fromUUID(account.getIdentifier(IdentityType.PNI))));
@@ -1812,7 +1812,7 @@ class AccountsTest {
     final Map<String, AttributeValue> originalE164ConstraintItem =
         DYNAMO_DB_EXTENSION.getDynamoDbClient().getItem(GetItemRequest.builder()
                 .tableName(Tables.NUMBERS.tableName())
-                .key(Map.of(Accounts.ATTR_ACCOUNT_E164, AttributeValues.fromString(account.getNumber())))
+                .key(Map.of(Accounts.ATTR_ACCOUNT_PRINCIPAL, AttributeValues.fromString(account.getPrincipal())))
                 .build())
             .item();
 
@@ -1837,7 +1837,7 @@ class AccountsTest {
     final Map<String, AttributeValue> regeneratedE164ConstraintItem =
         DYNAMO_DB_EXTENSION.getDynamoDbClient().getItem(GetItemRequest.builder()
                 .tableName(Tables.NUMBERS.tableName())
-                .key(Map.of(Accounts.ATTR_ACCOUNT_E164, AttributeValues.fromString(account.getNumber())))
+                .key(Map.of(Accounts.ATTR_ACCOUNT_PRINCIPAL, AttributeValues.fromString(account.getPrincipal())))
                 .build())
             .item();
 
@@ -1870,11 +1870,11 @@ class AccountsTest {
 
     final Map<String, AttributeValue> item = new HashMap<>(Map.of(
         Accounts.KEY_ACCOUNT_UUID, AttributeValues.fromUUID(account.getUuid()),
-        Accounts.ATTR_ACCOUNT_E164, AttributeValues.fromString(account.getNumber()),
-        Accounts.ATTR_PNI_UUID, AttributeValues.fromUUID(account.getPhoneNumberIdentifier()),
+        Accounts.ATTR_ACCOUNT_PRINCIPAL, AttributeValues.fromString(account.getPrincipal()),
+        Accounts.ATTR_PNI_UUID, AttributeValues.fromUUID(account.getPrincipalNameIdentifier()),
         Accounts.ATTR_ACCOUNT_DATA, accountData,
         Accounts.ATTR_VERSION, AttributeValues.fromInt(account.getVersion()),
-        Accounts.ATTR_CANONICALLY_DISCOVERABLE, AttributeValues.fromBool(account.isDiscoverableByPhoneNumber())));
+        Accounts.ATTR_CANONICALLY_DISCOVERABLE, AttributeValues.fromBool(account.isDiscoverableByPrincipal())));
 
     account.getUnidentifiedAccessKey()
         .map(AttributeValues::fromByteArray)
@@ -1956,7 +1956,7 @@ class AccountsTest {
     final GetItemResponse numberConstraintResponse = DYNAMO_DB_EXTENSION.getDynamoDbClient().getItem(
         GetItemRequest.builder()
             .tableName(Tables.NUMBERS.tableName())
-            .key(Map.of(Accounts.ATTR_ACCOUNT_E164, AttributeValues.fromString(number)))
+            .key(Map.of(Accounts.ATTR_ACCOUNT_PRINCIPAL, AttributeValues.fromString(number)))
             .build());
 
     assertThat(numberConstraintResponse.hasItem()).isTrue();
@@ -1967,7 +1967,7 @@ class AccountsTest {
     final GetItemResponse numberConstraintResponse = DYNAMO_DB_EXTENSION.getDynamoDbClient().getItem(
         GetItemRequest.builder()
             .tableName(Tables.NUMBERS.tableName())
-            .key(Map.of(Accounts.ATTR_ACCOUNT_E164, AttributeValues.fromString(number)))
+            .key(Map.of(Accounts.ATTR_ACCOUNT_PRINCIPAL, AttributeValues.fromString(number)))
             .build());
 
     assertThat(numberConstraintResponse.hasItem()).isFalse();
@@ -2047,8 +2047,8 @@ class AccountsTest {
   }
 
   private void verifyStoredState(String number, UUID uuid, UUID pni, byte[] usernameHash, Account result, Account expecting) {
-    assertThat(result.getNumber()).isEqualTo(number);
-    assertThat(result.getPhoneNumberIdentifier()).isEqualTo(pni);
+    assertThat(result.getPrincipal()).isEqualTo(number);
+    assertThat(result.getPrincipalNameIdentifier()).isEqualTo(pni);
     assertThat(result.getLastSeen()).isEqualTo(expecting.getLastSeen());
     assertThat(result.getUuid()).isEqualTo(uuid);
     assertThat(result.getVersion()).isEqualTo(expecting.getVersion());

@@ -96,18 +96,18 @@ extend google.protobuf.FieldOptions {
   repeated uint32 exactlySize = 70004;
 
   /*
-   * Requires a value of a string field to be a valid E164-normalized phone number.
+   * Requires a value of a string field to be a valid principal string.
    * If the field is `optional`, this check allows a value to be not set.
    *
    *  ```
    *  import "org/signal/chat/require.proto";
    *
    *  message Data {
-   *    string number = 1 [(require.e164)];
+   *    string principal = 1 [(require.principal)];
    *  }
    *  ```
    */
-  optional bool e164  = 70005;
+  optional bool principal = 70005;
 
   /*
    * Requires an integer value to be within a certain range. The range boundaries are specified

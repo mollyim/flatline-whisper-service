@@ -59,7 +59,7 @@ class ExternalServiceCredentialsAnonymousGrpcServiceTest extends
 
   @BeforeEach
   public void setup() {
-    Mockito.when(accountsManager.getByE164Async(USER_E164))
+    Mockito.when(accountsManager.getByPrincipalAsync(USER_E164))
         .thenReturn(CompletableFuture.completedFuture(Optional.of(account(USER_UUID))));
   }
 

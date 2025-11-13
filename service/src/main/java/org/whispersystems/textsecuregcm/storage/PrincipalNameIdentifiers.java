@@ -35,73 +35,73 @@ import software.amazon.awssdk.services.dynamodb.model.TransactionConflictExcepti
 import software.amazon.awssdk.services.dynamodb.model.Update;
 
 /**
- * Manages a global, persistent mapping of phone numbers to phone number identifiers regardless of whether those
+ * Manages a global, persistent mapping of principals to principal name identifiers regardless of whether those
  * numbers/identifiers are actually associated with an account.
  */
-public class PhoneNumberIdentifiers {
+public class PrincipalNameIdentifiers {
 
   private final DynamoDbAsyncClient dynamoDbClient;
   private final String tableName;
 
   @VisibleForTesting
-  static final String KEY_E164 = "P";
+  static final String KEY_PRINCIPAL = "P";
   @VisibleForTesting
   static final String INDEX_NAME = "pni_to_p";
   @VisibleForTesting
-  static final String ATTR_PHONE_NUMBER_IDENTIFIER = "PNI";
+  static final String ATTR_PRINCIPAL_NAME_IDENTIFIER = "PNI";
 
   private static final String CONDITIONAL_CHECK_FAILED = "ConditionalCheckFailed";
 
-  private static final Timer GET_PNI_TIMER = Metrics.timer(name(PhoneNumberIdentifiers.class, "get"));
-  private static final Timer SET_PNI_TIMER = Metrics.timer(name(PhoneNumberIdentifiers.class, "set"));
+  private static final Timer GET_PNI_TIMER = Metrics.timer(name(PrincipalNameIdentifiers.class, "get"));
+  private static final Timer SET_PNI_TIMER = Metrics.timer(name(PrincipalNameIdentifiers.class, "set"));
   private static final int MAX_RETRIES = 10;
 
-  private static final Logger logger = LoggerFactory.getLogger(PhoneNumberIdentifiers.class);
+  private static final Logger logger = LoggerFactory.getLogger(PrincipalNameIdentifiers.class);
 
-  public PhoneNumberIdentifiers(final DynamoDbAsyncClient dynamoDbClient, final String tableName) {
+  public PrincipalNameIdentifiers(final DynamoDbAsyncClient dynamoDbClient, final String tableName) {
     this.dynamoDbClient = dynamoDbClient;
     this.tableName = tableName;
   }
 
   /**
-   * Returns the phone number identifier (PNI) associated with the given phone number. If one doesn't exist, it is
+   * Returns the principal name identifier (PNI) associated with the given principal. If one doesn't exist, it is
    * created.
    *
-   * @param phoneNumber the phone number for which to retrieve a phone number identifier
-   * @return the phone number identifier associated with the given phone number
+   * @param principal the principal for which to retrieve a principal name identifier
+   * @return the principal name identifier associated with the given phone number
    */
-  public CompletableFuture<UUID> getPhoneNumberIdentifier(final String phoneNumber) {
-    // Each e164 phone number string represents a potential equivalence class e164s that represent the same number. If
-    // this is a new phone number, we'll want to set all the numbers in the equivalence class to the same PNI
-    final List<String> allPhoneNumberForms = Util.getAlternateForms(phoneNumber);
+  public CompletableFuture<UUID> getPrincipalNameIdentifier(final String principal) {
+    // Each principal string represents a potential equivalence class that represent the same principal. If
+    // this is a new principal, we'll want to set all the principals in the equivalence class to the same PNI
+    final List<String> allPrincipalForms = Util.getAlternateForms(principal);
 
-    return retry(MAX_RETRIES, TransactionConflictException.class, () -> fetchPhoneNumbers(allPhoneNumberForms)
-        .thenCompose(mappings -> setPniIfRequired(phoneNumber, allPhoneNumberForms, mappings)));
+    return retry(MAX_RETRIES, TransactionConflictException.class, () -> fetchPrincipals(allPrincipalForms)
+        .thenCompose(mappings -> setPniIfRequired(principal, allPrincipalForms, mappings)));
   }
 
   /**
-   * Returns the list of phone numbers associated with a given phone number identifier. If this
-   * UUID was not previously assigned as a PNI by {@link #getPhoneNumberIdentifier(String)}, the
+   * Returns the list of principals associated with a given principal name identifier. If this
+   * UUID was not previously assigned as a PNI by {@link #getPrincipalNameIdentifier(String)}, the
    * returned list will be empty.
    *
-   * @param phoneNumberIdentifier a phone number identifier
-   * @return the list of all e164s associated with the given phone number identifier
+   * @param principalNameIdentifier a principal name identifier
+   * @return the list of all principals associated with the given principal name identifier
    */
-  public CompletableFuture<List<String>> getPhoneNumber(final UUID phoneNumberIdentifier) {
+  public CompletableFuture<List<String>> getPrincipal(final UUID principalNameIdentifier) {
     return dynamoDbClient.query(QueryRequest.builder()
             .tableName(tableName)
             .indexName(INDEX_NAME)
             .keyConditionExpression("#pni = :pni")
-            .projectionExpression("#phone_number")
+            .projectionExpression("#principal")
             .expressionAttributeNames(Map.of(
-                "#phone_number", KEY_E164,
-                "#pni", ATTR_PHONE_NUMBER_IDENTIFIER
+                "#principal", KEY_PRINCIPAL,
+                "#pni", ATTR_PRINCIPAL_NAME_IDENTIFIER
             ))
             .expressionAttributeValues(Map.of(
-                ":pni", AttributeValues.fromUUID(phoneNumberIdentifier)
+                ":pni", AttributeValues.fromUUID(principalNameIdentifier)
             ))
             .build())
-        .thenApply(response -> response.items().stream().map(item -> item.get(KEY_E164).s()).toList());
+        .thenApply(response -> response.items().stream().map(item -> item.get(KEY_PRINCIPAL).s()).toList());
   }
 
   @VisibleForTesting
@@ -116,31 +116,31 @@ public class PhoneNumberIdentifiers {
   }
 
   /**
-   * Determine what PNI to set for the provided numbers, and set them if required
+   * Determine what PNI to set for the provided principals, and set them if required
    *
-   * @param phoneNumber          The original e164 the operation is for
-   * @param allPhoneNumberForms  The e164s to set. The first e164 in this list should be phoneNumber
-   * @param existingAssociations The current associations of allPhoneNumberForms in the table
-   * @return The PNI now associated with phoneNumber
+   * @param principal            The original principal the operation is for
+   * @param allPrincipalForms    The principals to set. The first element in this list should be principal
+   * @param existingAssociations The current associations of allPrincipalForms in the table
+   * @return The PNI now associated with principal
    */
   @VisibleForTesting
   CompletableFuture<UUID> setPniIfRequired(
-      final String phoneNumber,
-      final List<String> allPhoneNumberForms,
+      final String principal,
+      final List<String> allPrincipalForms,
       Map<String, UUID> existingAssociations) {
-    if (!phoneNumber.equals(allPhoneNumberForms.getFirst())) {
-      throw new IllegalArgumentException("allPhoneNumberForms must start with the target phoneNumber");
+    if (!principal.equals(allPrincipalForms.getFirst())) {
+      throw new IllegalArgumentException("allPrincipalForms must start with the target principal");
     }
 
-    if (existingAssociations.containsKey(phoneNumber)) {
+    if (existingAssociations.containsKey(principal)) {
       // If the provided phone number already has an association, just return that
-      return CompletableFuture.completedFuture(existingAssociations.get(phoneNumber));
+      return CompletableFuture.completedFuture(existingAssociations.get(principal));
     }
 
-    if (allPhoneNumberForms.size() == 1 || existingAssociations.isEmpty()) {
+    if (allPrincipalForms.size() == 1 || existingAssociations.isEmpty()) {
       // Easy case, if we're the only phone number in our equivalence class or there are no existing associations,
       // we can just make an association for a new PNI
-      return setPni(phoneNumber, allPhoneNumberForms, UUID.randomUUID());
+      return setPni(principal, allPrincipalForms, UUID.randomUUID());
     }
 
     // Otherwise, what members of the equivalence class have a PNI association?
@@ -152,7 +152,7 @@ public class PhoneNumberIdentifiers {
     // more. This could only happen if an equivalence class had more than two numbers, and had accumulated 2 unique
     // PNI associations before they were merged into a single class. In this case we've picked one of those pnis
     // arbitrarily (according to their ordering as returned by getAlternateForms)
-    final UUID existingPni = allPhoneNumberForms.stream()
+    final UUID existingPni = allPrincipalForms.stream()
         .filter(existingAssociations::containsKey)
         .findFirst()
         .map(existingAssociations::get)
@@ -161,47 +161,47 @@ public class PhoneNumberIdentifiers {
     if (byPni.size() > 1) {
       logger.warn("More than one PNI existed in the PNI table for the numbers that map to {}. " +
               "Arbitrarily picking {} to be the representative PNI for the numbers without PNI associations",
-          phoneNumber, existingPni);
+          principal, existingPni);
     }
 
     // Find all the unmapped phoneNumbers and set them to the PNI we chose from another member of the equivalence class
-    final List<String> unmappedNumbers = allPhoneNumberForms.stream()
+    final List<String> unmappedNumbers = allPrincipalForms.stream()
         .filter(number -> !existingAssociations.containsKey(number))
         .toList();
 
-    return setPni(phoneNumber, unmappedNumbers, existingPni);
+    return setPni(principal, unmappedNumbers, existingPni);
   }
 
 
   /**
-   * Attempt to associate phoneNumbers with the provided pni. If any of the phoneNumbers have an existing association
-   * that is not the target pni, no update will occur. If the first phoneNumber in phoneNumbers has an existing
+   * Attempt to associate principals with the provided pni. If any of the principals have an existing association
+   * that is not the target pni, no update will occur. If the first principal in principals has an existing
    * association, it will be returned, otherwise an exception will be thrown.
    *
-   * @param originalPhoneNumber The original e164 the operation is for
-   * @param allPhoneNumberForms The e164s to set. The first e164 in this list should be originalPhoneNumber
+   * @param originalPrincipal The original principal the operation is for
+   * @param allPrincipalForms The principals to set. The first principal in this list should be originalPrincipal
    * @param pni                 The PNI to set
-   * @return The provided PNI if the update occurred, or the existing PNI associated with originalPhoneNumber
+   * @return The provided PNI if the update occurred, or the existing PNI associated with originalPrincipal
    */
   @VisibleForTesting
-  CompletableFuture<UUID> setPni(final String originalPhoneNumber, final List<String> allPhoneNumberForms,
+  CompletableFuture<UUID> setPni(final String originalPrincipal, final List<String> allPrincipalForms,
       final UUID pni) {
-    if (!originalPhoneNumber.equals(allPhoneNumberForms.getFirst())) {
-      throw new IllegalArgumentException("allPhoneNumberForms must start with the target phoneNumber");
+    if (!originalPrincipal.equals(allPrincipalForms.getFirst())) {
+      throw new IllegalArgumentException("allPrincipalForms must start with the target phoneNumber");
     }
 
     final Timer.Sample sample = Timer.start();
-    final List<TransactWriteItem> transactWriteItems = allPhoneNumberForms
+    final List<TransactWriteItem> transactWriteItems = allPrincipalForms
         .stream()
         .map(phoneNumber -> TransactWriteItem.builder()
             .update(Update.builder()
                 .tableName(tableName)
-                .key(Map.of(KEY_E164, AttributeValues.fromString(phoneNumber)))
+                .key(Map.of(KEY_PRINCIPAL, AttributeValues.fromString(phoneNumber)))
                 .updateExpression("SET #pni = :pni")
                 // It's possible we're racing with someone else to update, but both of us selected the same PNI because
                 // an equivalent number already had it. That's fine, as long as the association happens.
                 .conditionExpression("attribute_not_exists(#pni) OR #pni = :pni")
-                .expressionAttributeNames(Map.of("#pni", ATTR_PHONE_NUMBER_IDENTIFIER))
+                .expressionAttributeNames(Map.of("#pni", ATTR_PRINCIPAL_NAME_IDENTIFIER))
                 .expressionAttributeValues(Map.of(":pni", AttributeValues.fromUUID(pni)))
                 .returnValuesOnConditionCheckFailure(ReturnValuesOnConditionCheckFailure.ALL_OLD)
                 .build()).build())
@@ -217,7 +217,7 @@ public class PhoneNumberIdentifiers {
             final CancellationReason cancelReason = e.cancellationReasons().getFirst();
             if (CONDITIONAL_CHECK_FAILED.equals(cancelReason.code())) {
               // Someone else beat us to the update, use the PNI they set.
-              return AttributeValues.getUUID(cancelReason.item(), ATTR_PHONE_NUMBER_IDENTIFIER, null);
+              return AttributeValues.getUUID(cancelReason.item(), ATTR_PRINCIPAL_NAME_IDENTIFIER, null);
             }
           }
           throw e;
@@ -226,27 +226,27 @@ public class PhoneNumberIdentifiers {
   }
 
   @VisibleForTesting
-  CompletableFuture<Map<String, UUID>> fetchPhoneNumbers(List<String> phoneNumbers) {
+  CompletableFuture<Map<String, UUID>> fetchPrincipals(List<String> principals) {
     final Timer.Sample sample = Timer.start();
     return dynamoDbClient.batchGetItem(
             BatchGetItemRequest.builder().requestItems(Map.of(tableName, KeysAndAttributes.builder()
                     // If we have a stale value, the subsequent conditional update will fail
                     .consistentRead(false)
-                    .projectionExpression("#number,#pni")
-                    .expressionAttributeNames(Map.of("#number", KEY_E164, "#pni", ATTR_PHONE_NUMBER_IDENTIFIER))
-                    .keys(phoneNumbers.stream()
-                        .map(number -> Map.of(KEY_E164, AttributeValues.fromString(number)))
+                    .projectionExpression("#principal,#pni")
+                    .expressionAttributeNames(Map.of("#principal", KEY_PRINCIPAL, "#pni", ATTR_PRINCIPAL_NAME_IDENTIFIER))
+                    .keys(principals.stream()
+                        .map(principal -> Map.of(KEY_PRINCIPAL, AttributeValues.fromString(principal)))
                         .toArray(Map[]::new))
                     .build()))
                 .build())
         .thenApply(batchResponse -> batchResponse.responses().get(tableName).stream().collect(Collectors.toMap(
-            item -> AttributeValues.getString(item, KEY_E164, null),
-            item -> AttributeValues.getUUID(item, ATTR_PHONE_NUMBER_IDENTIFIER, null))))
+            item -> AttributeValues.getString(item, KEY_PRINCIPAL, null),
+            item -> AttributeValues.getUUID(item, ATTR_PRINCIPAL_NAME_IDENTIFIER, null))))
         .whenComplete((ignored, throwable) -> sample.stop(GET_PNI_TIMER));
   }
 
   CompletableFuture<Void> regeneratePhoneNumberIdentifierMappings(final Account account) {
-    return setPni(account.getNumber(), Util.getAlternateForms(account.getNumber()), account.getIdentifier(IdentityType.PNI))
+    return setPni(account.getPrincipal(), Util.getAlternateForms(account.getPrincipal()), account.getIdentifier(IdentityType.PNI))
         .thenRun(Util.NOOP);
   }
 }

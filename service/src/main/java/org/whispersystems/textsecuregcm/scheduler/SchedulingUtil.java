@@ -66,7 +66,7 @@ public class SchedulingUtil {
   @VisibleForTesting
   static Optional<ZoneId> getZoneId(final Account account, final Clock clock) {
     try {
-      final Phonenumber.PhoneNumber phoneNumber = PhoneNumberUtil.getInstance().parse(account.getNumber(), null);
+      final Phonenumber.PhoneNumber phoneNumber = PhoneNumberUtil.getInstance().parse(account.getPrincipal(), null);
 
       final List<String> timeZonesForNumber =
           PhoneNumberToTimeZonesMapper.getInstance().getTimeZonesForNumber(phoneNumber);

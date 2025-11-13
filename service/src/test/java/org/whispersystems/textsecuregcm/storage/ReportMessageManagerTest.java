@@ -55,8 +55,8 @@ class ReportMessageManagerTest {
 
     sourceAccount = mock(Account.class);
     when(sourceAccount.getUuid()).thenReturn(sourceAci);
-    when(sourceAccount.getNumber()).thenReturn(sourceNumber);
-    when(sourceAccount.getPhoneNumberIdentifier()).thenReturn(sourcePni);
+    when(sourceAccount.getPrincipal()).thenReturn(sourceNumber);
+    when(sourceAccount.getPrincipalNameIdentifier()).thenReturn(sourcePni);
   }
 
   @Test

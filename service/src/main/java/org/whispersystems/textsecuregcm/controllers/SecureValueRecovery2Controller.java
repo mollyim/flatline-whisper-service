@@ -107,9 +107,9 @@ public class SecureValueRecovery2Controller {
         backupServiceCredentialGenerator,
         MAX_AGE_SECONDS);
 
-    // the username associated with the provided number
+    // the username associated with the provided principal
     final Optional<String> matchingUsername = accountsManager
-        .getByE164(request.number())
+        .getByPrincipal(request.principal())
         .map(Account::getUuid)
         .map(backupServiceCredentialGenerator::generateForUuid)
         .map(ExternalServiceCredentials::username);

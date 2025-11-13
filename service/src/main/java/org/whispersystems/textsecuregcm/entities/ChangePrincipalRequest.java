@@ -25,25 +25,25 @@ import org.whispersystems.textsecuregcm.util.E164;
 import org.whispersystems.textsecuregcm.util.IdentityKeyAdapter;
 import org.whispersystems.textsecuregcm.util.RegistrationIdValidator;
 
-public record ChangeNumberRequest(
+public record ChangePrincipalRequest(
     @Schema(description="""
         A session ID from registration service, if using session id to authenticate this request.
         Must not be combined with `recoveryPassword`.""")
     String sessionId,
 
     @Schema(type="string", description="""
-        The base64-encoded recovery password for the new phone number, if using a recovery password to authenticate this request.
+        The base64-encoded recovery password for the new principal, if using a recovery password to authenticate this request.
         Must not be combined with `sessionId`.""")
     @JsonDeserialize(using = ByteArrayAdapter.Deserializing.class) byte[] recoveryPassword,
 
     @E164
-    @Schema(description="the new phone number for this account")
-    @NotBlank String number,
+    @Schema(description="the new principal for this account")
+    @NotBlank String principal,
 
-    @Schema(description="the registration lock password for the new phone number, if necessary")
+    @Schema(description="the registration lock password for the new principal, if necessary")
     @JsonProperty("reglock") @Nullable String registrationLock,
 
-    @Schema(description="the new public identity key to use for the phone-number identity associated with the new phone number")
+    @Schema(description="the new public identity key to use for the principal-name identity associated with the new principal")
     @JsonSerialize(using = IdentityKeyAdapter.Serializer.class)
     @JsonDeserialize(using = IdentityKeyAdapter.Deserializer.class)
     @NotNull IdentityKey pniIdentityKey,
@@ -65,14 +65,14 @@ public record ChangeNumberRequest(
         Each must be accompanied by a valid signature from the new identity key in this request.""")
     @NotNull @NotEmpty @Valid Map<Byte, @NotNull @Valid KEMSignedPreKey> devicePniPqLastResortPrekeys,
 
-    @Schema(description="the new phone-number-identity registration ID for each device on the account, including this one")
-    @NotNull @NotEmpty Map<Byte, Integer> pniRegistrationIds) implements PhoneVerificationRequest {
+    @Schema(description="the new principal-name identity registration ID for each device on the account, including this one")
+    @NotNull @NotEmpty Map<Byte, Integer> pniRegistrationIds) implements PrincipalVerificationRequest {
 
   public boolean isSignatureValidOnEachSignedPreKey(@Nullable final String userAgent) {
     final List<SignedPreKey<?>> spks = new ArrayList<>(devicePniSignedPrekeys.values());
     spks.addAll(devicePniPqLastResortPrekeys.values());
 
-    return PreKeySignatureValidator.validatePreKeySignatures(pniIdentityKey, spks, userAgent, "change-number");
+    return PreKeySignatureValidator.validatePreKeySignatures(pniIdentityKey, spks, userAgent, "change-principal");
   }
 
   @AssertTrue

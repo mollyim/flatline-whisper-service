@@ -11,7 +11,7 @@ import com.google.protobuf.Descriptors;
 import io.grpc.StatusException;
 import java.util.Set;
 import org.whispersystems.textsecuregcm.util.ImpossiblePhoneNumberException;
-import org.whispersystems.textsecuregcm.util.NonNormalizedPhoneNumberException;
+import org.whispersystems.textsecuregcm.util.NonNormalizedPrincipalException;
 import org.whispersystems.textsecuregcm.util.Util;
 
 public class E164FieldValidator extends BaseFieldValidator<Boolean> {
@@ -31,7 +31,7 @@ public class E164FieldValidator extends BaseFieldValidator<Boolean> {
       final String fieldValue) throws StatusException {
     try {
       Util.requireNormalizedNumber(fieldValue);
-    } catch (final ImpossiblePhoneNumberException | NonNormalizedPhoneNumberException e) {
+    } catch (final ImpossiblePhoneNumberException | NonNormalizedPrincipalException e) {
       throw invalidArgument("value is not in E164 format");
     }
   }

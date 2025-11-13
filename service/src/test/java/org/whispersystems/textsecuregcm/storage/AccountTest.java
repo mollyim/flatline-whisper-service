@@ -102,14 +102,14 @@ class AccountTest {
     final Account account = AccountsHelper.generateTestAccount("+14152222222", UUID.randomUUID(), UUID.randomUUID(), List.of(recentPrimaryDevice),
         "1234".getBytes());
 
-    assertTrue(account.isDiscoverableByPhoneNumber(),
+    assertTrue(account.isDiscoverableByPrincipal(),
         "Freshly-loaded legacy accounts should be discoverable by phone number.");
 
-    account.setDiscoverableByPhoneNumber(false);
-    assertFalse(account.isDiscoverableByPhoneNumber());
+    account.setDiscoverableByPrincipal(false);
+    assertFalse(account.isDiscoverableByPrincipal());
 
-    account.setDiscoverableByPhoneNumber(true);
-    assertTrue(account.isDiscoverableByPhoneNumber());
+    account.setDiscoverableByPrincipal(true);
+    assertTrue(account.isDiscoverableByPrincipal());
   }
 
   @Test
@@ -134,11 +134,11 @@ class AccountTest {
     final Account account = AccountsHelper.generateTestAccount("+14151234567", UUID.randomUUID(), UUID.randomUUID(), Collections.emptyList(),
         new byte[0]);
 
-    assertDoesNotThrow(account::getNumber);
+    assertDoesNotThrow(account::getPrincipal);
 
     account.markStale();
 
-    assertThrows(AssertionError.class, account::getNumber);
+    assertThrows(AssertionError.class, account::getPrincipal);
     assertDoesNotThrow(account::getUuid);
   }
 

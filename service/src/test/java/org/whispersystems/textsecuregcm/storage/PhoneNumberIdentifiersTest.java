@@ -35,11 +35,11 @@ class PhoneNumberIdentifiersTest {
   @RegisterExtension
   static DynamoDbExtension DYNAMO_DB_EXTENSION = new DynamoDbExtension(Tables.PNI);
 
-  private PhoneNumberIdentifiers phoneNumberIdentifiers;
+  private PrincipalNameIdentifiers principalNameIdentifiers;
 
   @BeforeEach
   void setUp() {
-    phoneNumberIdentifiers = new PhoneNumberIdentifiers(DYNAMO_DB_EXTENSION.getDynamoDbAsyncClient(),
+    principalNameIdentifiers = new PrincipalNameIdentifiers(DYNAMO_DB_EXTENSION.getDynamoDbAsyncClient(),
         Tables.PNI.tableName());
   }
 
@@ -48,21 +48,21 @@ class PhoneNumberIdentifiersTest {
     final String number = "+18005551234";
     final String differentNumber = "+18005556789";
 
-    final UUID firstPni = phoneNumberIdentifiers.getPhoneNumberIdentifier(number).join();
-    final UUID secondPni = phoneNumberIdentifiers.getPhoneNumberIdentifier(number).join();
+    final UUID firstPni = principalNameIdentifiers.getPrincipalNameIdentifier(number).join();
+    final UUID secondPni = principalNameIdentifiers.getPrincipalNameIdentifier(number).join();
 
     assertEquals(firstPni, secondPni);
-    assertNotEquals(firstPni, phoneNumberIdentifiers.getPhoneNumberIdentifier(differentNumber).join());
+    assertNotEquals(firstPni, principalNameIdentifiers.getPrincipalNameIdentifier(differentNumber).join());
   }
 
   @Test
   void generatePhoneNumberIdentifier() {
     final List<String> numbers = List.of("+18005551234", "+18005556789");
     // Should set both PNIs to a new random PNI
-    final UUID pni = phoneNumberIdentifiers.setPniIfRequired(numbers.getFirst(), numbers, Collections.emptyMap()).join();
+    final UUID pni = principalNameIdentifiers.setPniIfRequired(numbers.getFirst(), numbers, Collections.emptyMap()).join();
 
-    assertEquals(pni, phoneNumberIdentifiers.getPhoneNumberIdentifier(numbers.getFirst()).join());
-    assertEquals(pni, phoneNumberIdentifiers.getPhoneNumberIdentifier(numbers.getLast()).join());
+    assertEquals(pni, principalNameIdentifiers.getPrincipalNameIdentifier(numbers.getFirst()).join());
+    assertEquals(pni, principalNameIdentifiers.getPrincipalNameIdentifier(numbers.getLast()).join());
   }
 
   @Test
@@ -73,15 +73,15 @@ class PhoneNumberIdentifiersTest {
     final List<String> allNumbers = List.of(firstNumber, secondNumber, thirdNumber);
 
     // Set one member of the "same" numbers to a new PNI
-    final UUID pni = phoneNumberIdentifiers.getPhoneNumberIdentifier(secondNumber).join();
+    final UUID pni = principalNameIdentifiers.getPrincipalNameIdentifier(secondNumber).join();
 
-    final Map<String, UUID> existingAssociations = phoneNumberIdentifiers.fetchPhoneNumbers(allNumbers).join();
+    final Map<String, UUID> existingAssociations = principalNameIdentifiers.fetchPrincipals(allNumbers).join();
     assertEquals(Map.of(secondNumber, pni), existingAssociations);
 
-    assertEquals(pni, phoneNumberIdentifiers.setPniIfRequired(firstNumber, allNumbers, existingAssociations).join());
+    assertEquals(pni, principalNameIdentifiers.setPniIfRequired(firstNumber, allNumbers, existingAssociations).join());
 
     for (String number : allNumbers) {
-      assertEquals(pni, phoneNumberIdentifiers.getPhoneNumberIdentifier(number).join());
+      assertEquals(pni, principalNameIdentifiers.getPrincipalNameIdentifier(number).join());
     }
   }
 
@@ -91,8 +91,8 @@ class PhoneNumberIdentifiersTest {
         .format(PhoneNumberUtil.getInstance().getExampleNumber("BJ"), PhoneNumberUtil.PhoneNumberFormat.E164);
 
     final String oldFormatBeninE164 = newFormatBeninE164.replaceFirst("01", "");
-    final UUID oldFormatPni = phoneNumberIdentifiers.getPhoneNumberIdentifier(oldFormatBeninE164).join();
-    final UUID newFormatPni = phoneNumberIdentifiers.getPhoneNumberIdentifier(newFormatBeninE164).join();
+    final UUID oldFormatPni = principalNameIdentifiers.getPrincipalNameIdentifier(oldFormatBeninE164).join();
+    final UUID newFormatPni = principalNameIdentifiers.getPrincipalNameIdentifier(newFormatBeninE164).join();
     assertEquals(oldFormatPni, newFormatPni);
   }
 
@@ -101,20 +101,20 @@ class PhoneNumberIdentifiersTest {
     final String firstNumber = "+18005551234";
     final String secondNumber = "+18005556789";
 
-    final UUID firstPni = phoneNumberIdentifiers.getPhoneNumberIdentifier(firstNumber).join();
-    final UUID secondPni = phoneNumberIdentifiers.getPhoneNumberIdentifier(secondNumber).join();
+    final UUID firstPni = principalNameIdentifiers.getPrincipalNameIdentifier(firstNumber).join();
+    final UUID secondPni = principalNameIdentifiers.getPrincipalNameIdentifier(secondNumber).join();
     assertNotEquals(firstPni, secondPni);
 
     assertEquals(
         firstPni,
-        phoneNumberIdentifiers.setPniIfRequired(
+        principalNameIdentifiers.setPniIfRequired(
             firstNumber, List.of(firstNumber, secondNumber),
-            phoneNumberIdentifiers.fetchPhoneNumbers(List.of(firstNumber, secondNumber)).join()).join());
+            principalNameIdentifiers.fetchPrincipals(List.of(firstNumber, secondNumber)).join()).join());
     assertEquals(
         secondPni,
-        phoneNumberIdentifiers.setPniIfRequired(
+        principalNameIdentifiers.setPniIfRequired(
             secondNumber, List.of(secondNumber, firstNumber),
-            phoneNumberIdentifiers.fetchPhoneNumbers(List.of(firstNumber, secondNumber)).join()).join());
+            principalNameIdentifiers.fetchPrincipals(List.of(firstNumber, secondNumber)).join()).join());
   }
 
   @Test
@@ -124,12 +124,12 @@ class PhoneNumberIdentifiersTest {
     final Map<String, UUID> existingAssociations = Collections.emptyMap();
 
     // Both numbers have different PNIs
-    final UUID pni1 = phoneNumberIdentifiers.getPhoneNumberIdentifier(numbers.getFirst()).join();
-    final UUID pni2 = phoneNumberIdentifiers.getPhoneNumberIdentifier(numbers.getLast()).join();
+    final UUID pni1 = principalNameIdentifiers.getPrincipalNameIdentifier(numbers.getFirst()).join();
+    final UUID pni2 = principalNameIdentifiers.getPrincipalNameIdentifier(numbers.getLast()).join();
     assertNotEquals(pni1, pni2);
 
     // Should conflict and find that we now have a PNI
-    assertEquals(pni1, phoneNumberIdentifiers.setPniIfRequired(numbers.getFirst(), numbers, existingAssociations).join());
+    assertEquals(pni1, principalNameIdentifiers.setPniIfRequired(numbers.getFirst(), numbers, existingAssociations).join());
   }
 
   @Test
@@ -139,12 +139,12 @@ class PhoneNumberIdentifiersTest {
     final Map<String, UUID> existingAssociations = Collections.emptyMap();
 
     // the alternate number has a PNI added
-    phoneNumberIdentifiers.getPhoneNumberIdentifier(numbers.getLast()).join();
+    principalNameIdentifiers.getPrincipalNameIdentifier(numbers.getLast()).join();
 
     // Should conflict and fail
     CompletableFutureTestUtil.assertFailsWithCause(
         TransactionCanceledException.class,
-        phoneNumberIdentifiers.setPniIfRequired(numbers.getFirst(), numbers, existingAssociations));
+        principalNameIdentifiers.setPniIfRequired(numbers.getFirst(), numbers, existingAssociations));
   }
 
   @Test
@@ -152,19 +152,19 @@ class PhoneNumberIdentifiersTest {
     final List<String> numbers = List.of("+18005550000", "+18005551111", "+18005552222", "+18005553333", "+1800555444");
 
     // Set pni1={number1, number2}, pni2={number3}, number0 and number 4 unset
-    final UUID pni1 = phoneNumberIdentifiers.setPniIfRequired(numbers.get(1), numbers.subList(1, 3),
+    final UUID pni1 = principalNameIdentifiers.setPniIfRequired(numbers.get(1), numbers.subList(1, 3),
         Collections.emptyMap()).join();
-    final UUID pni2 = phoneNumberIdentifiers.setPniIfRequired(numbers.get(3), List.of(numbers.get(3)),
+    final UUID pni2 = principalNameIdentifiers.setPniIfRequired(numbers.get(3), List.of(numbers.get(3)),
         Collections.emptyMap()).join();
 
-    final Map<String, UUID> existingAssociations = phoneNumberIdentifiers.fetchPhoneNumbers(numbers).join();
+    final Map<String, UUID> existingAssociations = principalNameIdentifiers.fetchPrincipals(numbers).join();
     assertEquals(existingAssociations, Map.of(numbers.get(1), pni1, numbers.get(2), pni1, numbers.get(3), pni2));
 
     // The unmapped phone numbers should map to the arbitrarily selected PNI (which is selected based on the order
     // of the numbers)
-    assertEquals(pni1, phoneNumberIdentifiers.setPniIfRequired(numbers.get(0), numbers, existingAssociations).join());
-    assertEquals(pni1, phoneNumberIdentifiers.getPhoneNumberIdentifier(numbers.get(0)).join());
-    assertEquals(pni1, phoneNumberIdentifiers.getPhoneNumberIdentifier(numbers.get(4)).join());
+    assertEquals(pni1, principalNameIdentifiers.setPniIfRequired(numbers.get(0), numbers, existingAssociations).join());
+    assertEquals(pni1, principalNameIdentifiers.getPrincipalNameIdentifier(numbers.get(0)).join());
+    assertEquals(pni1, principalNameIdentifiers.getPrincipalNameIdentifier(numbers.get(4)).join());
   }
 
   private static class FailN implements Supplier<CompletableFuture<Integer>> {
@@ -185,25 +185,25 @@ class PhoneNumberIdentifiersTest {
 
   @Test
   void testRetry() {
-    assertEquals(7, PhoneNumberIdentifiers.retry(10, IOException.class, new FailN(9)).join());
+    assertEquals(7, PrincipalNameIdentifiers.retry(10, IOException.class, new FailN(9)).join());
 
     CompletableFutureTestUtil.assertFailsWithCause(
         IOException.class,
-        PhoneNumberIdentifiers.retry(10, IOException.class, new FailN(10)));
+        PrincipalNameIdentifiers.retry(10, IOException.class, new FailN(10)));
 
     CompletableFutureTestUtil.assertFailsWithCause(
         IOException.class,
-        PhoneNumberIdentifiers.retry(10, RuntimeException.class, new FailN(1)));
+        PrincipalNameIdentifiers.retry(10, RuntimeException.class, new FailN(1)));
   }
 
   @Test
   void getPhoneNumber() {
     final String number = "+18005551234";
 
-    assertTrue(phoneNumberIdentifiers.getPhoneNumber(UUID.randomUUID()).join().isEmpty());
+    assertTrue(principalNameIdentifiers.getPrincipal(UUID.randomUUID()).join().isEmpty());
 
-    final UUID pni = phoneNumberIdentifiers.getPhoneNumberIdentifier(number).join();
-    assertEquals(List.of(number), phoneNumberIdentifiers.getPhoneNumber(pni).join());
+    final UUID pni = principalNameIdentifiers.getPrincipalNameIdentifier(number).join();
+    assertEquals(List.of(number), principalNameIdentifiers.getPrincipal(pni).join());
   }
 
   @Test
@@ -216,14 +216,14 @@ class PhoneNumberIdentifiersTest {
     final UUID phoneNumberIdentifier = UUID.randomUUID();
 
     final Account account = mock(Account.class);
-    when(account.getNumber()).thenReturn(newFormatBeninE164);
+    when(account.getPrincipal()).thenReturn(newFormatBeninE164);
     when(account.getIdentifier(IdentityType.PNI)).thenReturn(phoneNumberIdentifier);
 
-    phoneNumberIdentifiers.regeneratePhoneNumberIdentifierMappings(account).join();
+    principalNameIdentifiers.regeneratePhoneNumberIdentifierMappings(account).join();
 
-    assertEquals(phoneNumberIdentifier, phoneNumberIdentifiers.getPhoneNumberIdentifier(newFormatBeninE164).join());
-    assertEquals(phoneNumberIdentifier, phoneNumberIdentifiers.getPhoneNumberIdentifier(oldFormatBeninE164).join());
+    assertEquals(phoneNumberIdentifier, principalNameIdentifiers.getPrincipalNameIdentifier(newFormatBeninE164).join());
+    assertEquals(phoneNumberIdentifier, principalNameIdentifiers.getPrincipalNameIdentifier(oldFormatBeninE164).join());
     assertEquals(Set.of(newFormatBeninE164, oldFormatBeninE164),
-        new HashSet<>(phoneNumberIdentifiers.getPhoneNumber(phoneNumberIdentifier).join()));
+        new HashSet<>(principalNameIdentifiers.getPrincipal(phoneNumberIdentifier).join()));
   }
 }

@@ -61,7 +61,7 @@ public class ExternalServiceCredentialsAnonymousGrpcService extends
         svrCredentialsGenerator,
         MAX_SVR_PASSWORD_AGE_SECONDS);
 
-    return Mono.fromFuture(() -> accountsManager.getByE164Async(request.getNumber()))
+    return Mono.fromFuture(() -> accountsManager.getByPrincipalAsync(request.getNumber()))
         // the username associated with the provided number
         .map(maybeAccount -> maybeAccount.map(Account::getUuid)
             .map(svrCredentialsGenerator::generateForUuid)

@@ -13,7 +13,7 @@ import jakarta.ws.rs.ClientErrorException;
 import java.util.Base64;
 import org.apache.http.HttpStatus;
 
-public interface PhoneVerificationRequest {
+public interface PrincipalVerificationRequest {
 
   enum VerificationType {
     SESSION,
@@ -32,9 +32,9 @@ public interface PhoneVerificationRequest {
     return isNotBlank(sessionId()) ^ (recoveryPassword() != null && recoveryPassword().length > 0);
   }
 
-  default PhoneVerificationRequest.VerificationType verificationType() {
-    return isNotBlank(sessionId()) ? PhoneVerificationRequest.VerificationType.SESSION
-        : PhoneVerificationRequest.VerificationType.RECOVERY_PASSWORD;
+  default PrincipalVerificationRequest.VerificationType verificationType() {
+    return isNotBlank(sessionId()) ? PrincipalVerificationRequest.VerificationType.SESSION
+        : PrincipalVerificationRequest.VerificationType.RECOVERY_PASSWORD;
   }
 
   default byte[] decodeSessionId() {

@@ -70,7 +70,7 @@ public class RateLimitChallengeManager {
     final boolean challengeSuccess = captchaChecker.verify(Optional.of(account.getUuid()), Action.CHALLENGE, captcha, mostRecentProxyIp, userAgent).isValid(scoreThreshold);
 
     final Tags tags = Tags.of(
-        Tag.of(SOURCE_COUNTRY_TAG_NAME, Util.getCountryCode(account.getNumber())),
+        Tag.of(SOURCE_COUNTRY_TAG_NAME, Util.getCountryCode(account.getPrincipal())),
         Tag.of(SUCCESS_TAG_NAME, String.valueOf(challengeSuccess)),
         UserAgentTagUtil.getPlatformTag(userAgent)
     );
@@ -89,7 +89,7 @@ public class RateLimitChallengeManager {
       rateLimiters.getRateLimitResetLimiter().validate(account.getUuid());
     } catch (final RateLimitExceededException e) {
       Metrics.counter(RESET_RATE_LIMIT_EXCEEDED_COUNTER_NAME,
-          SOURCE_COUNTRY_TAG_NAME, Util.getCountryCode(account.getNumber())).increment();
+          SOURCE_COUNTRY_TAG_NAME, Util.getCountryCode(account.getPrincipal())).increment();
 
       throw e;
     }

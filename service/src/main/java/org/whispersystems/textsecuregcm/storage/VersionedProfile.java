@@ -33,7 +33,7 @@ public record VersionedProfile (String version,
 
                                 @JsonSerialize(using = ByteArrayAdapter.Serializing.class)
                                 @JsonDeserialize(using = ByteArrayAdapter.Deserializing.class)
-                                byte[] phoneNumberSharing,
+                                byte[] principalSharing,
 
                                 @JsonSerialize(using = ByteArrayAdapter.Serializing.class)
                                 @JsonDeserialize(using = ByteArrayAdapter.Deserializing.class)

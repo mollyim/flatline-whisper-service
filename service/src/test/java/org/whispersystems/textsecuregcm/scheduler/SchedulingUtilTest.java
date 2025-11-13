@@ -25,7 +25,7 @@ class SchedulingUtilTest {
       final Account account = mock(Account.class);
 
       // The account has a phone number that can be resolved to a region with known timezones
-      when(account.getNumber()).thenReturn(PhoneNumberUtil.getInstance().format(
+      when(account.getPrincipal()).thenReturn(PhoneNumberUtil.getInstance().format(
           PhoneNumberUtil.getInstance().getExampleNumber("DE"), PhoneNumberUtil.PhoneNumberFormat.E164));
 
       final ZoneId berlinZoneId = ZoneId.of("Europe/Berlin");
@@ -48,7 +48,7 @@ class SchedulingUtilTest {
       final Account account = mock(Account.class);
 
       // The account does not have a phone number that can be connected to a region/time zone
-      when(account.getNumber()).thenReturn("Not a parseable number");
+      when(account.getPrincipal()).thenReturn("Not a parseable number");
 
       final ZonedDateTime beforeNotificationTime = ZonedDateTime.now(ZoneId.systemDefault()).with(LocalTime.of(13, 59));
       final LocalTime preferredNotificationTime = LocalTime.of(14, 0);
@@ -72,7 +72,7 @@ class SchedulingUtilTest {
     final Account account = mock(Account.class);
 
     // The account has a phone number that can be resolved to a region with known timezones
-    when(account.getNumber()).thenReturn(PhoneNumberUtil.getInstance().format(
+    when(account.getPrincipal()).thenReturn(PhoneNumberUtil.getInstance().format(
         PhoneNumberUtil.getInstance().getExampleNumber("DE"), PhoneNumberUtil.PhoneNumberFormat.E164));
 
     final LocalDateTime afterNotificationTime = LocalDateTime.of(2025, 3, 29, 15, 0);
@@ -94,7 +94,7 @@ class SchedulingUtilTest {
     final Account account = mock(Account.class);
     final Phonenumber.PhoneNumber phoneNumber = PhoneNumberUtil.getInstance().getExampleNumber("DE");
 
-    when(account.getNumber())
+    when(account.getPrincipal())
         .thenReturn(PhoneNumberUtil.getInstance().format(phoneNumber , PhoneNumberUtil.PhoneNumberFormat.E164));
 
     final Instant now = Instant.now();
@@ -111,7 +111,7 @@ class SchedulingUtilTest {
     // A US VOIP number spans multiple time zones, we should pick a 'middle' one
     final Phonenumber.PhoneNumber phoneNumber =
         PhoneNumberUtil.getInstance().getExampleNumberForType("US", PhoneNumberUtil.PhoneNumberType.VOIP);
-    when(account.getNumber())
+    when(account.getPrincipal())
         .thenReturn(PhoneNumberUtil.getInstance().format(phoneNumber, PhoneNumberUtil.PhoneNumberFormat.E164));
 
     final Instant now = Instant.now();

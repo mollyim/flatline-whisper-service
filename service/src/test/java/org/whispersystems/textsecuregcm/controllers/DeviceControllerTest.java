@@ -144,9 +144,9 @@ class DeviceControllerTest {
     when(primaryDevice.getId()).thenReturn(Device.PRIMARY_ID);
 
     when(account.getNextDeviceId()).thenReturn(NEXT_DEVICE_ID);
-    when(account.getNumber()).thenReturn(AuthHelper.VALID_NUMBER);
+    when(account.getPrincipal()).thenReturn(AuthHelper.VALID_NUMBER);
     when(account.getUuid()).thenReturn(AuthHelper.VALID_UUID);
-    when(account.getPhoneNumberIdentifier()).thenReturn(AuthHelper.VALID_PNI);
+    when(account.getPrincipalNameIdentifier()).thenReturn(AuthHelper.VALID_PNI);
     when(account.getPrimaryDevice()).thenReturn(primaryDevice);
     when(account.getDevice(anyByte())).thenReturn(Optional.empty());
     when(account.getDevice(Device.PRIMARY_ID)).thenReturn(Optional.of(primaryDevice));
@@ -156,8 +156,8 @@ class DeviceControllerTest {
     when(accountsManager.getByAccountIdentifierAsync(AuthHelper.VALID_UUID))
         .thenReturn(CompletableFuture.completedFuture(Optional.of(account)));
 
-    when(accountsManager.getByE164(AuthHelper.VALID_NUMBER)).thenReturn(Optional.of(account));
-    when(accountsManager.getByE164(AuthHelper.VALID_NUMBER_TWO)).thenReturn(Optional.of(maxedAccount));
+    when(accountsManager.getByPrincipal(AuthHelper.VALID_NUMBER)).thenReturn(Optional.of(account));
+    when(accountsManager.getByPrincipal(AuthHelper.VALID_NUMBER_TWO)).thenReturn(Optional.of(maxedAccount));
 
     when(clientPublicKeysManager.setPublicKey(any(), anyByte(), any()))
         .thenReturn(CompletableFuture.completedFuture(null));

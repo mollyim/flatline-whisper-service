@@ -91,7 +91,7 @@ import org.whispersystems.textsecuregcm.spam.RegistrationFraudChecker;
 import org.whispersystems.textsecuregcm.spam.RegistrationFraudChecker.VerificationCheck;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
-import org.whispersystems.textsecuregcm.storage.PhoneNumberIdentifiers;
+import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
 import org.whispersystems.textsecuregcm.storage.VerificationSessionManager;
 import org.whispersystems.textsecuregcm.util.ExceptionUtils;
@@ -126,7 +126,7 @@ public class VerificationController {
   private final PushNotificationManager pushNotificationManager;
   private final RegistrationCaptchaManager registrationCaptchaManager;
   private final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager;
-  private final PhoneNumberIdentifiers phoneNumberIdentifiers;
+  private final PrincipalNameIdentifiers principalNameIdentifiers;
   private final RateLimiters rateLimiters;
   private final AccountsManager accountsManager;
   private final RegistrationFraudChecker registrationFraudChecker;
@@ -138,7 +138,7 @@ public class VerificationController {
       final PushNotificationManager pushNotificationManager,
       final RegistrationCaptchaManager registrationCaptchaManager,
       final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager,
-      final PhoneNumberIdentifiers phoneNumberIdentifiers,
+      final PrincipalNameIdentifiers principalNameIdentifiers,
       final RateLimiters rateLimiters,
       final AccountsManager accountsManager,
       final RegistrationFraudChecker registrationFraudChecker,
@@ -149,7 +149,7 @@ public class VerificationController {
     this.pushNotificationManager = pushNotificationManager;
     this.registrationCaptchaManager = registrationCaptchaManager;
     this.registrationRecoveryPasswordsManager = registrationRecoveryPasswordsManager;
-    this.phoneNumberIdentifiers = phoneNumberIdentifiers;
+    this.principalNameIdentifiers = principalNameIdentifiers;
     this.rateLimiters = rateLimiters;
     this.accountsManager = accountsManager;
     this.registrationFraudChecker = registrationFraudChecker;
@@ -192,7 +192,7 @@ public class VerificationController {
       final String sourceHost = (String) requestContext.getProperty(RemoteAddressFilter.REMOTE_ADDRESS_ATTRIBUTE_NAME);
 
       registrationServiceSession = registrationServiceClient.createRegistrationSession(phoneNumber, sourceHost,
-          accountsManager.getByE164(request.number()).isPresent(),
+          accountsManager.getByPrincipal(request.number()).isPresent(),
           REGISTRATION_RPC_TIMEOUT).join();
     } catch (final CancellationException e) {
 
@@ -730,7 +730,8 @@ public class VerificationController {
     }
 
     if (resultSession.verified()) {
-      registrationRecoveryPasswordsManager.remove(phoneNumberIdentifiers.getPhoneNumberIdentifier(registrationServiceSession.number()).join());
+      registrationRecoveryPasswordsManager.remove(
+          principalNameIdentifiers.getPrincipalNameIdentifier(registrationServiceSession.number()).join());
     }
 
     Metrics.counter(VERIFIED_COUNTER_NAME, Tags.of(
@@ -776,7 +777,8 @@ public class VerificationController {
           .orElseThrow(NotFoundException::new);
 
       if (registrationServiceSession.verified()) {
-        registrationRecoveryPasswordsManager.remove(phoneNumberIdentifiers.getPhoneNumberIdentifier(registrationServiceSession.number()).join());
+        registrationRecoveryPasswordsManager.remove(
+            principalNameIdentifiers.getPrincipalNameIdentifier(registrationServiceSession.number()).join());
       }
 
       return registrationServiceSession;

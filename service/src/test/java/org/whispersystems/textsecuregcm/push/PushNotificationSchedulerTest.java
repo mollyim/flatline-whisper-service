@@ -72,11 +72,11 @@ class PushNotificationSchedulerTest {
     account = mock(Account.class);
     when(account.getUuid()).thenReturn(ACCOUNT_UUID);
     when(account.getIdentifier(IdentityType.ACI)).thenReturn(ACCOUNT_UUID);
-    when(account.getNumber()).thenReturn(ACCOUNT_NUMBER);
+    when(account.getPrincipal()).thenReturn(ACCOUNT_NUMBER);
     when(account.getDevice(DEVICE_ID)).thenReturn(Optional.of(device));
 
     final AccountsManager accountsManager = mock(AccountsManager.class);
-    when(accountsManager.getByE164(ACCOUNT_NUMBER)).thenReturn(Optional.of(account));
+    when(accountsManager.getByPrincipal(ACCOUNT_NUMBER)).thenReturn(Optional.of(account));
     when(accountsManager.getByAccountIdentifierAsync(ACCOUNT_UUID))
         .thenReturn(CompletableFuture.completedFuture(Optional.of(account)));
 

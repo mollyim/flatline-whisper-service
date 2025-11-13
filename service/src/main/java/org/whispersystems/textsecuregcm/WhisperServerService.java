@@ -37,10 +37,8 @@ import io.netty.resolver.dns.DnsNameResolverBuilder;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.Filter;
 import jakarta.servlet.ServletRegistration;
-import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
 import java.net.http.HttpClient;
-import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
@@ -85,7 +83,7 @@ import org.whispersystems.textsecuregcm.auth.CoturnTurnCredentialsManager;
 import org.whispersystems.textsecuregcm.auth.DisconnectionRequestManager;
 import org.whispersystems.textsecuregcm.auth.ExternalServiceCredentialsGenerator;
 import org.whispersystems.textsecuregcm.auth.IdlePrimaryDeviceAuthenticatedWebSocketUpgradeFilter;
-import org.whispersystems.textsecuregcm.auth.PhoneVerificationTokenManager;
+import org.whispersystems.textsecuregcm.auth.PrincipalVerificationTokenManager;
 import org.whispersystems.textsecuregcm.auth.RegistrationLockVerificationManager;
 import org.whispersystems.textsecuregcm.auth.grpc.ProhibitAuthenticationInterceptor;
 import org.whispersystems.textsecuregcm.auth.grpc.RequireAuthenticationInterceptor;
@@ -153,7 +151,6 @@ import org.whispersystems.textsecuregcm.grpc.net.ManagedNioEventLoopGroup;
 import org.whispersystems.textsecuregcm.grpc.net.noisedirect.NoiseDirectTunnelServer;
 import org.whispersystems.textsecuregcm.grpc.net.websocket.NoiseWebSocketTunnelServer;
 import org.whispersystems.textsecuregcm.jetty.JettyHttpConfigurationCustomizer;
-import org.whispersystems.textsecuregcm.keytransparency.KeyTransparencyServiceClient;
 import org.whispersystems.textsecuregcm.limits.CardinalityEstimator;
 import org.whispersystems.textsecuregcm.limits.MessageDeliveryLoopMonitor;
 import org.whispersystems.textsecuregcm.limits.NoopMessageDeliveryLoopMonitor;
@@ -166,10 +163,10 @@ import org.whispersystems.textsecuregcm.mappers.CompletionExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.DeviceLimitExceededExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.GrpcStatusRuntimeExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.IOExceptionMapper;
-import org.whispersystems.textsecuregcm.mappers.ImpossiblePhoneNumberExceptionMapper;
+import org.whispersystems.textsecuregcm.mappers.ImpossiblePrincipalExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.InvalidWebsocketAddressExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.JsonMappingExceptionMapper;
-import org.whispersystems.textsecuregcm.mappers.NonNormalizedPhoneNumberExceptionMapper;
+import org.whispersystems.textsecuregcm.mappers.NonNormalizedPrincipalExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.ObsoletePhoneNumberFormatExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.RateLimitExceededExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.RegistrationServiceSenderExceptionMapper;
@@ -187,7 +184,6 @@ import org.whispersystems.textsecuregcm.metrics.TrafficSource;
 import org.whispersystems.textsecuregcm.providers.MultiRecipientMessageProvider;
 import org.whispersystems.textsecuregcm.push.DummySender;
 import org.whispersystems.textsecuregcm.push.MessageSender;
-import org.whispersystems.textsecuregcm.push.ProvisioningManager;
 import org.whispersystems.textsecuregcm.push.PushNotificationManager;
 import org.whispersystems.textsecuregcm.push.PushNotificationScheduler;
 import org.whispersystems.textsecuregcm.push.ReceiptSender;
@@ -213,7 +209,7 @@ import org.whispersystems.textsecuregcm.spam.SpamFilter;
 import org.whispersystems.textsecuregcm.storage.AccountLockManager;
 import org.whispersystems.textsecuregcm.storage.Accounts;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
-import org.whispersystems.textsecuregcm.storage.ChangeNumberManager;
+import org.whispersystems.textsecuregcm.storage.ChangePrincipalManager;
 import org.whispersystems.textsecuregcm.storage.ClientPublicKeys;
 import org.whispersystems.textsecuregcm.storage.ClientPublicKeysManager;
 import org.whispersystems.textsecuregcm.storage.ClientReleaseManager;
@@ -227,7 +223,7 @@ import org.whispersystems.textsecuregcm.storage.MessagesManager;
 import org.whispersystems.textsecuregcm.storage.OneTimeDonationsManager;
 import org.whispersystems.textsecuregcm.storage.PagedSingleUseKEMPreKeyStore;
 import org.whispersystems.textsecuregcm.storage.PersistentTimer;
-import org.whispersystems.textsecuregcm.storage.PhoneNumberIdentifiers;
+import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.Profiles;
 import org.whispersystems.textsecuregcm.storage.ProfilesManager;
 import org.whispersystems.textsecuregcm.storage.PushChallengeDynamoDb;
@@ -248,11 +244,7 @@ import org.whispersystems.textsecuregcm.storage.VerificationSessions;
 import org.whispersystems.textsecuregcm.storage.devicecheck.AppleDeviceCheckManager;
 import org.whispersystems.textsecuregcm.storage.devicecheck.AppleDeviceCheckTrustAnchor;
 import org.whispersystems.textsecuregcm.storage.devicecheck.AppleDeviceChecks;
-import org.whispersystems.textsecuregcm.subscriptions.AppleAppStoreManager;
 import org.whispersystems.textsecuregcm.subscriptions.BankMandateTranslator;
-import org.whispersystems.textsecuregcm.subscriptions.BraintreeManager;
-import org.whispersystems.textsecuregcm.subscriptions.GooglePlayBillingManager;
-import org.whispersystems.textsecuregcm.subscriptions.StripeManager;
 import org.whispersystems.textsecuregcm.util.BufferingInterceptor;
 import org.whispersystems.textsecuregcm.util.ResilienceUtil;
 import org.whispersystems.textsecuregcm.util.ManagedAwsCrt;
@@ -438,15 +430,16 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         dynamoDbClient,
         dynamoDbAsyncClient,
         config.getDynamoDbTables().getAccounts().getTableName(),
-        config.getDynamoDbTables().getAccounts().getPhoneNumberTableName(),
-        config.getDynamoDbTables().getAccounts().getPhoneNumberIdentifierTableName(),
+        config.getDynamoDbTables().getAccounts().getPrincipalTableName(),
+        config.getDynamoDbTables().getAccounts().getPrincipalNameIdentifierTableName(),
         config.getDynamoDbTables().getAccounts().getUsernamesTableName(),
+        // FLT(uoemai): TODO: Consider if subjects table is required here.
         config.getDynamoDbTables().getDeletedAccounts().getTableName(),
         config.getDynamoDbTables().getAccounts().getUsedLinkDeviceTokensTableName());
     ClientReleases clientReleases = new ClientReleases(dynamoDbAsyncClient,
         config.getDynamoDbTables().getClientReleases().getTableName());
-    PhoneNumberIdentifiers phoneNumberIdentifiers = new PhoneNumberIdentifiers(dynamoDbAsyncClient,
-        config.getDynamoDbTables().getPhoneNumberIdentifiers().getTableName());
+    PrincipalNameIdentifiers principalNameIdentifiers = new PrincipalNameIdentifiers(dynamoDbAsyncClient,
+        config.getDynamoDbTables().getPrincipalNameIdentifiers().getTableName());
     Profiles profiles = new Profiles(dynamoDbClient, dynamoDbAsyncClient,
         config.getDynamoDbTables().getProfiles().getTableName());
 
@@ -668,7 +661,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         config.getDynamoDbTables().getDeletedAccountsLock().getTableName());
     ClientPublicKeysManager clientPublicKeysManager =
         new ClientPublicKeysManager(clientPublicKeys, accountLockManager, accountLockExecutor);
-    AccountsManager accountsManager = new AccountsManager(accounts, phoneNumberIdentifiers, cacheCluster,
+    AccountsManager accountsManager = new AccountsManager(accounts, principalNameIdentifiers, cacheCluster,
         pubsubClient, accountLockManager, keysManager, messagesManager, profilesManager,
         insecureStorageClient, insecureValueRecoveryClient, disconnectionRequestManager,
         registrationRecoveryPasswordsManager, clientPublicKeysManager, accountLockExecutor, messagePollExecutor,
@@ -749,7 +742,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     PushChallengeManager pushChallengeManager = new PushChallengeManager(pushNotificationManager,
         pushChallengeDynamoDb);
 
-    ChangeNumberManager changeNumberManager = new ChangeNumberManager(messageSender, accountsManager, Clock.systemUTC());
+    ChangePrincipalManager changePrincipalManager = new ChangePrincipalManager(messageSender, accountsManager, Clock.systemUTC());
 
     // FLT(uoemai): All forms of payment are disabled in the prototype.
     // HttpClient currencyClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_2).connectTimeout(Duration.ofSeconds(10)).build();
@@ -1127,12 +1120,12 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
 
     final PersistentTimer persistentTimer = new PersistentTimer(rateLimitersCluster, clock);
 
-    final PhoneVerificationTokenManager phoneVerificationTokenManager = new PhoneVerificationTokenManager(
-        phoneNumberIdentifiers, registrationServiceClient, registrationRecoveryPasswordsManager, registrationRecoveryChecker);
+    final PrincipalVerificationTokenManager principalVerificationTokenManager = new PrincipalVerificationTokenManager(
+        principalNameIdentifiers, registrationServiceClient, registrationRecoveryPasswordsManager, registrationRecoveryChecker);
     final List<Object> commonControllers = Lists.newArrayList(
         new AccountController(accountsManager, rateLimiters, registrationRecoveryPasswordsManager,
             usernameHashZkProofVerifier),
-        new AccountControllerV2(accountsManager, changeNumberManager, phoneVerificationTokenManager,
+        new AccountControllerV2(accountsManager, changePrincipalManager, principalVerificationTokenManager,
             registrationLockVerificationManager, rateLimiters),
         new AttachmentControllerV4(rateLimiters, gcsAttachmentGenerator, tusAttachmentGenerator,
             experimentEnrollmentManager),
@@ -1156,7 +1149,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         // FLT(uoemai): Disable key transparency for the prototype.
         // new KeyTransparencyController(keyTransparencyServiceClient),
         new MessageController(rateLimiters, messageByteLimitCardinalityEstimator, messageSender, receiptSender,
-            accountsManager, messagesManager, phoneNumberIdentifiers, pushNotificationManager, pushNotificationScheduler,
+            accountsManager, messagesManager, principalNameIdentifiers, pushNotificationManager, pushNotificationScheduler,
             reportMessageManager, messageDeliveryScheduler, clientReleaseManager,
             zkSecretParams, spamChecker, messageMetrics, messageDeliveryLoopMonitor,
             Clock.systemUTC()),
@@ -1167,7 +1160,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
             zkSecretParams, zkProfileOperations, batchIdentityCheckExecutor),
         // FLT(uoemai): Device provisioning is disabled in the prototype.
         // new ProvisioningController(rateLimiters, provisioningManager),
-        new RegistrationController(accountsManager, phoneVerificationTokenManager, registrationLockVerificationManager,
+        new RegistrationController(accountsManager, principalVerificationTokenManager, registrationLockVerificationManager,
             rateLimiters),
         new RemoteConfigControllerV1(remoteConfigsManager, config.getRemoteConfigConfiguration().globalConfig(), clock),
         new RemoteConfigController(remoteConfigsManager, config.getRemoteConfigConfiguration().globalConfig(), clock),
@@ -1178,7 +1171,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
             config.getCdnConfiguration().bucket()),
         new VerificationController(registrationServiceClient, new VerificationSessionManager(verificationSessions),
             pushNotificationManager, registrationCaptchaManager, registrationRecoveryPasswordsManager,
-            phoneNumberIdentifiers, rateLimiters, accountsManager, registrationFraudChecker,
+            principalNameIdentifiers, rateLimiters, accountsManager, registrationFraudChecker,
             dynamicConfigurationManager, clock)
     );
     // FLT(uoemai): All forms of payment are disabled in the prototype.
@@ -1248,8 +1241,9 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         new InvalidWebsocketAddressExceptionMapper(),
         new DeviceLimitExceededExceptionMapper(),
         new ServerRejectedExceptionMapper(),
-        new ImpossiblePhoneNumberExceptionMapper(),
-        new NonNormalizedPhoneNumberExceptionMapper(),
+        new ImpossiblePrincipalExceptionMapper(),
+        new NonNormalizedPrincipalExceptionMapper(),
+        // FLT(uoemai): TODO: Remove this after migrating verification.
         new ObsoletePhoneNumberFormatExceptionMapper(),
         new RegistrationServiceSenderExceptionMapper(),
         new SubscriptionExceptionMapper(),

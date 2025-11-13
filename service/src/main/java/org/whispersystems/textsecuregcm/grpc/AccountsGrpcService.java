@@ -85,8 +85,8 @@ public class AccountsGrpcService extends ReactorAccountsGrpc.AccountsImplBase {
         .map(account -> {
           final AccountIdentifiers.Builder accountIdentifiersBuilder = AccountIdentifiers.newBuilder()
               .addServiceIdentifiers(ServiceIdentifierUtil.toGrpcServiceIdentifier(new AciServiceIdentifier(account.getUuid())))
-              .addServiceIdentifiers(ServiceIdentifierUtil.toGrpcServiceIdentifier(new PniServiceIdentifier(account.getPhoneNumberIdentifier())))
-              .setE164(account.getNumber());
+              .addServiceIdentifiers(ServiceIdentifierUtil.toGrpcServiceIdentifier(new PniServiceIdentifier(account.getPrincipalNameIdentifier())))
+              .setE164(account.getPrincipal());
 
           account.getUsernameHash().ifPresent(usernameHash ->
               accountIdentifiersBuilder.setUsernameHash(ByteString.copyFrom(usernameHash)));
@@ -321,7 +321,7 @@ public class AccountsGrpcService extends ReactorAccountsGrpc.AccountsImplBase {
     return Mono.fromFuture(() -> accountsManager.getByAccountIdentifierAsync(authenticatedDevice.accountIdentifier()))
         .map(maybeAccount -> maybeAccount.orElseThrow(Status.UNAUTHENTICATED::asRuntimeException))
         .flatMap(account -> Mono.fromFuture(() -> accountsManager.updateAsync(account,
-            a -> a.setDiscoverableByPhoneNumber(request.getDiscoverableByPhoneNumber()))))
+            a -> a.setDiscoverableByPrincipal(request.getDiscoverableByPhoneNumber()))))
         .thenReturn(SetDiscoverableByPhoneNumberResponse.newBuilder().build());
   }
 

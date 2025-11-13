@@ -71,7 +71,7 @@ public record RegistrationRequest(@Schema(requiredMode = Schema.RequiredMode.NOT
                                   @Valid
                                   @JsonUnwrapped
                                   @JsonProperty
-                                  DeviceActivationRequest deviceActivationRequest) implements PhoneVerificationRequest {
+                                  DeviceActivationRequest deviceActivationRequest) implements PrincipalVerificationRequest {
 
   public boolean isEverySignedKeyValid(@Nullable final String userAgent) {
     if (deviceActivationRequest().aciSignedPreKey() == null ||

@@ -15,11 +15,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.cert.CertificateException;
 import java.time.Clock;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
@@ -68,7 +64,7 @@ import org.whispersystems.textsecuregcm.storage.MessagesCache;
 import org.whispersystems.textsecuregcm.storage.MessagesDynamoDb;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
 import org.whispersystems.textsecuregcm.storage.PagedSingleUseKEMPreKeyStore;
-import org.whispersystems.textsecuregcm.storage.PhoneNumberIdentifiers;
+import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.Profiles;
 import org.whispersystems.textsecuregcm.storage.ProfilesManager;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswords;
@@ -117,7 +113,7 @@ record CommandDependencies(
     SubscriptionManager subscriptionManager,
     DynamicConfigurationManager<DynamicConfiguration> dynamicConfigurationManager,
     DynamoDbAsyncClient dynamoDbAsyncClient,
-    PhoneNumberIdentifiers phoneNumberIdentifiers,
+    PrincipalNameIdentifiers principalNameIdentifiers,
     DynamoDbRecoveryManager dynamoDbRecoveryManager) {
 
   static CommandDependencies build(
@@ -217,13 +213,13 @@ record CommandDependencies(
         dynamoDbClient,
         dynamoDbAsyncClient,
         configuration.getDynamoDbTables().getAccounts().getTableName(),
-        configuration.getDynamoDbTables().getAccounts().getPhoneNumberTableName(),
-        configuration.getDynamoDbTables().getAccounts().getPhoneNumberIdentifierTableName(),
+        configuration.getDynamoDbTables().getAccounts().getPrincipalTableName(),
+        configuration.getDynamoDbTables().getAccounts().getPrincipalNameIdentifierTableName(),
         configuration.getDynamoDbTables().getAccounts().getUsernamesTableName(),
         configuration.getDynamoDbTables().getDeletedAccounts().getTableName(),
         configuration.getDynamoDbTables().getAccounts().getUsedLinkDeviceTokensTableName());
-    PhoneNumberIdentifiers phoneNumberIdentifiers = new PhoneNumberIdentifiers(dynamoDbAsyncClient,
-        configuration.getDynamoDbTables().getPhoneNumberIdentifiers().getTableName());
+    PrincipalNameIdentifiers principalNameIdentifiers = new PrincipalNameIdentifiers(dynamoDbAsyncClient,
+        configuration.getDynamoDbTables().getPrincipalNameIdentifiers().getTableName());
     Profiles profiles = new Profiles(dynamoDbClient, dynamoDbAsyncClient,
         configuration.getDynamoDbTables().getProfiles().getTableName());
     S3AsyncClient asyncKeysS3Client = S3AsyncClient.builder()
@@ -286,7 +282,7 @@ record CommandDependencies(
         new ClientPublicKeysManager(clientPublicKeys, accountLockManager, accountLockExecutor);
     RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager =
         new RegistrationRecoveryPasswordsManager(registrationRecoveryPasswords);
-    AccountsManager accountsManager = new AccountsManager(accounts, phoneNumberIdentifiers, cacheCluster,
+    AccountsManager accountsManager = new AccountsManager(accounts, principalNameIdentifiers, cacheCluster,
         pubsubClient, accountLockManager, keys, messagesManager, profilesManager,
         secureStorageClient, secureValueRecovery2Client, disconnectionRequestManager,
         registrationRecoveryPasswordsManager, clientPublicKeysManager, accountLockExecutor, messagePollExecutor,
@@ -360,7 +356,7 @@ record CommandDependencies(
             Clock.systemUTC());
 
     final DynamoDbRecoveryManager dynamoDbRecoveryManager =
-        new DynamoDbRecoveryManager(accounts, phoneNumberIdentifiers);
+        new DynamoDbRecoveryManager(accounts, principalNameIdentifiers);
 
     environment.lifecycle().manage(apnSender);
     environment.lifecycle().manage(disconnectionRequestManager);
@@ -389,7 +385,7 @@ record CommandDependencies(
         subscriptionManager,
         dynamicConfigurationManager,
         dynamoDbAsyncClient,
-        phoneNumberIdentifiers,
+            principalNameIdentifiers,
         dynamoDbRecoveryManager
     );
   }

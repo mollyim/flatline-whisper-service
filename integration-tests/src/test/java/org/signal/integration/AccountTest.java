@@ -22,7 +22,7 @@ import org.signal.libsignal.usernames.BaseUsernameException;
 import org.signal.libsignal.usernames.Username;
 import org.whispersystems.textsecuregcm.entities.AccountIdentifierResponse;
 import org.whispersystems.textsecuregcm.entities.AccountIdentityResponse;
-import org.whispersystems.textsecuregcm.entities.ChangeNumberRequest;
+import org.whispersystems.textsecuregcm.entities.ChangePrincipalRequest;
 import org.whispersystems.textsecuregcm.entities.ConfirmUsernameHashRequest;
 import org.whispersystems.textsecuregcm.entities.ReserveUsernameHashRequest;
 import org.whispersystems.textsecuregcm.entities.ReserveUsernameHashResponse;
@@ -65,7 +65,7 @@ public class AccountTest {
 
     final ECKeyPair pniIdentityKeyPair = ECKeyPair.generate();
 
-    final ChangeNumberRequest changeNumberRequest = new ChangeNumberRequest(null,
+    final ChangePrincipalRequest changePrincipalRequest = new ChangePrincipalRequest(null,
         Operations.populateRandomRecoveryPassword(targetNumber),
         targetNumber,
         null,
@@ -76,7 +76,7 @@ public class AccountTest {
         Map.of(Device.PRIMARY_ID, 17));
 
     final AccountIdentityResponse accountIdentityResponse =
-        Operations.apiPut("/v2/accounts/number", changeNumberRequest)
+        Operations.apiPut("/v2/accounts/number", changePrincipalRequest)
             .authorized(user)
             .executeExpectSuccess(AccountIdentityResponse.class);
 

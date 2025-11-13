@@ -107,7 +107,7 @@ import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.ClientReleaseManager;
 import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
-import org.whispersystems.textsecuregcm.storage.PhoneNumberIdentifiers;
+import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RemovedMessage;
 import org.whispersystems.textsecuregcm.storage.ReportMessageManager;
 import org.whispersystems.textsecuregcm.tests.util.AccountsHelper;
@@ -171,7 +171,7 @@ class MessageControllerTest {
   private static final RateLimiters rateLimiters = mock(RateLimiters.class);
   private static final CardinalityEstimator cardinalityEstimator = mock(CardinalityEstimator.class);
   private static final RateLimiter rateLimiter = mock(RateLimiter.class);
-  private static final PhoneNumberIdentifiers phoneNumberIdentifiers = mock(PhoneNumberIdentifiers.class);
+  private static final PrincipalNameIdentifiers PRINCIPAL_NAME_IDENTIFIERS = mock(PrincipalNameIdentifiers.class);
   private static final PushNotificationManager pushNotificationManager = mock(PushNotificationManager.class);
   private static final PushNotificationScheduler pushNotificationScheduler = mock(PushNotificationScheduler.class);
   private static final ReportMessageManager reportMessageManager = mock(ReportMessageManager.class);
@@ -193,7 +193,7 @@ class MessageControllerTest {
       .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
       .addResource(
           new MessageController(rateLimiters, cardinalityEstimator, messageSender, receiptSender, accountsManager,
-              messagesManager, phoneNumberIdentifiers, pushNotificationManager, pushNotificationScheduler,
+              messagesManager, PRINCIPAL_NAME_IDENTIFIERS, pushNotificationManager, pushNotificationScheduler,
               reportMessageManager, messageDeliveryScheduler, mock(ClientReleaseManager.class),
               serverSecretParams, SpamChecker.noop(), new MessageMetrics(), mock(MessageDeliveryLoopMonitor.class),
               clock))
@@ -275,7 +275,7 @@ class MessageControllerTest {
         rateLimiters,
         rateLimiter,
         cardinalityEstimator,
-        phoneNumberIdentifiers,
+        PRINCIPAL_NAME_IDENTIFIERS,
         pushNotificationManager,
         reportMessageManager
     );
@@ -882,10 +882,10 @@ class MessageControllerTest {
 
     final Account account = mock(Account.class);
     when(account.getUuid()).thenReturn(senderAci);
-    when(account.getNumber()).thenReturn(senderNumber);
-    when(account.getPhoneNumberIdentifier()).thenReturn(senderPni);
+    when(account.getPrincipal()).thenReturn(senderNumber);
+    when(account.getPrincipalNameIdentifier()).thenReturn(senderPni);
 
-    when(accountsManager.getByE164(senderNumber)).thenReturn(Optional.of(account));
+    when(accountsManager.getByPrincipal(senderNumber)).thenReturn(Optional.of(account));
 
     try (final Response response =
         resources.getJerseyTest()
@@ -900,7 +900,7 @@ class MessageControllerTest {
       verify(reportMessageManager).report(Optional.of(senderNumber), Optional.of(senderAci), Optional.of(senderPni),
           messageGuid, AuthHelper.VALID_UUID, Optional.empty(), userAgent);
       verify(accountsManager, never()).findRecentlyDeletedPhoneNumberIdentifier(any(UUID.class));
-      verify(phoneNumberIdentifiers, never()).getPhoneNumber(any());
+      verify(PRINCIPAL_NAME_IDENTIFIERS, never()).getPrincipal(any());
     }
   }
 
@@ -914,11 +914,11 @@ class MessageControllerTest {
 
     final Account account = mock(Account.class);
     when(account.getUuid()).thenReturn(senderAci);
-    when(account.getNumber()).thenReturn(senderNumber);
-    when(account.getPhoneNumberIdentifier()).thenReturn(senderPni);
+    when(account.getPrincipal()).thenReturn(senderNumber);
+    when(account.getPrincipalNameIdentifier()).thenReturn(senderPni);
 
-    when(accountsManager.getByE164(senderNumber)).thenReturn(Optional.empty());
-    when(phoneNumberIdentifiers.getPhoneNumberIdentifier(senderNumber)).thenReturn(CompletableFuture.completedFuture(senderPni));
+    when(accountsManager.getByPrincipal(senderNumber)).thenReturn(Optional.empty());
+    when(PRINCIPAL_NAME_IDENTIFIERS.getPrincipalNameIdentifier(senderNumber)).thenReturn(CompletableFuture.completedFuture(senderPni));
     when(accountsManager.findRecentlyDeletedAccountIdentifier(senderPni)).thenReturn(Optional.of(senderAci));
 
     try (final Response response =
@@ -946,11 +946,11 @@ class MessageControllerTest {
 
     final Account account = mock(Account.class);
     when(account.getUuid()).thenReturn(senderAci);
-    when(account.getNumber()).thenReturn(senderNumber);
-    when(account.getPhoneNumberIdentifier()).thenReturn(senderPni);
+    when(account.getPrincipal()).thenReturn(senderNumber);
+    when(account.getPrincipalNameIdentifier()).thenReturn(senderPni);
 
     when(accountsManager.getByAccountIdentifier(senderAci)).thenReturn(Optional.of(account));
-    when(phoneNumberIdentifiers.getPhoneNumber(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderNumber)));
+    when(PRINCIPAL_NAME_IDENTIFIERS.getPrincipal(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderNumber)));
 
     try (final Response response =
         resources.getJerseyTest()
@@ -965,7 +965,7 @@ class MessageControllerTest {
       verify(reportMessageManager).report(Optional.of(senderNumber), Optional.of(senderAci), Optional.of(senderPni),
           messageGuid, AuthHelper.VALID_UUID, Optional.empty(), userAgent);
       verify(accountsManager, never()).findRecentlyDeletedPhoneNumberIdentifier(any(UUID.class));
-      verify(phoneNumberIdentifiers, never()).getPhoneNumber(any());
+      verify(PRINCIPAL_NAME_IDENTIFIERS, never()).getPrincipal(any());
     }
   }
 
@@ -979,12 +979,12 @@ class MessageControllerTest {
 
     final Account account = mock(Account.class);
     when(account.getUuid()).thenReturn(senderAci);
-    when(account.getNumber()).thenReturn(senderNumber);
-    when(account.getPhoneNumberIdentifier()).thenReturn(senderPni);
+    when(account.getPrincipal()).thenReturn(senderNumber);
+    when(account.getPrincipalNameIdentifier()).thenReturn(senderPni);
 
     when(accountsManager.getByAccountIdentifier(senderAci)).thenReturn(Optional.empty());
     when(accountsManager.findRecentlyDeletedPhoneNumberIdentifier(senderAci)).thenReturn(Optional.of(senderPni));
-    when(phoneNumberIdentifiers.getPhoneNumber(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderNumber)));
+    when(PRINCIPAL_NAME_IDENTIFIERS.getPrincipal(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderNumber)));
 
     try (final Response response =
         resources.getJerseyTest()
@@ -1011,12 +1011,12 @@ class MessageControllerTest {
 
     final Account account = mock(Account.class);
     when(account.getUuid()).thenReturn(senderAci);
-    when(account.getNumber()).thenReturn(senderNumber);
-    when(account.getPhoneNumberIdentifier()).thenReturn(senderPni);
+    when(account.getPrincipal()).thenReturn(senderNumber);
+    when(account.getPrincipalNameIdentifier()).thenReturn(senderPni);
 
     when(accountsManager.getByAccountIdentifier(senderAci)).thenReturn(Optional.of(account));
     when(accountsManager.findRecentlyDeletedPhoneNumberIdentifier(senderAci)).thenReturn(Optional.of(senderPni));
-    when(phoneNumberIdentifiers.getPhoneNumber(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderNumber)));
+    when(PRINCIPAL_NAME_IDENTIFIERS.getPrincipal(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderNumber)));
 
     Entity<SpamReport> entity = Entity.entity(new SpamReport(new byte[3]), "application/json");
 
@@ -1036,7 +1036,7 @@ class MessageControllerTest {
           argThat(maybeBytes -> maybeBytes.map(bytes -> Arrays.equals(bytes, new byte[3])).orElse(false)),
           any());
       verify(accountsManager, never()).findRecentlyDeletedPhoneNumberIdentifier(any(UUID.class));
-      verify(phoneNumberIdentifiers, never()).getPhoneNumber(any());
+      verify(PRINCIPAL_NAME_IDENTIFIERS, never()).getPrincipal(any());
     }
 
     when(accountsManager.getByAccountIdentifier(senderAci)).thenReturn(Optional.empty());
@@ -1074,12 +1074,12 @@ class MessageControllerTest {
 
     final Account account = mock(Account.class);
     when(account.getUuid()).thenReturn(senderAci);
-    when(account.getNumber()).thenReturn(senderNumber);
-    when(account.getPhoneNumberIdentifier()).thenReturn(senderPni);
+    when(account.getPrincipal()).thenReturn(senderNumber);
+    when(account.getPrincipalNameIdentifier()).thenReturn(senderPni);
 
     when(accountsManager.getByAccountIdentifier(senderAci)).thenReturn(Optional.of(account));
     when(accountsManager.findRecentlyDeletedPhoneNumberIdentifier(senderAci)).thenReturn(Optional.of(senderPni));
-    when(phoneNumberIdentifiers.getPhoneNumber(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderNumber)));
+    when(PRINCIPAL_NAME_IDENTIFIERS.getPrincipal(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderNumber)));
 
     try (final Response response =
         resources.getJerseyTest()

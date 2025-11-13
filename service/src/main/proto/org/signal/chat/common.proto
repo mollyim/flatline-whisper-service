@@ -34,9 +34,9 @@ message AccountIdentifiers {
   repeated ServiceIdentifier service_identifiers = 1;
 
   /**
-   * The phone number associated with the identified account.
+   * The principal associated with the identified account.
    */
-  string e164 = 2;
+  string principal = 2;
 
   /**
    * The username hash (if any) associated with the identified account. May be
