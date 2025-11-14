@@ -19,7 +19,7 @@ import org.whispersystems.textsecuregcm.util.ServiceIdentifierAdapter;
 public record BatchIdentityCheckRequest(@Valid @NotNull @Size(max = 1000) List<Element> elements) {
 
   /**
-   * @param uuid        account id or phone number id
+   * @param uuid        account id or principal name id
    * @param fingerprint most significant 4 bytes of SHA-256 of the 33-byte identity key field (32-byte curve25519 public
    *                    key prefixed with 0x05)
    */

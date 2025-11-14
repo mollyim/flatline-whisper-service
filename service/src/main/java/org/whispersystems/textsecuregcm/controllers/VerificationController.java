@@ -182,7 +182,7 @@ public class VerificationController {
 
     final Phonenumber.PhoneNumber phoneNumber;
     try {
-      phoneNumber = Util.canonicalizePhoneNumber(PhoneNumberUtil.getInstance().parse(request.number(), null));
+      phoneNumber = Util.canonicalizePhoneNumber(PhoneNumberUtil.getInstance().parse(request.principal(), null));
     } catch (final NumberParseException e) {
       throw new ServerErrorException("could not parse already validated number", Response.Status.INTERNAL_SERVER_ERROR);
     }
@@ -192,7 +192,7 @@ public class VerificationController {
       final String sourceHost = (String) requestContext.getProperty(RemoteAddressFilter.REMOTE_ADDRESS_ATTRIBUTE_NAME);
 
       registrationServiceSession = registrationServiceClient.createRegistrationSession(phoneNumber, sourceHost,
-          accountsManager.getByPrincipal(request.number()).isPresent(),
+          accountsManager.getByPrincipal(request.principal()).isPresent(),
           REGISTRATION_RPC_TIMEOUT).join();
     } catch (final CancellationException e) {
 
@@ -262,7 +262,7 @@ public class VerificationController {
     final VerificationCheck verificationCheck = registrationFraudChecker.checkVerificationAttempt(
         requestContext,
         verificationSession,
-        registrationServiceSession.number(),
+        registrationServiceSession.principal(),
         updateVerificationSessionRequest);
 
     try {
@@ -380,8 +380,8 @@ public class VerificationController {
     }
 
     Metrics.counter(PUSH_CHALLENGE_COUNTER_NAME,
-            COUNTRY_CODE_TAG_NAME, Util.getCountryCode(registrationServiceSession.number()),
-            REGION_CODE_TAG_NAME, Util.getRegion(registrationServiceSession.number()),
+            COUNTRY_CODE_TAG_NAME, Util.getCountryCode(registrationServiceSession.principal()),
+            REGION_CODE_TAG_NAME, Util.getRegion(registrationServiceSession.principal()),
             CHALLENGE_PRESENT_TAG_NAME, Boolean.toString(pushChallengePresent),
             CHALLENGE_MATCH_TAG_NAME, Boolean.toString(pushChallengeMatches))
         .increment();
@@ -443,8 +443,8 @@ public class VerificationController {
       Metrics.counter(CAPTCHA_ATTEMPT_COUNTER_NAME, Tags.of(
               Tag.of(SUCCESS_TAG_NAME, String.valueOf(assessmentResult.isValid(captchaScoreThreshold))),
               UserAgentTagUtil.getPlatformTag(userAgent),
-              Tag.of(COUNTRY_CODE_TAG_NAME, Util.getCountryCode(registrationServiceSession.number())),
-              Tag.of(REGION_CODE_TAG_NAME, Util.getRegion(registrationServiceSession.number())),
+              Tag.of(COUNTRY_CODE_TAG_NAME, Util.getCountryCode(registrationServiceSession.principal())),
+              Tag.of(REGION_CODE_TAG_NAME, Util.getRegion(registrationServiceSession.principal())),
               Tag.of(SCORE_TAG_NAME, assessmentResult.getScoreString())))
           .increment();
 
@@ -643,8 +643,8 @@ public class VerificationController {
 
     Metrics.counter(CODE_REQUESTED_COUNTER_NAME, Tags.of(
             UserAgentTagUtil.getPlatformTag(userAgent),
-            Tag.of(COUNTRY_CODE_TAG_NAME, Util.getCountryCode(registrationServiceSession.number())),
-            Tag.of(REGION_CODE_TAG_NAME, Util.getRegion(registrationServiceSession.number())),
+            Tag.of(COUNTRY_CODE_TAG_NAME, Util.getCountryCode(registrationServiceSession.principal())),
+            Tag.of(REGION_CODE_TAG_NAME, Util.getRegion(registrationServiceSession.principal())),
             Tag.of(VERIFICATION_TRANSPORT_TAG_NAME, verificationCodeRequest.transport().toString())))
         .increment();
 
@@ -731,13 +731,13 @@ public class VerificationController {
 
     if (resultSession.verified()) {
       registrationRecoveryPasswordsManager.remove(
-          principalNameIdentifiers.getPrincipalNameIdentifier(registrationServiceSession.number()).join());
+          principalNameIdentifiers.getPrincipalNameIdentifier(registrationServiceSession.principal()).join());
     }
 
     Metrics.counter(VERIFIED_COUNTER_NAME, Tags.of(
             UserAgentTagUtil.getPlatformTag(userAgent),
-            Tag.of(COUNTRY_CODE_TAG_NAME, Util.getCountryCode(registrationServiceSession.number())),
-            Tag.of(REGION_CODE_TAG_NAME, Util.getRegion(registrationServiceSession.number())),
+            Tag.of(COUNTRY_CODE_TAG_NAME, Util.getCountryCode(registrationServiceSession.principal())),
+            Tag.of(REGION_CODE_TAG_NAME, Util.getRegion(registrationServiceSession.principal())),
             Tag.of(SUCCESS_TAG_NAME, Boolean.toString(resultSession.verified()))))
         .increment();
 
@@ -778,7 +778,7 @@ public class VerificationController {
 
       if (registrationServiceSession.verified()) {
         registrationRecoveryPasswordsManager.remove(
-            principalNameIdentifiers.getPrincipalNameIdentifier(registrationServiceSession.number()).join());
+            principalNameIdentifiers.getPrincipalNameIdentifier(registrationServiceSession.principal()).join());
       }
 
       return registrationServiceSession;

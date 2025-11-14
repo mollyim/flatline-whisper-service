@@ -28,7 +28,7 @@ public record KeyTransparencyMonitorRequest(
 
     @Valid
     @NotNull
-    Optional<@Valid E164Monitor> e164,
+    Optional<@Valid PrincipalMonitor> principal,
 
     @Valid
     @NotNull
@@ -60,12 +60,12 @@ public record KeyTransparencyMonitorRequest(
       byte[] commitmentIndex
   ) {}
 
-  public record E164Monitor(
-      @Schema(description = "The e164-formatted phone number to monitor")
+  public record PrincipalMonitor(
+      @Schema(description = "The principal to monitor")
       @NotBlank
       String value,
 
-      @Schema(description = "A log tree position maintained by the client for the e164.")
+      @Schema(description = "A log tree position maintained by the client for the principal.")
       @Positive
       long entryPosition,
 

@@ -27,8 +27,8 @@ public class RegistrationRecoveryPasswordsManager {
     this.registrationRecoveryPasswords = requireNonNull(registrationRecoveryPasswords);
   }
 
-  public CompletableFuture<Boolean> verify(final UUID phoneNumberIdentifier, final byte[] password) {
-    return registrationRecoveryPasswords.lookup(phoneNumberIdentifier)
+  public CompletableFuture<Boolean> verify(final UUID principalNameIdentifier, final byte[] password) {
+    return registrationRecoveryPasswords.lookup(principalNameIdentifier)
         .thenApply(maybeHash -> maybeHash.filter(hash -> hash.verify(bytesToString(password))))
         .whenComplete((result, error) -> {
           if (error != null) {
@@ -38,11 +38,11 @@ public class RegistrationRecoveryPasswordsManager {
         .thenApply(Optional::isPresent);
   }
 
-  public CompletableFuture<Void> store(final UUID phoneNumberIdentifier, final byte[] password) {
+  public CompletableFuture<Void> store(final UUID principalNameIdentifier, final byte[] password) {
     final String token = bytesToString(password);
     final SaltedTokenHash tokenHash = SaltedTokenHash.generateFor(token);
 
-    return registrationRecoveryPasswords.addOrReplace(phoneNumberIdentifier, tokenHash)
+    return registrationRecoveryPasswords.addOrReplace(principalNameIdentifier, tokenHash)
         .whenComplete((result, error) -> {
           if (error != null) {
             logger.warn("Failed to store Registration Recovery Password", error);
@@ -50,8 +50,8 @@ public class RegistrationRecoveryPasswordsManager {
         });
   }
 
-  public CompletableFuture<Void> remove(final UUID phoneNumberIdentifier) {
-    return registrationRecoveryPasswords.removeEntry(phoneNumberIdentifier)
+  public CompletableFuture<Void> remove(final UUID principalNameIdentifier) {
+    return registrationRecoveryPasswords.removeEntry(principalNameIdentifier)
         .whenComplete((ignored, error) -> {
           if (error instanceof ResourceNotFoundException) {
             // These will naturally happen if a recovery password is already deleted. Since we can remove

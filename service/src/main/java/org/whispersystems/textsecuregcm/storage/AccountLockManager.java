@@ -41,37 +41,37 @@ public class AccountLockManager {
   }
 
   /**
-   * Acquires a distributed, pessimistic lock for the accounts identified by the given phone number identifiers. By
+   * Acquires a distributed, pessimistic lock for the accounts identified by the given principal name identifiers. By
    * design, the accounts need not actually exist in order to acquire a lock; this allows lock acquisition for
-   * operations that span account lifecycle changes (like deleting an account or changing a phone number). The given
+   * operations that span account lifecycle changes (like deleting an account or changing a principal). The given
    * task runs once locks for all given identifiers have been acquired, and the locks are released as soon as the task
    * completes by any means.
    *
-   * @param phoneNumberIdentifiers  the phone number identifiers for which to acquire a distributed, pessimistic lock
-   * @param task                    the task to execute once locks have been acquired
-   * @param lockAcquisitionExecutor the executor on which to run blocking lock acquire/release tasks. this executor
-   *                                should not use virtual threads.
+   * @param principalNameIdentifiers the principal name identifiers for which to acquire a distributed, pessimistic lock
+   * @param task                     the task to execute once locks have been acquired
+   * @param lockAcquisitionExecutor  the executor on which to run blocking lock acquire/release tasks. this executor
+   *                                 should not use virtual threads.
    *
    * @return the value returned by the given {@code task}
    *
    * @throws Exception if an exception is thrown by the given {@code task}
    */
-  public <V> V withLock(final Set<UUID> phoneNumberIdentifiers,
+  public <V> V withLock(final Set<UUID> principalNameIdentifiers,
       final Callable<V> task,
       final Executor lockAcquisitionExecutor) throws Exception {
 
-    if (phoneNumberIdentifiers.isEmpty()) {
+    if (principalNameIdentifiers.isEmpty()) {
       throw new IllegalArgumentException("List of PNIs to lock must not be empty");
     }
 
-    final List<LockItem> lockItems = new ArrayList<>(phoneNumberIdentifiers.size());
+    final List<LockItem> lockItems = new ArrayList<>(principalNameIdentifiers.size());
 
     try {
       // Offload the acquire/release tasks to the dedicated lock acquisition executor. The lock client performs blocking
       // operations while holding locks which forces thread pinning when this method runs on a virtual thread.
       // https://github.com/awslabs/amazon-dynamodb-lock-client/issues/97
       CompletableFuture.runAsync(() -> {
-        for (final UUID pni : phoneNumberIdentifiers) {
+        for (final UUID pni : principalNameIdentifiers) {
           try {
             lockItems.add(lockClient.acquireLock(AcquireLockOptions.builder(pni.toString())
                 .withAcquireReleasedLocksConsistently(true)
@@ -95,29 +95,29 @@ public class AccountLockManager {
   }
 
   /**
-   * Acquires a distributed, pessimistic lock for the accounts identified by the given phone number identifiers. By
+   * Acquires a distributed, pessimistic lock for the accounts identified by the given principal name identifiers. By
    * design, the accounts need not actually exist in order to acquire a lock; this allows lock acquisition for
-   * operations that span account lifecycle changes (like deleting an account or changing a phone number). The given
+   * operations that span account lifecycle changes (like deleting an account or changing a principal). The given
    * task runs once locks for all given identifiers have been acquired, and the locks are released as soon as the task
    * completes by any means.
    *
-   * @param phoneNumberIdentifiers the phone number identifiers for which to acquire a distributed, pessimistic lock
-   * @param taskSupplier           a supplier for the task to execute once locks have been acquired
-   * @param executor               the executor on which to acquire and release locks
+   * @param principalNameIdentifiers the principal name identifiers for which to acquire a distributed, pessimistic lock
+   * @param taskSupplier             a supplier for the task to execute once locks have been acquired
+   * @param executor                 the executor on which to acquire and release locks
    * @return a future that completes normally when the given task has executed successfully and all locks have been
    * released; the returned future may fail with an {@link InterruptedException} if interrupted while acquiring a lock
    */
-  public <T> CompletableFuture<T> withLockAsync(final Set<UUID> phoneNumberIdentifiers,
+  public <T> CompletableFuture<T> withLockAsync(final Set<UUID> principalNameIdentifiers,
       final Supplier<CompletableFuture<T>> taskSupplier, final Executor executor) {
 
-    if (phoneNumberIdentifiers.isEmpty()) {
+    if (principalNameIdentifiers.isEmpty()) {
       throw new IllegalArgumentException("List of PNIs to lock must not be empty");
     }
 
-    final List<LockItem> lockItems = new ArrayList<>(phoneNumberIdentifiers.size());
+    final List<LockItem> lockItems = new ArrayList<>(principalNameIdentifiers.size());
 
     return CompletableFuture.runAsync(() -> {
-          for (final UUID pni : phoneNumberIdentifiers) {
+          for (final UUID pni : principalNameIdentifiers) {
             try {
               lockItems.add(lockClient.acquireLock(AcquireLockOptions.builder(pni.toString())
                   .withAcquireReleasedLocksConsistently(true)

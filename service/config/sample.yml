@@ -149,7 +149,7 @@ dynamoDbTables:
   onetimeDonations:
     tableName: Example_OnetimeDonations
     expiration: P90D
-  principalNamedentifiers:
+  principalNameIdentifiers:
     tableName: Example_PrincipalNameIdentifiers
   profiles:
     tableName: Example_Profiles

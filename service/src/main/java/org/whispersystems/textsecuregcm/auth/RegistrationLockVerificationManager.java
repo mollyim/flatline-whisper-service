@@ -50,7 +50,7 @@ public class RegistrationLockVerificationManager {
   private static final String ALREADY_LOCKED_TAG_NAME = "alreadyLocked";
   private static final String REGISTRATION_LOCK_VERIFICATION_FLOW_TAG_NAME = "flow";
   private static final String REGISTRATION_LOCK_MATCHES_TAG_NAME = "registrationLockMatches";
-  private static final String PHONE_VERIFICATION_TYPE_TAG_NAME = "phoneVerificationType";
+  private static final String PRINCIPAL_VERIFICATION_TYPE_TAG_NAME = "principalVerificationType";
 
   private final AccountsManager accounts;
   private final DisconnectionRequestManager disconnectionRequestManager;
@@ -85,12 +85,12 @@ public class RegistrationLockVerificationManager {
   public void verifyRegistrationLock(final Account account, @Nullable final String clientRegistrationLock,
       final String userAgent,
       final Flow flow,
-      final PrincipalVerificationRequest.VerificationType phoneVerificationType
+      final PrincipalVerificationRequest.VerificationType principalVerificationType
   ) throws RateLimitExceededException, WebApplicationException {
 
     final Tags expiredTags = Tags.of(UserAgentTagUtil.getPlatformTag(userAgent),
         Tag.of(REGISTRATION_LOCK_VERIFICATION_FLOW_TAG_NAME, flow.name()),
-        Tag.of(PHONE_VERIFICATION_TYPE_TAG_NAME, phoneVerificationType.name())
+        Tag.of(PRINCIPAL_VERIFICATION_TYPE_TAG_NAME, principalVerificationType.name())
     );
 
     final StoredRegistrationLock existingRegistrationLock = account.getRegistrationLock();
@@ -152,7 +152,7 @@ public class RegistrationLockVerificationManager {
       // if the user verified correctly via registration recovery password and sent an empty token.
       // This allows users to re-register via registration recovery password
       // instead of always being forced to fall back to SMS verification.
-      if (!phoneVerificationType.equals(PrincipalVerificationRequest.VerificationType.RECOVERY_PASSWORD) || clientRegistrationLock != null) {
+      if (!principalVerificationType.equals(PrincipalVerificationRequest.VerificationType.RECOVERY_PASSWORD) || clientRegistrationLock != null) {
         registrationRecoveryPasswordsManager.remove(updatedAccount.getIdentifier(IdentityType.PNI));
       }
 

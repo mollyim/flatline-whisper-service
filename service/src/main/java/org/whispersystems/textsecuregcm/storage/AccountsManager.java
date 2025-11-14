@@ -791,17 +791,17 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
   }
 
   private Collection<TransactWriteItem> buildPniKeyWriteItems(
-      final UUID phoneNumberIdentifier,
+      final UUID principalNameIdentifier,
       final Map<Byte, ECSignedPreKey> pniSignedPreKeys,
       final Map<Byte, KEMSignedPreKey> pniPqLastResortPreKeys) {
 
     final List<TransactWriteItem> keyWriteItems = new ArrayList<>();
 
     pniSignedPreKeys.forEach((deviceId, signedPreKey) ->
-        keyWriteItems.add(keysManager.buildWriteItemForEcSignedPreKey(phoneNumberIdentifier, deviceId, signedPreKey)));
+        keyWriteItems.add(keysManager.buildWriteItemForEcSignedPreKey(principalNameIdentifier, deviceId, signedPreKey)));
 
     pniPqLastResortPreKeys.forEach((deviceId, lastResortKey) ->
-        keyWriteItems.add(keysManager.buildWriteItemForLastResortKey(phoneNumberIdentifier, deviceId, lastResortKey)));
+        keyWriteItems.add(keysManager.buildWriteItemForLastResortKey(principalNameIdentifier, deviceId, lastResortKey)));
 
     return keyWriteItems;
   }
@@ -1163,7 +1163,7 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
     );
   }
 
-  public CompletableFuture<Optional<Account>> getByPhoneNumberIdentifierAsync(final UUID pni) {
+  public CompletableFuture<Optional<Account>> getByprincipalNameIdentifierAsync(final UUID pni) {
     return checkRedisThenAccountsAsync(
         getByNumberTimer,
         () -> redisGetBySecondaryKeyAsync(getAccountMapKey(pni.toString()), redisPniGetTimer),
@@ -1193,7 +1193,7 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
   public CompletableFuture<Optional<Account>> getByServiceIdentifierAsync(final ServiceIdentifier serviceIdentifier) {
     return switch (serviceIdentifier.identityType()) {
       case ACI -> getByAccountIdentifierAsync(serviceIdentifier.uuid());
-      case PNI -> getByPhoneNumberIdentifierAsync(serviceIdentifier.uuid());
+      case PNI -> getByprincipalNameIdentifierAsync(serviceIdentifier.uuid());
     };
   }
 
@@ -1217,11 +1217,11 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
     return principalNameIdentifiers.getPrincipalNameIdentifier(principal).join();
   }
 
-  public Optional<UUID> findRecentlyDeletedAccountIdentifier(final UUID phoneNumberIdentifier) {
-    return accounts.findRecentlyDeletedAccountIdentifier(phoneNumberIdentifier);
+  public Optional<UUID> findRecentlyDeletedAccountIdentifier(final UUID principalNameIdentifier) {
+    return accounts.findRecentlyDeletedAccountIdentifier(principalNameIdentifier);
   }
 
-  public Optional<UUID> findRecentlyDeletedPhoneNumberIdentifier(final UUID accountIdentifier) {
+  public Optional<UUID> findRecentlyDeletedprincipalNameIdentifier(final UUID accountIdentifier) {
     return accounts.findRecentlyDeletedPrincipalNameIdentifier(accountIdentifier);
   }
 

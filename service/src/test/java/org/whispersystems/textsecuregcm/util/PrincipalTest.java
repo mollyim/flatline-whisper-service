@@ -16,7 +16,7 @@ import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
-public class E164Test {
+public class PrincipalTest {
 
   private static final Validator VALIDATOR = Validation.buildDefaultValidatorFactory().getValidator();
 
@@ -29,10 +29,10 @@ public class E164Test {
   @SuppressWarnings("FieldCanBeLocal")
   private static class Data {
 
-    @E164
+    @Principal
     private final String number;
 
-    @E164
+    @Principal
     private final Optional<String> optionalNumber;
 
     private Data(final String number, final Optional<String> optionalNumber) {
@@ -43,22 +43,22 @@ public class E164Test {
 
   private static class Methods {
 
-    public void foo(@E164 final String number, @E164 final Optional<String> optionalNumber) {
+    public void foo(@Principal final String number, @Principal final Optional<String> optionalNumber) {
       // noop
     }
 
-    @E164
+    @Principal
     public String bar() {
       return "nevermind";
     }
 
-    @E164
+    @Principal
     public Optional<String> barOptionalString() {
       return Optional.of("nevermind");
     }
   }
 
-  private record Rec(@E164 String number, @E164 Optional<String> optionalNumber) {
+  private record Rec(@Principal String number, @Principal Optional<String> optionalNumber) {
   }
 
   @Test

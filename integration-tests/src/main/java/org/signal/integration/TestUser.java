@@ -39,7 +39,7 @@ public class TestUser {
 
   private final byte[] unidentifiedAccessKey;
 
-  private String phoneNumber;
+  private String principal;
 
   private IdentityKeyPair pniIdentityKey;
 
@@ -52,7 +52,7 @@ public class TestUser {
   private UUID pniUuid;
 
 
-  public static TestUser create(final String phoneNumber, final String accountPassword, final byte[] registrationPassword) {
+  public static TestUser create(final String principal, final String accountPassword, final byte[] registrationPassword) {
     // ACI identity key pair
     final IdentityKeyPair aciIdentityKey = IdentityKeyPair.generate();
     // PNI identity key pair
@@ -68,7 +68,7 @@ public class TestUser {
         registrationId,
         pniRegistrationId,
         aciIdentityKey,
-        phoneNumber,
+        principal,
         pniIdentityKey,
         unidentifiedAccessKey,
         accountPassword,
@@ -79,7 +79,7 @@ public class TestUser {
       final int registrationId,
       final int pniRegistrationId,
       final IdentityKeyPair aciIdentityKey,
-      final String phoneNumber,
+      final String principal,
       final IdentityKeyPair pniIdentityKey,
       final byte[] unidentifiedAccessKey,
       final String accountPassword,
@@ -87,7 +87,7 @@ public class TestUser {
     this.registrationId = registrationId;
     this.pniRegistrationId = pniRegistrationId;
     this.aciIdentityKey = aciIdentityKey;
-    this.phoneNumber = phoneNumber;
+    this.principal = principal;
     this.pniIdentityKey = pniIdentityKey;
     this.unidentifiedAccessKey = unidentifiedAccessKey;
     this.accountPassword = accountPassword;
@@ -103,8 +103,8 @@ public class TestUser {
     return aciIdentityKey;
   }
 
-  public String phoneNumber() {
-    return phoneNumber;
+  public String principal() {
+    return principal;
   }
 
   public IdentityKeyPair pniIdentityKey() {
@@ -141,8 +141,8 @@ public class TestUser {
     this.pniUuid = pniUuid;
   }
 
-  public void setPhoneNumber(final String phoneNumber) {
-    this.phoneNumber = phoneNumber;
+  public void setPrincipal(final String principal) {
+    this.principal = principal;
   }
 
   public void setPniIdentityKey(final IdentityKeyPair pniIdentityKey) {

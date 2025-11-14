@@ -164,7 +164,7 @@ public class ProfileGrpcServiceTest extends SimpleBaseGrpcTest<ProfileGrpcServic
         Map.of(1L, "TEST1", 2L, "TEST2", 3L, "TEST3")
     );
     final RateLimiters rateLimiters = mock(RateLimiters.class);
-    final String phoneNumber = PhoneNumberUtil.getInstance().format(
+    final String principal = PhoneNumberUtil.getInstance().format(
         PhoneNumberUtil.getInstance().getExampleNumber("US"),
         PhoneNumberUtil.PhoneNumberFormat.E164);
 
@@ -178,7 +178,7 @@ public class ProfileGrpcServiceTest extends SimpleBaseGrpcTest<ProfileGrpcServic
     when(dynamicConfiguration.getPaymentsConfiguration()).thenReturn(dynamicPaymentsConfiguration);
 
     when(account.getUuid()).thenReturn(AUTHENTICATED_ACI);
-    when(account.getPrincipal()).thenReturn(phoneNumber);
+    when(account.getPrincipal()).thenReturn(principal);
     when(account.getBadges()).thenReturn(Collections.emptyList());
 
     when(profile.paymentAddress()).thenReturn(null);
@@ -245,7 +245,7 @@ public class ProfileGrpcServiceTest extends SimpleBaseGrpcTest<ProfileGrpcServic
     assertThat(profile.aboutEmoji()).isEqualTo(validAboutEmoji);
     assertThat(profile.about()).isEqualTo(validAbout);
     assertThat(profile.paymentAddress()).isEqualTo(validPaymentAddress);
-    assertThat(profile.phoneNumberSharing()).isEqualTo(validPhoneNumberSharing);
+    assertThat(profile.principalSharing()).isEqualTo(validPhoneNumberSharing);
   }
 
   @ParameterizedTest
@@ -519,11 +519,11 @@ public class ProfileGrpcServiceTest extends SimpleBaseGrpcTest<ProfileGrpcServic
     final byte[] emoji = TestRandomUtil.nextBytes(60);
     final byte[] about = TestRandomUtil.nextBytes(156);
     final byte[] paymentAddress = TestRandomUtil.nextBytes(582);
-    final byte[] phoneNumberSharing = TestRandomUtil.nextBytes(29);
+    final byte[] principalSharing = TestRandomUtil.nextBytes(29);
     final String avatar = "profiles/" + ProfileTestHelper.generateRandomBase64FromByteArray(16);
 
     final VersionedProfile profile = new VersionedProfile(accountVersion, name, avatar, emoji, about, paymentAddress,
-        phoneNumberSharing, new byte[0]);
+        principalSharing, new byte[0]);
 
     final GetVersionedProfileRequest request = GetVersionedProfileRequest.newBuilder()
         .setAccountIdentifier(ServiceIdentifier.newBuilder()
@@ -544,7 +544,7 @@ public class ProfileGrpcServiceTest extends SimpleBaseGrpcTest<ProfileGrpcServic
         .setAbout(ByteString.copyFrom(about))
         .setAboutEmoji(ByteString.copyFrom(emoji))
         .setAvatar(avatar)
-        .setPhoneNumberSharing(ByteString.copyFrom(phoneNumberSharing));
+        .setPhoneNumberSharing(ByteString.copyFrom(principalSharing));
 
     if (expectResponseHasPaymentAddress) {
       expectedResponseBuilder.setPaymentAddress(ByteString.copyFrom(paymentAddress));

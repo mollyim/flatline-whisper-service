@@ -50,10 +50,10 @@ public class RegistrationRecoveryPasswords {
     this.clock = requireNonNull(clock);
   }
 
-  public CompletableFuture<Optional<SaltedTokenHash>> lookup(final UUID phoneNumberIdentifier) {
+  public CompletableFuture<Optional<SaltedTokenHash>> lookup(final UUID principalNameIdentifier) {
     return asyncClient.getItem(GetItemRequest.builder()
             .tableName(tableName)
-            .key(Map.of(KEY_PNI, AttributeValues.fromString(phoneNumberIdentifier.toString())))
+            .key(Map.of(KEY_PNI, AttributeValues.fromString(principalNameIdentifier.toString())))
             .consistentRead(true)
             .build())
         .thenApply(getItemResponse -> Optional.ofNullable(getItemResponse.item())
@@ -62,13 +62,13 @@ public class RegistrationRecoveryPasswords {
             .map(RegistrationRecoveryPasswords::saltedTokenHashFromItem));
   }
 
-  public CompletableFuture<Void> addOrReplace(final UUID phoneNumberIdentifier, final SaltedTokenHash data) {
+  public CompletableFuture<Void> addOrReplace(final UUID principalNameIdentifier, final SaltedTokenHash data) {
     final long expirationSeconds = expirationSeconds();
 
     return asyncClient.putItem(PutItemRequest.builder()
             .tableName(tableName)
             .item(Map.of(
-                KEY_PNI, AttributeValues.fromString(phoneNumberIdentifier.toString()),
+                KEY_PNI, AttributeValues.fromString(principalNameIdentifier.toString()),
                 ATTR_EXP, AttributeValues.fromLong(expirationSeconds),
                 ATTR_SALT, AttributeValues.fromString(data.salt()),
                 ATTR_HASH, AttributeValues.fromString(data.hash())))
@@ -76,10 +76,10 @@ public class RegistrationRecoveryPasswords {
         .thenRun(Util.NOOP);
   }
 
-  public CompletableFuture<Void> removeEntry(final UUID phoneNumberIdentifier) {
+  public CompletableFuture<Void> removeEntry(final UUID principalNameIdentifier) {
     return asyncClient.deleteItem(DeleteItemRequest.builder()
             .tableName(tableName)
-            .key(Map.of(KEY_PNI, AttributeValues.fromString(phoneNumberIdentifier.toString())))
+            .key(Map.of(KEY_PNI, AttributeValues.fromString(principalNameIdentifier.toString())))
             .build())
         .thenRun(Util.NOOP);
   }

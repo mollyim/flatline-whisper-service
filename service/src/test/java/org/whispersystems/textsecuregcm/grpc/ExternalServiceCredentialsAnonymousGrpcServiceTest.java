@@ -34,7 +34,7 @@ class ExternalServiceCredentialsAnonymousGrpcServiceTest extends
 
   private static final UUID USER_UUID = UUID.randomUUID();
 
-  private static final String USER_E164 = PhoneNumberUtil.getInstance().format(
+  private static final String USER_PRINCIPAL = PhoneNumberUtil.getInstance().format(
       PhoneNumberUtil.getInstance().getExampleNumber("US"),
       PhoneNumberUtil.PhoneNumberFormat.E164
   );
@@ -59,7 +59,7 @@ class ExternalServiceCredentialsAnonymousGrpcServiceTest extends
 
   @BeforeEach
   public void setup() {
-    Mockito.when(accountsManager.getByPrincipalAsync(USER_E164))
+    Mockito.when(accountsManager.getByPrincipalAsync(USER_PRINCIPAL))
         .thenReturn(CompletableFuture.completedFuture(Optional.of(account(USER_UUID))));
   }
 
@@ -130,7 +130,7 @@ class ExternalServiceCredentialsAnonymousGrpcServiceTest extends
       final long nowMillis) throws Exception {
     CLOCK.setTimeMillis(nowMillis);
     final CheckSvrCredentialsRequest request = CheckSvrCredentialsRequest.newBuilder()
-        .setNumber(USER_E164)
+        .setPrincipal(USER_PRINCIPAL)
         .addAllPasswords(expected.keySet())
         .build();
     final CheckSvrCredentialsResponse response = unauthenticatedServiceStub().checkSvrCredentials(request);

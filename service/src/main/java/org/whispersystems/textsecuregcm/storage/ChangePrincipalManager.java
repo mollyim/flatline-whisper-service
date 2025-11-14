@@ -96,7 +96,7 @@ public class ChangePrincipalManager {
           Optional.of(Device.PRIMARY_ID),
           senderUserAgent);
     } catch (final RuntimeException e) {
-      logger.warn("Changed number but could not send all device messages for {}", account.getIdentifier(IdentityType.ACI), e);
+      logger.warn("Changed principal but could not send all device messages for {}", account.getIdentifier(IdentityType.ACI), e);
       throw e;
     }
 

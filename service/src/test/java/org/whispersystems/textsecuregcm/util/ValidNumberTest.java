@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+// FLT(uoemai): TODO: Migrate tests to
 class ValidNumberTest {
 
   @ParameterizedTest
@@ -29,12 +30,12 @@ class ValidNumberTest {
       "+689123456",
       "+80011111111"})
   void requireNormalizedNumber(final String number) {
-    assertDoesNotThrow(() -> Util.requireNormalizedNumber(number));
+    assertDoesNotThrow(() -> Util.requireNormalizedPrincipal(number));
   }
 
   @Test
   void requireNormalizedNumberNull() {
-    assertThrows(ImpossiblePhoneNumberException.class, () -> Util.requireNormalizedNumber(null));
+    assertThrows(ImpossiblePrincipalNumberException.class, () -> Util.requireNormalizedPrincipal(null));
   }
 
   @ParameterizedTest
@@ -49,7 +50,7 @@ class ValidNumberTest {
       "+1415123123a"
   })
   void requireNormalizedNumberImpossibleNumber(final String number) {
-    assertThrows(ImpossiblePhoneNumberException.class, () -> Util.requireNormalizedNumber(number));
+    assertThrows(ImpossiblePrincipalNumberException.class, () -> Util.requireNormalizedPrincipal(number));
   }
 
   @ParameterizedTest
@@ -61,6 +62,6 @@ class ValidNumberTest {
       "+1 415)123-1234",
       " +14151231234"})
   void requireNormalizedNumberNonNormalized(final String number) {
-    assertThrows(NonNormalizedPrincipalException.class, () -> Util.requireNormalizedNumber(number));
+    assertThrows(NonNormalizedPrincipalException.class, () -> Util.requireNormalizedPrincipal(number));
   }
 }

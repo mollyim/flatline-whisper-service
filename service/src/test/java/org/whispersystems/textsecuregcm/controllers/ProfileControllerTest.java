@@ -226,11 +226,11 @@ class ProfileControllerTest {
     final byte[] name = TestRandomUtil.nextBytes(81);
     final byte[] emoji = TestRandomUtil.nextBytes(60);
     final byte[] about = TestRandomUtil.nextBytes(156);
-    final byte[] phoneNumberSharing = TestRandomUtil.nextBytes(29);
+    final byte[] principalSharing = TestRandomUtil.nextBytes(29);
 
     when(profilesManager.get(eq(AuthHelper.VALID_UUID), eq(versionHex("someversion")))).thenReturn(Optional.empty());
     when(profilesManager.get(eq(AuthHelper.VALID_UUID_TWO), eq(versionHex("validversion")))).thenReturn(Optional.of(new VersionedProfile(
-        versionHex("validversion"), name, "profiles/validavatar", emoji, about, null, phoneNumberSharing, "validcommitment".getBytes())));
+        versionHex("validversion"), name, "profiles/validavatar", emoji, about, null, principalSharing, "validcommitment".getBytes())));
 
     when(profilesManager.deleteAvatar(anyString())).thenReturn(CompletableFuture.completedFuture(null));
 
@@ -501,7 +501,7 @@ class ProfileControllerTest {
   void testSetProfileWithoutAvatarUpload() throws InvalidInputException {
     final ProfileKeyCommitment commitment = new ProfileKey(new byte[32]).getCommitment(new ServiceId.Aci(AuthHelper.VALID_UUID));
     final byte[] name = TestRandomUtil.nextBytes(81);
-    final byte[] phoneNumberSharing = TestRandomUtil.nextBytes(29);
+    final byte[] principalSharing = TestRandomUtil.nextBytes(29);
 
     clearInvocations(AuthHelper.VALID_ACCOUNT_TWO);
 
@@ -510,7 +510,7 @@ class ProfileControllerTest {
         .request()
         .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_UUID_TWO, AuthHelper.VALID_PASSWORD_TWO))
         .put(Entity.entity(new CreateProfileRequest(commitment, versionHex("anotherversion"), name, null, null,
-            null, false, false, Optional.of(List.of()), phoneNumberSharing), MediaType.APPLICATION_JSON_TYPE))) {
+            null, false, false, Optional.of(List.of()), principalSharing), MediaType.APPLICATION_JSON_TYPE))) {
 
       assertThat(response.getStatus()).isEqualTo(200);
       assertThat(response.hasEntity()).isFalse();
@@ -528,7 +528,7 @@ class ProfileControllerTest {
       assertThat(profileArgumentCaptor.getValue().name()).isEqualTo(name);
       assertThat(profileArgumentCaptor.getValue().aboutEmoji()).isNull();
       assertThat(profileArgumentCaptor.getValue().about()).isNull();
-      assertThat(profileArgumentCaptor.getValue().phoneNumberSharing()).isEqualTo(phoneNumberSharing);
+      assertThat(profileArgumentCaptor.getValue().principalSharing()).isEqualTo(principalSharing);
     }
   }
 
@@ -826,7 +826,7 @@ class ProfileControllerTest {
     final ProfileKeyCommitment commitment = new ProfileKey(new byte[32]).getCommitment(new ServiceId.Aci(AuthHelper.VALID_UUID));
     final byte[] name = TestRandomUtil.nextBytes(81);
     final byte[] paymentAddress = TestRandomUtil.nextBytes(582);
-    final byte[] phoneNumberSharing = TestRandomUtil.nextBytes(29);
+    final byte[] principalSharing = TestRandomUtil.nextBytes(29);
 
     clearInvocations(AuthHelper.VALID_ACCOUNT_TWO);
 
@@ -834,7 +834,7 @@ class ProfileControllerTest {
         .thenReturn(Optional.of(
             new VersionedProfile("1", name, null, null, null,
                 existingPaymentAddressOnProfile ? TestRandomUtil.nextBytes(582) : null,
-                phoneNumberSharing,
+                principalSharing,
                 commitment.serialize())));
 
     final String version = versionHex("yetanotherversion");
@@ -879,7 +879,7 @@ class ProfileControllerTest {
   void testSetProfilePhoneNumberSharing() throws Exception {
     final ProfileKeyCommitment commitment = new ProfileKey(new byte[32]).getCommitment(new ServiceId.Aci(AuthHelper.VALID_UUID));
     final byte[] name = TestRandomUtil.nextBytes(81);
-    final byte[] phoneNumberSharing = TestRandomUtil.nextBytes(29);
+    final byte[] principalSharing = TestRandomUtil.nextBytes(29);
 
     clearInvocations(AuthHelper.VALID_ACCOUNT_TWO);
 
@@ -889,7 +889,7 @@ class ProfileControllerTest {
         .request()
         .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_UUID_TWO, AuthHelper.VALID_PASSWORD_TWO))
         .put(Entity.entity(new CreateProfileRequest(commitment, version, name, null, null,
-            null, false, false, Optional.of(List.of()), phoneNumberSharing), MediaType.APPLICATION_JSON_TYPE))) {
+            null, false, false, Optional.of(List.of()), principalSharing), MediaType.APPLICATION_JSON_TYPE))) {
 
       assertThat(response.getStatus()).isEqualTo(200);
       assertThat(response.hasEntity()).isFalse();
@@ -915,11 +915,11 @@ class ProfileControllerTest {
     final byte[] name = TestRandomUtil.nextBytes(81);
     final byte[] emoji = TestRandomUtil.nextBytes(60);
     final byte[] about = TestRandomUtil.nextBytes(156);
-    final byte[] phoneNumberSharing = TestRandomUtil.nextBytes(29);
+    final byte[] principalSharing = TestRandomUtil.nextBytes(29);
 
     final String version = versionHex("validversion");
     when(profilesManager.get(eq(AuthHelper.VALID_UUID_TWO), eq(version))).thenReturn(Optional.of(new VersionedProfile(
-        version, name, "profiles/validavatar", emoji, about, null, phoneNumberSharing, "validcommitment".getBytes())));
+        version, name, "profiles/validavatar", emoji, about, null, principalSharing, "validcommitment".getBytes())));
 
     final VersionedProfileResponse profile = resources.getJerseyTest()
         .target("/v1/profile/" + AuthHelper.VALID_UUID_TWO + "/" + version)
@@ -932,7 +932,7 @@ class ProfileControllerTest {
     assertThat(profile.about()).containsExactly(about);
     assertThat(profile.aboutEmoji()).containsExactly(emoji);
     assertThat(profile.avatar()).isEqualTo("profiles/validavatar");
-    assertThat(profile.phoneNumberSharing()).containsExactly(phoneNumberSharing);
+    assertThat(profile.principalSharing()).containsExactly(principalSharing);
     assertThat(profile.baseProfileResponse().getUuid()).isEqualTo(new AciServiceIdentifier(AuthHelper.VALID_UUID_TWO));
     assertThat(profile.baseProfileResponse().getBadges()).hasSize(1).element(0).has(new Condition<>(
         badge -> "Test Badge".equals(badge.getName()), "has badge with expected name"));

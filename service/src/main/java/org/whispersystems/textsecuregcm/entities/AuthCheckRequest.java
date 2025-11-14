@@ -12,9 +12,8 @@ import java.util.List;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import org.whispersystems.textsecuregcm.util.E164;
 
-public record AuthCheckRequest(@Schema(description = "The e164-formatted phone number.")
+public record AuthCheckRequest(@Schema(description = "The principal.")
                                @NotNull String principal,
                                @Schema(description = """
                                A list of SVR tokens, previously retrieved from `backup/auth`. Tokens should be the

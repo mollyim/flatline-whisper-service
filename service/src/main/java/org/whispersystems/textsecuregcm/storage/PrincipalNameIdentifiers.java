@@ -36,7 +36,7 @@ import software.amazon.awssdk.services.dynamodb.model.Update;
 
 /**
  * Manages a global, persistent mapping of principals to principal name identifiers regardless of whether those
- * numbers/identifiers are actually associated with an account.
+ * principals/identifiers are actually associated with an account.
  */
 public class PrincipalNameIdentifiers {
 
@@ -68,10 +68,10 @@ public class PrincipalNameIdentifiers {
    * created.
    *
    * @param principal the principal for which to retrieve a principal name identifier
-   * @return the principal name identifier associated with the given phone number
+   * @return the principal name identifier associated with the given principal
    */
   public CompletableFuture<UUID> getPrincipalNameIdentifier(final String principal) {
-    // Each principal string represents a potential equivalence class that represent the same principal. If
+    // Each principal represents a potential equivalence class that represent the same principal. If
     // this is a new principal, we'll want to set all the principals in the equivalence class to the same PNI
     final List<String> allPrincipalForms = Util.getAlternateForms(principal);
 
@@ -133,12 +133,12 @@ public class PrincipalNameIdentifiers {
     }
 
     if (existingAssociations.containsKey(principal)) {
-      // If the provided phone number already has an association, just return that
+      // If the provided principal already has an association, just return that
       return CompletableFuture.completedFuture(existingAssociations.get(principal));
     }
 
     if (allPrincipalForms.size() == 1 || existingAssociations.isEmpty()) {
-      // Easy case, if we're the only phone number in our equivalence class or there are no existing associations,
+      // Easy case, if we're the only principal in our equivalence class or there are no existing associations,
       // we can just make an association for a new PNI
       return setPni(principal, allPrincipalForms, UUID.randomUUID());
     }
@@ -149,7 +149,7 @@ public class PrincipalNameIdentifiers {
         Collectors.mapping(Map.Entry::getKey, Collectors.toList())));
 
     // Usually there should be only a single PNI associated with the equivalence class, but it's possible there's
-    // more. This could only happen if an equivalence class had more than two numbers, and had accumulated 2 unique
+    // more. This could only happen if an equivalence class had more than two principals, and had accumulated 2 unique
     // PNI associations before they were merged into a single class. In this case we've picked one of those pnis
     // arbitrarily (according to their ordering as returned by getAlternateForms)
     final UUID existingPni = allPrincipalForms.stream()
@@ -159,17 +159,17 @@ public class PrincipalNameIdentifiers {
         .orElseThrow(() -> new IllegalStateException("Previously checked that a mapping existed"));
 
     if (byPni.size() > 1) {
-      logger.warn("More than one PNI existed in the PNI table for the numbers that map to {}. " +
-              "Arbitrarily picking {} to be the representative PNI for the numbers without PNI associations",
+      logger.warn("More than one PNI existed in the PNI table for the principals that map to {}. " +
+              "Arbitrarily picking {} to be the representative PNI for the principals without PNI associations",
           principal, existingPni);
     }
 
-    // Find all the unmapped phoneNumbers and set them to the PNI we chose from another member of the equivalence class
-    final List<String> unmappedNumbers = allPrincipalForms.stream()
-        .filter(number -> !existingAssociations.containsKey(number))
+    // Find all the unmapped principals and set them to the PNI we chose from another member of the equivalence class
+    final List<String> unmappedPrincipals = allPrincipalForms.stream()
+        .filter(p -> !existingAssociations.containsKey(p))
         .toList();
 
-    return setPni(principal, unmappedNumbers, existingPni);
+    return setPni(principal, unmappedPrincipals, existingPni);
   }
 
 
@@ -187,19 +187,19 @@ public class PrincipalNameIdentifiers {
   CompletableFuture<UUID> setPni(final String originalPrincipal, final List<String> allPrincipalForms,
       final UUID pni) {
     if (!originalPrincipal.equals(allPrincipalForms.getFirst())) {
-      throw new IllegalArgumentException("allPrincipalForms must start with the target phoneNumber");
+      throw new IllegalArgumentException("allPrincipalForms must start with the target principal");
     }
 
     final Timer.Sample sample = Timer.start();
     final List<TransactWriteItem> transactWriteItems = allPrincipalForms
         .stream()
-        .map(phoneNumber -> TransactWriteItem.builder()
+        .map(principal -> TransactWriteItem.builder()
             .update(Update.builder()
                 .tableName(tableName)
-                .key(Map.of(KEY_PRINCIPAL, AttributeValues.fromString(phoneNumber)))
+                .key(Map.of(KEY_PRINCIPAL, AttributeValues.fromString(principal)))
                 .updateExpression("SET #pni = :pni")
                 // It's possible we're racing with someone else to update, but both of us selected the same PNI because
-                // an equivalent number already had it. That's fine, as long as the association happens.
+                // an equivalent principal already had it. That's fine, as long as the association happens.
                 .conditionExpression("attribute_not_exists(#pni) OR #pni = :pni")
                 .expressionAttributeNames(Map.of("#pni", ATTR_PRINCIPAL_NAME_IDENTIFIER))
                 .expressionAttributeValues(Map.of(":pni", AttributeValues.fromUUID(pni)))
@@ -213,7 +213,7 @@ public class PrincipalNameIdentifiers {
         .thenApply(ignored -> pni)
         .exceptionally(ExceptionUtils.exceptionallyHandler(TransactionCanceledException.class, e -> {
           if (e.hasCancellationReasons()) {
-            // Get the cancellation reason for the number that we were primarily trying to associate with a PNI
+            // Get the cancellation reason for the principal that we were primarily trying to associate with a PNI
             final CancellationReason cancelReason = e.cancellationReasons().getFirst();
             if (CONDITIONAL_CHECK_FAILED.equals(cancelReason.code())) {
               // Someone else beat us to the update, use the PNI they set.
@@ -245,7 +245,7 @@ public class PrincipalNameIdentifiers {
         .whenComplete((ignored, throwable) -> sample.stop(GET_PNI_TIMER));
   }
 
-  CompletableFuture<Void> regeneratePhoneNumberIdentifierMappings(final Account account) {
+  CompletableFuture<Void> regenerateprincipalNameIdentifierMappings(final Account account) {
     return setPni(account.getPrincipal(), Util.getAlternateForms(account.getPrincipal()), account.getIdentifier(IdentityType.PNI))
         .thenRun(Util.NOOP);
   }

@@ -70,11 +70,11 @@ public final class Operations {
     // utility class
   }
 
-  public static TestUser newRegisteredUser(final String number) {
-    final byte[] registrationPassword = populateRandomRecoveryPassword(number);
+  public static TestUser newRegisteredUser(final String principal) {
+    final byte[] registrationPassword = populateRandomRecoveryPassword(principal);
     final String accountPassword = Base64.getEncoder().encodeToString(randomBytes(32));
 
-    final TestUser user = TestUser.create(number, accountPassword, registrationPassword);
+    final TestUser user = TestUser.create(principal, accountPassword, registrationPassword);
     final AccountAttributes accountAttributes = user.accountAttributes();
 
     final ECKeyPair aciIdentityKeyPair = ECKeyPair.generate();
@@ -95,7 +95,7 @@ public final class Operations {
             Optional.empty()));
 
     final AccountIdentityResponse registrationResponse = apiPost("/v1/registration", registrationRequest)
-        .authorized(number, accountPassword)
+        .authorized(principal, accountPassword)
         .executeExpectSuccess(AccountIdentityResponse.class);
 
     user.setAciUuid(registrationResponse.uuid());
@@ -104,11 +104,11 @@ public final class Operations {
     return user;
   }
 
-  public record PrescribedVerificationNumber(String number, String verificationCode) {}
+  public record PrescribedVerificationPrincipal(String principal, String verificationCode) {}
 
-  public static PrescribedVerificationNumber prescribedVerificationNumber() {
-      return new PrescribedVerificationNumber(
-          CONFIG.prescribedRegistrationNumber(),
+  public static PrescribedVerificationPrincipal prescribedVerificationPrincipal() {
+      return new PrescribedVerificationPrincipal(
+          CONFIG.prescribedRegistrationPrincipal(),
           CONFIG.prescribedRegistrationCode());
   }
 
@@ -121,9 +121,9 @@ public final class Operations {
         .orElseThrow(() -> new RuntimeException("push challenge not found for the verification session"));
   }
 
-  public static byte[] populateRandomRecoveryPassword(final String number) {
+  public static byte[] populateRandomRecoveryPassword(final String principal) {
     final byte[] recoveryPassword = randomBytes(32);
-    INTEGRATION_TOOLS.populateRecoveryPassword(number, recoveryPassword).join();
+    INTEGRATION_TOOLS.populateRecoveryPassword(principal, recoveryPassword).join();
 
     return recoveryPassword;
   }

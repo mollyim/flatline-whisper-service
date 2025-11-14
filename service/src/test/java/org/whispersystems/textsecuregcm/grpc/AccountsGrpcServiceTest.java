@@ -51,7 +51,7 @@ import org.signal.chat.account.ReserveUsernameHashError;
 import org.signal.chat.account.ReserveUsernameHashErrorType;
 import org.signal.chat.account.ReserveUsernameHashRequest;
 import org.signal.chat.account.ReserveUsernameHashResponse;
-import org.signal.chat.account.SetDiscoverableByPhoneNumberRequest;
+import org.signal.chat.account.SetDiscoverableByPrincipalRequest;
 import org.signal.chat.account.SetRegistrationLockRequest;
 import org.signal.chat.account.SetRegistrationLockResponse;
 import org.signal.chat.account.SetRegistrationRecoveryPasswordRequest;
@@ -125,16 +125,15 @@ class AccountsGrpcServiceTest extends SimpleBaseGrpcTest<AccountsGrpcService, Ac
 
   @Test
   void getAccountIdentity() {
-    final UUID phoneNumberIdentifier = UUID.randomUUID();
-    final String e164 = PhoneNumberUtil.getInstance().format(
-        PhoneNumberUtil.getInstance().getExampleNumber("US"), PhoneNumberUtil.PhoneNumberFormat.E164);
+    final UUID principalNameIdentifier = UUID.randomUUID();
+    final String principal = "user.account@example.com";
 
     final byte[] usernameHash = TestRandomUtil.nextBytes(32);
 
     final Account account = mock(Account.class);
     when(account.getUuid()).thenReturn(AUTHENTICATED_ACI);
-    when(account.getPrincipalNameIdentifier()).thenReturn(phoneNumberIdentifier);
-    when(account.getPrincipal()).thenReturn(e164);
+    when(account.getPrincipalNameIdentifier()).thenReturn(principalNameIdentifier);
+    when(account.getPrincipal()).thenReturn(principal);
     when(account.getUsernameHash()).thenReturn(Optional.of(usernameHash));
 
     when(accountsManager.getByAccountIdentifierAsync(AUTHENTICATED_ACI))
@@ -143,8 +142,8 @@ class AccountsGrpcServiceTest extends SimpleBaseGrpcTest<AccountsGrpcService, Ac
     final GetAccountIdentityResponse expectedResponse = GetAccountIdentityResponse.newBuilder()
         .setAccountIdentifiers(AccountIdentifiers.newBuilder()
             .addServiceIdentifiers(ServiceIdentifierUtil.toGrpcServiceIdentifier(new AciServiceIdentifier(AUTHENTICATED_ACI)))
-            .addServiceIdentifiers(ServiceIdentifierUtil.toGrpcServiceIdentifier(new PniServiceIdentifier(phoneNumberIdentifier)))
-            .setE164(e164)
+            .addServiceIdentifiers(ServiceIdentifierUtil.toGrpcServiceIdentifier(new PniServiceIdentifier(principalNameIdentifier)))
+            .setPrincipal(principal)
             .setUsernameHash(ByteString.copyFrom(usernameHash))
             .build())
         .build();
@@ -669,26 +668,26 @@ class AccountsGrpcServiceTest extends SimpleBaseGrpcTest<AccountsGrpcService, Ac
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void setDiscoverableByPhoneNumber(final boolean discoverableByPhoneNumber) {
+  void setDiscoverableByPrincipal(final boolean discoverableByPrincipal) {
     final Account account = mock(Account.class);
 
     when(accountsManager.getByAccountIdentifierAsync(AUTHENTICATED_ACI))
         .thenReturn(CompletableFuture.completedFuture(Optional.of(account)));
 
     assertDoesNotThrow(() ->
-        authenticatedServiceStub().setDiscoverableByPhoneNumber(SetDiscoverableByPhoneNumberRequest.newBuilder()
-            .setDiscoverableByPhoneNumber(discoverableByPhoneNumber)
+        authenticatedServiceStub().setDiscoverableByPrincipal(SetDiscoverableByPrincipalRequest.newBuilder()
+            .setDiscoverableByPrincipal(discoverableByPrincipal)
             .build()));
 
-    verify(account).setDiscoverableByPrincipal(discoverableByPhoneNumber);
+    verify(account).setDiscoverableByPrincipal(discoverableByPrincipal);
   }
 
   @Test
   void setRegistrationRecoveryPassword() {
-    final UUID phoneNumberIdentifier = UUID.randomUUID();
+    final UUID principalNameIdentifier = UUID.randomUUID();
 
     final Account account = mock(Account.class);
-    when(account.getIdentifier(IdentityType.PNI)).thenReturn(phoneNumberIdentifier);
+    when(account.getIdentifier(IdentityType.PNI)).thenReturn(principalNameIdentifier);
 
     when(accountsManager.getByAccountIdentifierAsync(AUTHENTICATED_ACI))
         .thenReturn(CompletableFuture.completedFuture(Optional.of(account)));

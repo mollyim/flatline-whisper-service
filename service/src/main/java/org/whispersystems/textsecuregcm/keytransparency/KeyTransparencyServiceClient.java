@@ -25,8 +25,8 @@ import org.signal.keytransparency.client.AciMonitorRequest;
 import org.signal.keytransparency.client.ConsistencyParameters;
 import org.signal.keytransparency.client.DistinguishedRequest;
 import org.signal.keytransparency.client.DistinguishedResponse;
-import org.signal.keytransparency.client.E164MonitorRequest;
-import org.signal.keytransparency.client.E164SearchRequest;
+import org.signal.keytransparency.client.PrincipalMonitorRequest;
+import org.signal.keytransparency.client.PrincipalSearchRequest;
 import org.signal.keytransparency.client.KeyTransparencyQueryServiceGrpc;
 import org.signal.keytransparency.client.MonitorRequest;
 import org.signal.keytransparency.client.MonitorResponse;
@@ -115,7 +115,7 @@ public class KeyTransparencyServiceClient implements Managed {
       final ByteString aci,
       final ByteString aciIdentityKey,
       final Optional<ByteString> usernameHash,
-      final Optional<E164SearchRequest> e164SearchRequest,
+      final Optional<PrincipalSearchRequest> principalSearchRequest,
       final Optional<Long> lastTreeHeadSize,
       final long distinguishedTreeHeadSize) {
     final SearchRequest.Builder searchRequestBuilder = SearchRequest.newBuilder()
@@ -123,7 +123,7 @@ public class KeyTransparencyServiceClient implements Managed {
         .setAciIdentityKey(aciIdentityKey);
 
     usernameHash.ifPresent(searchRequestBuilder::setUsernameHash);
-    e164SearchRequest.ifPresent(searchRequestBuilder::setE164SearchRequest);
+    principalSearchRequest.ifPresent(searchRequestBuilder::setPrincipalSearchRequest);
 
     final ConsistencyParameters.Builder consistency = ConsistencyParameters.newBuilder()
         .setDistinguished(distinguishedTreeHeadSize);
@@ -141,7 +141,7 @@ public class KeyTransparencyServiceClient implements Managed {
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
   public MonitorResponse monitor(final AciMonitorRequest aciMonitorRequest,
       final Optional<UsernameHashMonitorRequest> usernameHashMonitorRequest,
-      final Optional<E164MonitorRequest> e164MonitorRequest,
+      final Optional<PrincipalMonitorRequest> principalMonitorRequest,
       final long lastTreeHeadSize,
       final long distinguishedTreeHeadSize) {
     final MonitorRequest.Builder monitorRequestBuilder = MonitorRequest.newBuilder()
@@ -152,7 +152,7 @@ public class KeyTransparencyServiceClient implements Managed {
             .build());
 
     usernameHashMonitorRequest.ifPresent(monitorRequestBuilder::setUsernameHash);
-    e164MonitorRequest.ifPresent(monitorRequestBuilder::setE164);
+    principalMonitorRequest.ifPresent(monitorRequestBuilder::setPrincipal);
     return monitor(monitorRequestBuilder.build());
   }
 

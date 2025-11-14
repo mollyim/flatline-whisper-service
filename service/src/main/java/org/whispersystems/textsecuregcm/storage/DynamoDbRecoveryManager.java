@@ -32,6 +32,6 @@ public class DynamoDbRecoveryManager {
   public CompletableFuture<Void> regenerateData(final Account account) {
     return CompletableFuture.allOf(
         accounts.regenerateConstraints(account),
-        principalNameIdentifiers.regeneratePhoneNumberIdentifierMappings(account));
+        principalNameIdentifiers.regenerateprincipalNameIdentifierMappings(account));
   }
 }

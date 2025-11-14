@@ -96,7 +96,7 @@ extend google.protobuf.FieldOptions {
   repeated uint32 exactlySize = 70004;
 
   /*
-   * Requires a value of a string field to be a valid principal string.
+   * Requires a value of a string field to be a valid principal.
    * If the field is `optional`, this check allows a value to be not set.
    *
    *  ```

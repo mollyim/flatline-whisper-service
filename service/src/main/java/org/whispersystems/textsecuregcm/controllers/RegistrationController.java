@@ -92,7 +92,7 @@ public class RegistrationController {
       2. gets 409 from device available for transfer \n
       3. success \n
       """)
-  @ApiResponse(responseCode = "200", description = "The phone number associated with the authenticated account was changed successfully", useReturnTypeSchema = true)
+  @ApiResponse(responseCode = "200", description = "The principal associated with the authenticated account was changed successfully", useReturnTypeSchema = true)
   @ApiResponse(responseCode = "403", description = "Verification failed for the provided Registration Recovery Password")
   @ApiResponse(responseCode = "409", description = "The caller has not explicitly elected to skip transferring data from another device, but a device transfer is technically possible")
   @ApiResponse(responseCode = "422", description = "The request did not pass validation")
@@ -107,19 +107,19 @@ public class RegistrationController {
       @NotNull @Valid final RegistrationRequest registrationRequest,
       @Context final ContainerRequestContext requestContext) throws RateLimitExceededException, InterruptedException {
 
-    final String number = authorizationHeader.getUsername();
+    final String principal = authorizationHeader.getUsername();
     final String password = authorizationHeader.getPassword();
 
     if (!registrationRequest.isEverySignedKeyValid(userAgent)) {
       throw new WebApplicationException("Invalid signature", 422);
     }
 
-    rateLimiters.getRegistrationLimiter().validate(number);
+    rateLimiters.getRegistrationLimiter().validate(principal);
 
     final PrincipalVerificationRequest.VerificationType verificationType = principalVerificationTokenManager.verify(
-        requestContext, number, registrationRequest);
+        requestContext, principal, registrationRequest);
 
-    final Optional<Account> existingAccount = accounts.getByPrincipal(number);
+    final Optional<Account> existingAccount = accounts.getByPrincipal(principal);
 
     existingAccount.ifPresent(account -> {
       final Instant accountLastSeen = Instant.ofEpochMilli(account.getLastSeen());
@@ -139,7 +139,7 @@ public class RegistrationController {
           userAgent, RegistrationLockVerificationManager.Flow.REGISTRATION, verificationType);
     }
 
-    final Account account = accounts.create(number,
+    final Account account = accounts.create(principal,
         registrationRequest.accountAttributes(),
         existingAccount.map(Account::getBadges).orElseGet(ArrayList::new),
         registrationRequest.aciIdentityKey(),
@@ -161,8 +161,8 @@ public class RegistrationController {
         userAgent);
 
     Metrics.counter(ACCOUNT_CREATED_COUNTER_NAME, Tags.of(UserAgentTagUtil.getPlatformTag(userAgent),
-            Tag.of(COUNTRY_CODE_TAG_NAME, Util.getCountryCode(number)),
-            Tag.of(REGION_CODE_TAG_NAME, Util.getRegion(number)),
+            Tag.of(COUNTRY_CODE_TAG_NAME, Util.getCountryCode(principal)),
+            Tag.of(REGION_CODE_TAG_NAME, Util.getRegion(principal)),
             Tag.of(VERIFICATION_TYPE_TAG_NAME, verificationType.name())))
         .increment();
 

@@ -306,10 +306,10 @@ public class AuthHelper {
       final UUID uuid = UUID.randomUUID();
       final String region = new ArrayList<>((PhoneNumberUtil.getInstance().getSupportedRegions())).get(
           EXTENSION_TEST_ACCOUNTS.size());
-      final Phonenumber.PhoneNumber phoneNumber = PhoneNumberUtil.getInstance().getExampleNumber(region);
+      final Phonenumber.PhoneNumber principal = PhoneNumberUtil.getInstance().getExampleNumber(region);
 
       final TestAccount testAccount = new TestAccount(
-          PhoneNumberUtil.getInstance().format(phoneNumber, PhoneNumberUtil.PhoneNumberFormat.E164), uuid,
+          PhoneNumberUtil.getInstance().format(principal, PhoneNumberUtil.PhoneNumberFormat.E164), uuid,
           "extension-password-" + region);
       testAccount.setup(ACCOUNTS_MANAGER);
 

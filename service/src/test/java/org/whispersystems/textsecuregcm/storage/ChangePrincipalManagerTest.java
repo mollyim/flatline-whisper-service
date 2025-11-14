@@ -43,7 +43,7 @@ public class ChangePrincipalManagerTest {
   private MessageSender messageSender;
   private ChangePrincipalManager changePrincipalManager;
 
-  private Map<Account, UUID> updatedPhoneNumberIdentifiersByAccount;
+  private Map<Account, UUID> updatedprincipalNameIdentifiersByAccount;
 
   private static final TestClock CLOCK = TestClock.pinned(Instant.now());
 
@@ -53,7 +53,7 @@ public class ChangePrincipalManagerTest {
     messageSender = mock(MessageSender.class);
     changePrincipalManager = new ChangePrincipalManager(messageSender, accountsManager, CLOCK);
 
-    updatedPhoneNumberIdentifiersByAccount = new HashMap<>();
+    updatedprincipalNameIdentifiersByAccount = new HashMap<>();
 
     when(accountsManager.changePrincipal(any(), any(), any(), any(), any(), any())).thenAnswer((Answer<Account>)invocation -> {
       final Account account = invocation.getArgument(0, Account.class);
@@ -63,7 +63,7 @@ public class ChangePrincipalManagerTest {
       final List<Device> devices = account.getDevices();
 
       final UUID updatedPni = UUID.randomUUID();
-      updatedPhoneNumberIdentifiersByAccount.put(account, updatedPni);
+      updatedprincipalNameIdentifiersByAccount.put(account, updatedPni);
 
       final Account updatedAccount = mock(Account.class);
       when(updatedAccount.getIdentifier(IdentityType.ACI)).thenReturn(uuid);
@@ -178,7 +178,7 @@ public class ChangePrincipalManagerTest {
         .setContent(ByteString.copyFrom(incomingMessage.content()))
         .setSourceServiceId(new AciServiceIdentifier(aci).toServiceIdentifierString())
         .setSourceDevice(primaryDeviceId)
-        .setUpdatedPni(updatedPhoneNumberIdentifiersByAccount.get(account).toString())
+        .setUpdatedPni(updatedprincipalNameIdentifiersByAccount.get(account).toString())
         .setUrgent(true)
         .setEphemeral(false)
         .build();

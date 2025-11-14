@@ -56,10 +56,10 @@ public class RegistrationServiceClient implements Managed {
   static String convertNumeralE164ToString(long from) {
 
     try {
-      final Phonenumber.PhoneNumber phoneNumber = PhoneNumberUtil.getInstance()
+      final Phonenumber.PhoneNumber principal = PhoneNumberUtil.getInstance()
           .parse("+" + from, null);
       return PhoneNumberUtil.getInstance()
-          .format(phoneNumber, PhoneNumberUtil.PhoneNumberFormat.E164);
+          .format(principal, PhoneNumberUtil.PhoneNumberFormat.E164);
     } catch (final NumberParseException e) {
       throw new IllegalArgumentException("could not parse to phone number", e);
     }
@@ -97,10 +97,10 @@ public class RegistrationServiceClient implements Managed {
   }
 
   public CompletableFuture<RegistrationServiceSession> createRegistrationSession(
-      final Phonenumber.PhoneNumber phoneNumber, final String sourceHost, final boolean accountExistsWithPhoneNumber, final Duration timeout) {
+      final Phonenumber.PhoneNumber principal, final String sourceHost, final boolean accountExistsWithPhoneNumber, final Duration timeout) {
 
     final long e164 = Long.parseLong(
-        PhoneNumberUtil.getInstance().format(phoneNumber, PhoneNumberUtil.PhoneNumberFormat.E164).substring(1));
+        PhoneNumberUtil.getInstance().format(principal, PhoneNumberUtil.PhoneNumberFormat.E164).substring(1));
     final String rateLimitCollationKey = hmac(sourceHost);
 
     return CompletableFutureUtil.toCompletableFuture(stub.withDeadline(toDeadline(timeout))

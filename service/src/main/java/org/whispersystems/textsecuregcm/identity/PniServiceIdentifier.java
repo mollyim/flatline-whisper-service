@@ -15,13 +15,13 @@ import java.util.HexFormat;
 import java.util.UUID;
 
 /**
- * An identifier for an account based on the account's phone number identifier (PNI).
+ * An identifier for an account based on the account's principal name identifier (PNI).
  *
  * @param uuid the account's PNI UUID
  */
 @Schema(
     type = "string",
-    description = "An identifier for an account based on the account's phone number identifier (PNI)"
+    description = "An identifier for an account based on the account's principal name identifier (PNI)"
 )
 public record PniServiceIdentifier(UUID uuid) implements ServiceIdentifier {
 

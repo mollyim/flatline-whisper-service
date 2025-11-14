@@ -59,15 +59,15 @@ public class AccountTest {
   }
 
   @Test
-  public void changePhoneNumber() {
+  public void changePrincipal() {
     final TestUser user = Operations.newRegisteredUser("+19995550301");
-    final String targetNumber = "+19995550302";
+    final String targetPrincipal = "+19995550302";
 
     final ECKeyPair pniIdentityKeyPair = ECKeyPair.generate();
 
     final ChangePrincipalRequest changePrincipalRequest = new ChangePrincipalRequest(null,
-        Operations.populateRandomRecoveryPassword(targetNumber),
-        targetNumber,
+        Operations.populateRandomRecoveryPassword(targetPrincipal),
+        targetPrincipal,
         null,
         new IdentityKey(pniIdentityKeyPair.getPublicKey()),
         Collections.emptyList(),
@@ -76,13 +76,13 @@ public class AccountTest {
         Map.of(Device.PRIMARY_ID, 17));
 
     final AccountIdentityResponse accountIdentityResponse =
-        Operations.apiPut("/v2/accounts/number", changePrincipalRequest)
+        Operations.apiPut("/v2/accounts/principal", changePrincipalRequest)
             .authorized(user)
             .executeExpectSuccess(AccountIdentityResponse.class);
 
     assertEquals(user.aciUuid(), accountIdentityResponse.uuid());
     assertNotEquals(user.pniUuid(), accountIdentityResponse.pni());
-    assertEquals(targetNumber, accountIdentityResponse.number());
+    assertEquals(targetPrincipal, accountIdentityResponse.principal());
   }
 
   @Test

@@ -31,8 +31,8 @@ class UtilTest {
 
   @ParameterizedTest
   @MethodSource
-  void getAlternateForms(final String phoneNumber, final List<String> expectedAlternateForms) {
-    assertEquals(expectedAlternateForms, Util.getAlternateForms(phoneNumber));
+  void getAlternateForms(final String principal, final List<String> expectedAlternateForms) {
+    assertEquals(expectedAlternateForms, Util.getAlternateForms(principal));
   }
 
   static List<Arguments> getAlternateForms() {

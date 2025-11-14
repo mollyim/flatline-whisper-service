@@ -40,9 +40,9 @@ public class AccountsHelper {
     return generateTestAccount(number, UUID.randomUUID(), UUID.randomUUID(), devices, null);
   }
 
-  public static Account generateTestAccount(String number, UUID uuid, final UUID phoneNumberIdentifier, List<Device> devices, byte[] unidentifiedAccessKey) {
+  public static Account generateTestAccount(String number, UUID uuid, final UUID principalNameIdentifier, List<Device> devices, byte[] unidentifiedAccessKey) {
     final Account account = new Account();
-    account.setPrincipal(number, phoneNumberIdentifier);
+    account.setPrincipal(number, principalNameIdentifier);
     account.setUuid(uuid);
     devices.forEach(account::addDevice);
     account.setUnidentifiedAccessKey(unidentifiedAccessKey);
@@ -199,7 +199,7 @@ public class AccountsHelper {
       for (Stubbing stubbing : mockingDetails.getStubbings()) {
         switch (stubbing.getInvocation().getMethod().getName()) {
           case "getUuid" -> when(updatedAccount.getUuid()).thenAnswer(stubbing);
-          case "getPhoneNumberIdentifier" -> when(updatedAccount.getPrincipalNameIdentifier()).thenAnswer(stubbing);
+          case "getprincipalNameIdentifier" -> when(updatedAccount.getPrincipalNameIdentifier()).thenAnswer(stubbing);
           case "getIdentifier" -> when(updatedAccount.getIdentifier(stubbing.getInvocation().getArgument(0))).thenAnswer(stubbing);
           case "isIdentifiedBy" -> when(updatedAccount.isIdentifiedBy(stubbing.getInvocation().getArgument(0))).thenAnswer(stubbing);
           case "getNumber" -> when(updatedAccount.getPrincipal()).thenAnswer(stubbing);

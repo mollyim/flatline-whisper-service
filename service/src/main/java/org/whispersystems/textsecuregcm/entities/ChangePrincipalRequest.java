@@ -21,7 +21,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import org.signal.libsignal.protocol.IdentityKey;
 import org.whispersystems.textsecuregcm.util.ByteArrayAdapter;
-import org.whispersystems.textsecuregcm.util.E164;
+import org.whispersystems.textsecuregcm.util.Principal;
 import org.whispersystems.textsecuregcm.util.IdentityKeyAdapter;
 import org.whispersystems.textsecuregcm.util.RegistrationIdValidator;
 
@@ -36,7 +36,7 @@ public record ChangePrincipalRequest(
         Must not be combined with `sessionId`.""")
     @JsonDeserialize(using = ByteArrayAdapter.Deserializing.class) byte[] recoveryPassword,
 
-    @E164
+    @Principal
     @Schema(description="the new principal for this account")
     @NotBlank String principal,
 

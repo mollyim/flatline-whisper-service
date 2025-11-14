@@ -18,8 +18,8 @@ import org.signal.keytransparency.client.AciMonitorRequest;
 import org.signal.keytransparency.client.ConsistencyParameters;
 import org.signal.keytransparency.client.DistinguishedRequest;
 import org.signal.keytransparency.client.DistinguishedResponse;
-import org.signal.keytransparency.client.E164MonitorRequest;
-import org.signal.keytransparency.client.E164SearchRequest;
+import org.signal.keytransparency.client.PrincipalMonitorRequest;
+import org.signal.keytransparency.client.PrincipalSearchRequest;
 import org.signal.keytransparency.client.KeyTransparencyQueryServiceGrpc;
 import org.signal.keytransparency.client.MonitorRequest;
 import org.signal.keytransparency.client.MonitorResponse;
@@ -96,7 +96,7 @@ public class KeyTransparencyGrpcServiceTest extends SimpleBaseGrpcTest<KeyTransp
   @MethodSource
   void searchInvalidRequest(final Optional<byte[]> aciServiceIdentifier,
       final Optional<IdentityKey> aciIdentityKey,
-      final Optional<String> e164,
+      final Optional<String> principal,
       final Optional<byte[]> unidentifiedAccessKey,
       final Optional<byte[]> usernameHash,
       final Optional<Long> lastTreeHeadSize,
@@ -108,11 +108,11 @@ public class KeyTransparencyGrpcServiceTest extends SimpleBaseGrpcTest<KeyTransp
     aciIdentityKey.ifPresent(v -> requestBuilder.setAciIdentityKey(ByteString.copyFrom(v.serialize())));
     usernameHash.ifPresent(v -> requestBuilder.setUsernameHash(ByteString.copyFrom(v)));
 
-    final E164SearchRequest.Builder e164RequestBuilder = E164SearchRequest.newBuilder();
+    final PrincipalSearchRequest.Builder principalRequestBuilder = PrincipalSearchRequest.newBuilder();
 
-    e164.ifPresent(e164RequestBuilder::setE164);
-    unidentifiedAccessKey.ifPresent(v -> e164RequestBuilder.setUnidentifiedAccessKey(ByteString.copyFrom(v)));
-    requestBuilder.setE164SearchRequest(e164RequestBuilder.build());
+    principal.ifPresent(principalRequestBuilder::setPrincipal);
+    unidentifiedAccessKey.ifPresent(v -> principalRequestBuilder.setUnidentifiedAccessKey(ByteString.copyFrom(v)));
+    requestBuilder.setPrincipalSearchRequest(principalRequestBuilder.build());
 
     final ConsistencyParameters.Builder consistencyBuilder = ConsistencyParameters.newBuilder();
     distinguishedTreeHeadSize.ifPresent(consistencyBuilder::setDistinguished);
@@ -132,8 +132,8 @@ public class KeyTransparencyGrpcServiceTest extends SimpleBaseGrpcTest<KeyTransp
         Arguments.argumentSet("Non-positive consistency.last", Optional.of(aciBytes), Optional.of(ACI_IDENTITY_KEY), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(0L), Optional.of(4L)),
         Arguments.argumentSet("consistency.distinguished not provided",Optional.of(aciBytes), Optional.of(ACI_IDENTITY_KEY), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()),
         Arguments.argumentSet("Non-positive consistency.distinguished",Optional.of(aciBytes), Optional.of(ACI_IDENTITY_KEY), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(0L)),
-        Arguments.argumentSet("E164 can't be provided without an unidentified access key", Optional.of(aciBytes), Optional.of(ACI_IDENTITY_KEY), Optional.of(NUMBER), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(4L)),
-        Arguments.argumentSet("Unidentified access key can't be provided without E164", Optional.of(aciBytes), Optional.of(ACI_IDENTITY_KEY), Optional.empty(), Optional.of(UNIDENTIFIED_ACCESS_KEY), Optional.empty(), Optional.empty(), Optional.of(4L)),
+        Arguments.argumentSet("Principal can't be provided without an unidentified access key", Optional.of(aciBytes), Optional.of(ACI_IDENTITY_KEY), Optional.of(NUMBER), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(4L)),
+        Arguments.argumentSet("Unidentified access key can't be provided without principal", Optional.of(aciBytes), Optional.of(ACI_IDENTITY_KEY), Optional.empty(), Optional.of(UNIDENTIFIED_ACCESS_KEY), Optional.empty(), Optional.empty(), Optional.of(4L)),
         Arguments.argumentSet("Invalid username hash", Optional.of(aciBytes), Optional.of(ACI_IDENTITY_KEY), Optional.empty(), Optional.empty(), Optional.of(new byte[19]), Optional.empty(), Optional.of(4L))
     );
   }
@@ -180,7 +180,7 @@ public class KeyTransparencyGrpcServiceTest extends SimpleBaseGrpcTest<KeyTransp
   @ParameterizedTest
   @MethodSource
   void monitorInvalidRequest(final Optional<AciMonitorRequest> aciMonitorRequest,
-      final Optional<E164MonitorRequest> e164MonitorRequest,
+      final Optional<PrincipalMonitorRequest> principalMonitorRequest,
       final Optional<UsernameHashMonitorRequest> usernameHashMonitorRequest,
       final Optional<Long> lastTreeHeadSize,
       final Optional<Long> distinguishedTreeHeadSize) {
@@ -188,7 +188,7 @@ public class KeyTransparencyGrpcServiceTest extends SimpleBaseGrpcTest<KeyTransp
     final MonitorRequest.Builder requestBuilder = MonitorRequest.newBuilder();
 
     aciMonitorRequest.ifPresent(requestBuilder::setAci);
-    e164MonitorRequest.ifPresent(requestBuilder::setE164);
+    principalMonitorRequest.ifPresent(requestBuilder::setPrincipal);
     usernameHashMonitorRequest.ifPresent(requestBuilder::setUsernameHash);
 
     final ConsistencyParameters.Builder consistencyBuilder = ConsistencyParameters.newBuilder();
@@ -209,9 +209,9 @@ public class KeyTransparencyGrpcServiceTest extends SimpleBaseGrpcTest<KeyTransp
         Arguments.argumentSet("Invalid ACI", Optional.of(constructAciMonitorRequest(new byte[15], new byte[32], 10)), Optional.empty(), Optional.empty(), Optional.of(4L), Optional.of(4L)),
         Arguments.argumentSet("Invalid commitment index on ACI monitor request", Optional.of(constructAciMonitorRequest(ACI.toCompactByteArray(), new byte[31], 10)), Optional.empty(), Optional.empty(), Optional.of(4L), Optional.of(4L)),
         Arguments.argumentSet("Invalid entry position on ACI monitor request", Optional.of(constructAciMonitorRequest(ACI.toCompactByteArray(), new byte[32], 0)), Optional.empty(), Optional.empty(), Optional.of(4L), Optional.of(4L)),
-        Arguments.argumentSet("E164 can't be blank", validAciMonitorRequest, Optional.of(constructE164MonitorRequest("", new byte[32], 10)), Optional.empty(), Optional.of(4L), Optional.of(4L)),
-        Arguments.argumentSet("Invalid commitment index on E164 monitor request", validAciMonitorRequest, Optional.of(constructE164MonitorRequest(NUMBER, new byte[31], 10)), Optional.empty(), Optional.of(4L), Optional.of(4L)),
-        Arguments.argumentSet("Invalid entry position on E164 monitor request", validAciMonitorRequest, Optional.of(constructE164MonitorRequest(NUMBER, new byte[32], 0)), Optional.empty(), Optional.of(4L), Optional.of(4L)),
+        Arguments.argumentSet("Principal can't be blank", validAciMonitorRequest, Optional.of(constructPrincipalMonitorRequest("", new byte[32], 10)), Optional.empty(), Optional.of(4L), Optional.of(4L)),
+        Arguments.argumentSet("Invalid commitment index on principal monitor request", validAciMonitorRequest, Optional.of(constructPrincipalMonitorRequest(NUMBER, new byte[31], 10)), Optional.empty(), Optional.of(4L), Optional.of(4L)),
+        Arguments.argumentSet("Invalid entry position on principal monitor request", validAciMonitorRequest, Optional.of(constructPrincipalMonitorRequest(NUMBER, new byte[32], 0)), Optional.empty(), Optional.of(4L), Optional.of(4L)),
         Arguments.argumentSet("Username hash can't be empty", validAciMonitorRequest, Optional.empty(), Optional.of(constructUsernameHashMonitorRequest(new byte[0], new byte[32], 10)), Optional.of(4L), Optional.of(4L)),
         Arguments.argumentSet("Invalid username hash length", validAciMonitorRequest, Optional.empty(), Optional.of(constructUsernameHashMonitorRequest(new byte[31], new byte[32], 10)), Optional.of(4L), Optional.of(4L)),
         Arguments.argumentSet("Invalid commitment index on username hash monitor request", validAciMonitorRequest, Optional.empty(), Optional.of(constructUsernameHashMonitorRequest(USERNAME_HASH, new byte[31], 10)), Optional.of(4L), Optional.of(4L)),
@@ -287,9 +287,9 @@ public class KeyTransparencyGrpcServiceTest extends SimpleBaseGrpcTest<KeyTransp
         .build();
   }
 
-  private static E164MonitorRequest constructE164MonitorRequest(final String e164, final byte[] commitmentIndex, final long entryPosition) {
-    return E164MonitorRequest.newBuilder()
-        .setE164(e164)
+  private static PrincipalMonitorRequest constructPrincipalMonitorRequest(final String principal, final byte[] commitmentIndex, final long entryPosition) {
+    return PrincipalMonitorRequest.newBuilder()
+        .setPrincipal(principal)
         .setCommitmentIndex(ByteString.copyFrom(commitmentIndex))
         .setEntryPosition(entryPosition)
         .build();

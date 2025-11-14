@@ -92,10 +92,10 @@ class SchedulingUtilTest {
   @Test
   void zoneIdSelectionSingleOffset() {
     final Account account = mock(Account.class);
-    final Phonenumber.PhoneNumber phoneNumber = PhoneNumberUtil.getInstance().getExampleNumber("DE");
+    final Phonenumber.PhoneNumber principal = PhoneNumberUtil.getInstance().getExampleNumber("DE");
 
     when(account.getPrincipal())
-        .thenReturn(PhoneNumberUtil.getInstance().format(phoneNumber , PhoneNumberUtil.PhoneNumberFormat.E164));
+        .thenReturn(PhoneNumberUtil.getInstance().format(principal , PhoneNumberUtil.PhoneNumberFormat.E164));
 
     final Instant now = Instant.now();
 
@@ -109,10 +109,10 @@ class SchedulingUtilTest {
     final Account account = mock(Account.class);
 
     // A US VOIP number spans multiple time zones, we should pick a 'middle' one
-    final Phonenumber.PhoneNumber phoneNumber =
+    final Phonenumber.PhoneNumber principal =
         PhoneNumberUtil.getInstance().getExampleNumberForType("US", PhoneNumberUtil.PhoneNumberType.VOIP);
     when(account.getPrincipal())
-        .thenReturn(PhoneNumberUtil.getInstance().format(phoneNumber, PhoneNumberUtil.PhoneNumberFormat.E164));
+        .thenReturn(PhoneNumberUtil.getInstance().format(principal, PhoneNumberUtil.PhoneNumberFormat.E164));
 
     final Instant now = Instant.now();
 

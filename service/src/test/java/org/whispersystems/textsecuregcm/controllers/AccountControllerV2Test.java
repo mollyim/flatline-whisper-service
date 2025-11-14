@@ -138,7 +138,7 @@ class AccountControllerV2Test {
       .build();
 
   @Nested
-  class ChangeNumber {
+  class ChangePrincipal {
 
     @BeforeEach
     void setUp() throws Exception {
@@ -149,7 +149,7 @@ class AccountControllerV2Test {
       when(changePrincipalManager.changePrincipal(any(), any(), any(), any(), any(), any(), any(), any())).thenAnswer(
           (Answer<Account>) invocation -> {
             final Account account = invocation.getArgument(0);
-            final String number = invocation.getArgument(1);
+            final String principal = invocation.getArgument(1);
             final IdentityKey pniIdentityKey = invocation.getArgument(2);
 
             final UUID uuid = account.getUuid();
@@ -157,9 +157,9 @@ class AccountControllerV2Test {
 
             final Account updatedAccount = mock(Account.class);
             when(updatedAccount.getUuid()).thenReturn(uuid);
-            when(updatedAccount.getPrincipal()).thenReturn(number);
+            when(updatedAccount.getPrincipal()).thenReturn(principal);
             when(updatedAccount.getIdentityKey(IdentityType.PNI)).thenReturn(pniIdentityKey);
-            if (number.equals(account.getPrincipal())) {
+            if (principal.equals(account.getPrincipal())) {
               when(updatedAccount.getPrincipalNameIdentifier()).thenReturn(AuthHelper.VALID_PNI);
             } else {
               when(updatedAccount.getPrincipalNameIdentifier()).thenReturn(UUID.randomUUID());
@@ -201,7 +201,7 @@ class AccountControllerV2Test {
           any(), any(), any());
 
       assertEquals(AuthHelper.VALID_UUID, accountIdentityResponse.uuid());
-      assertEquals(NEW_NUMBER, accountIdentityResponse.number());
+      assertEquals(NEW_NUMBER, accountIdentityResponse.principal());
       assertNotEquals(AuthHelper.VALID_PNI, accountIdentityResponse.pni());
     }
 
@@ -225,7 +225,7 @@ class AccountControllerV2Test {
           any(), any(), any());
 
       assertEquals(AuthHelper.VALID_UUID, accountIdentityResponse.uuid());
-      assertEquals(AuthHelper.VALID_NUMBER, accountIdentityResponse.number());
+      assertEquals(AuthHelper.VALID_NUMBER, accountIdentityResponse.principal());
       assertEquals(AuthHelper.VALID_PNI, accountIdentityResponse.pni());
     }
 
@@ -439,7 +439,7 @@ class AccountControllerV2Test {
             any(), any(), any());
 
         assertEquals(AuthHelper.VALID_UUID, accountIdentityResponse.uuid());
-        assertEquals(NEW_NUMBER, accountIdentityResponse.number());
+        assertEquals(NEW_NUMBER, accountIdentityResponse.principal());
         assertNotEquals(AuthHelper.VALID_PNI, accountIdentityResponse.pni());
       }
     }
@@ -663,9 +663,9 @@ class AccountControllerV2Test {
       final AccountDataReportResponse structuredResponse = SystemMapper.jsonMapper()
           .readValue(stringResponse, AccountDataReportResponse.class);
 
-      assertEquals(account.getPrincipal(), structuredResponse.data().account().phoneNumber());
+      assertEquals(account.getPrincipal(), structuredResponse.data().account().principal());
       assertEquals(account.isDiscoverableByPrincipal(),
-          structuredResponse.data().account().findAccountByPhoneNumber());
+          structuredResponse.data().account().findAccountByPrincipal());
       assertEquals(account.isUnrestrictedUnidentifiedAccess(),
           structuredResponse.data().account().allowSealedSenderFromAnyone());
 
@@ -835,8 +835,8 @@ class AccountControllerV2Test {
 
     }
 
-    private static String toE164(Phonenumber.PhoneNumber phoneNumber) {
-      return PhoneNumberUtil.getInstance().format(phoneNumber, PhoneNumberUtil.PhoneNumberFormat.E164);
+    private static String toE164(Phonenumber.PhoneNumber principal) {
+      return PhoneNumberUtil.getInstance().format(principal, PhoneNumberUtil.PhoneNumberFormat.E164);
     }
   }
 }

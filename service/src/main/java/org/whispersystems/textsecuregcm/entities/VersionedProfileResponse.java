@@ -42,6 +42,6 @@ public record VersionedProfileResponse(
     @JsonProperty
     @JsonSerialize(using = ByteArrayBase64WithPaddingAdapter.Serializing.class)
     @JsonDeserialize(using = ByteArrayBase64WithPaddingAdapter.Deserializing.class)
-    byte[] phoneNumberSharing) {
+    byte[] principalSharing) {
 
 }

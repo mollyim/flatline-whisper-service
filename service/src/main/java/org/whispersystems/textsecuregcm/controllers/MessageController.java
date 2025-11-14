@@ -906,7 +906,7 @@ public class MessageController {
           .or(() -> accountsManager.getByPrincipal(source));
       if (sourceAccount.isEmpty()) {
         logger.warn("Could not find source: {}", sourceAci.get());
-        sourcePni = accountsManager.findRecentlyDeletedPhoneNumberIdentifier(sourceAci.get());
+        sourcePni = accountsManager.findRecentlyDeletedprincipalNameIdentifier(sourceAci.get());
         sourcePrincipal = sourcePni.flatMap(pni ->
             Util.getCanonicalNumber(principalNameIdentifiers.getPrincipal(pni).join()));
       } else {

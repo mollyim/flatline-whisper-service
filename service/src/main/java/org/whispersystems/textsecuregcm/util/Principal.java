@@ -22,24 +22,24 @@ import java.util.Optional;
 
 /**
  * Constraint annotation that requires annotated entity
- * to hold (or return) a string value that is a valid E164-normalized phone number.
+ * to hold (or return) a string value that is a valid, normalized principal.
  */
 @Target({ FIELD, PARAMETER, METHOD })
 @Retention(RUNTIME)
 @Constraint(validatedBy = {
-    E164.Validator.class,
-    E164.OptionalValidator.class
+    Principal.Validator.class,
+    Principal.OptionalValidator.class
 })
 @Documented
-public @interface E164 {
+public @interface Principal {
 
-  String message() default "value is not a valid E164 number";
+  String message() default "value is not a valid principal";
 
   Class<?>[] groups() default { };
 
   Class<? extends Payload>[] payload() default { };
 
-  class Validator implements ConstraintValidator<E164, String> {
+  class Validator implements ConstraintValidator<Principal, String> {
 
     @Override
     public boolean isValid(final String value, final ConstraintValidatorContext context) {
@@ -50,15 +50,15 @@ public @interface E164 {
         return false;
       }
       try {
-        Util.requireNormalizedNumber(value);
-      } catch (final ImpossiblePhoneNumberException | NonNormalizedPrincipalException e) {
+        Util.requireNormalizedPrincipal(value);
+      } catch (final ImpossiblePrincipalNumberException | NonNormalizedPrincipalException e) {
         return false;
       }
       return true;
     }
   }
 
-  class OptionalValidator implements ConstraintValidator<E164, Optional<String>> {
+  class OptionalValidator implements ConstraintValidator<Principal, Optional<String>> {
 
     @Override
     public boolean isValid(final Optional<String> value, final ConstraintValidatorContext context) {

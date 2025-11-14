@@ -16,10 +16,10 @@ public record AccountIdentityResponse(
     @Schema(description = "the account identifier for this account")
     UUID uuid,
 
-    @Schema(description = "the phone number associated with this account")
-    String number,
+    @Schema(description = "the principal associated with this account")
+    String principal,
 
-    @Schema(description = "the account identifier for this account's phone-number identity")
+    @Schema(description = "the account identifier for this account's principal-name identity")
     UUID pni,
 
     @Schema(description = "a hash of this account's username, if set")

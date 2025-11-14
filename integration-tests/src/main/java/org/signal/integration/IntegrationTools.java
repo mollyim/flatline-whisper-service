@@ -45,7 +45,7 @@ public class IntegrationTools {
     return new IntegrationTools(
         new RegistrationRecoveryPasswordsManager(registrationRecoveryPasswords),
         new VerificationSessionManager(verificationSessions),
-        new PrincipalNameIdentifiers(dynamoDbAsyncClient, config.dynamoDbTables().phoneNumberIdentifiers())
+        new PrincipalNameIdentifiers(dynamoDbAsyncClient, config.dynamoDbTables().principalNameIdentifiers())
     );
   }
 
@@ -58,9 +58,9 @@ public class IntegrationTools {
     this.principalNameIdentifiers = principalNameIdentifiers;
   }
 
-  public CompletableFuture<Void> populateRecoveryPassword(final String phoneNumber, final byte[] password) {
+  public CompletableFuture<Void> populateRecoveryPassword(final String principal, final byte[] password) {
     return principalNameIdentifiers
-        .getPrincipalNameIdentifier(phoneNumber)
+        .getPrincipalNameIdentifier(principal)
         .thenCompose(pni -> registrationRecoveryPasswordsManager.store(pni, password));
   }
 

@@ -127,7 +127,7 @@ class AccountsManagerTest {
   private DisconnectionRequestManager disconnectionRequestManager;
   private ClientPublicKeysManager clientPublicKeysManager;
 
-  private Map<String, UUID> phoneNumberIdentifiersByE164;
+  private Map<String, UUID> principalNameIdentifiersByE164;
 
   private RedisAsyncCommands<String, String> asyncCommands;
   private RedisAdvancedClusterCommands<String, String> clusterCommands;
@@ -184,9 +184,9 @@ class AccountsManagerTest {
     doAnswer((Answer<Void>) invocation -> {
       final Account account = invocation.getArgument(0, Account.class);
       final String number = invocation.getArgument(1, String.class);
-      final UUID phoneNumberIdentifier = invocation.getArgument(2, UUID.class);
+      final UUID principalNameIdentifier = invocation.getArgument(2, UUID.class);
 
-      account.setPrincipal(number, phoneNumberIdentifier);
+      account.setPrincipal(number, principalNameIdentifier);
 
       return null;
     }).when(accounts).changePrincipal(any(), anyString(), any(), any(), any());
@@ -198,11 +198,11 @@ class AccountsManagerTest {
     when(svr2Client.removeData(any(UUID.class))).thenReturn(CompletableFuture.completedFuture(null));
 
     final PrincipalNameIdentifiers principalNameIdentifiers = mock(PrincipalNameIdentifiers.class);
-    phoneNumberIdentifiersByE164 = new HashMap<>();
+    principalNameIdentifiersByE164 = new HashMap<>();
 
     when(principalNameIdentifiers.getPrincipalNameIdentifier(anyString())).thenAnswer((Answer<CompletableFuture<UUID>>) invocation -> {
       final String number = invocation.getArgument(0, String.class);
-      return CompletableFuture.completedFuture(phoneNumberIdentifiersByE164.computeIfAbsent(number, n -> UUID.randomUUID()));
+      return CompletableFuture.completedFuture(principalNameIdentifiersByE164.computeIfAbsent(number, n -> UUID.randomUUID()));
     });
 
     @SuppressWarnings("unchecked") final DynamicConfigurationManager<DynamicConfiguration> dynamicConfigurationManager =
@@ -382,7 +382,7 @@ class AccountsManagerTest {
 
     when(asyncClusterCommands.setex(any(), anyLong(), any())).thenReturn(MockRedisFuture.completedFuture("OK"));
 
-    Optional<Account> account = accountsManager.getByPhoneNumberIdentifierAsync(pni).join();
+    Optional<Account> account = accountsManager.getByprincipalNameIdentifierAsync(pni).join();
 
     assertTrue(account.isPresent());
     assertEquals(account.get().getPrincipal(), "+14152222222");
@@ -479,7 +479,7 @@ class AccountsManagerTest {
     when(accounts.getByPrincipalNameIdentifierAsync(pni))
         .thenReturn(CompletableFuture.completedFuture(Optional.of(account)));
 
-    Optional<Account> retrieved = accountsManager.getByPhoneNumberIdentifierAsync(pni).join();
+    Optional<Account> retrieved = accountsManager.getByprincipalNameIdentifierAsync(pni).join();
 
     assertTrue(retrieved.isPresent());
     assertSame(retrieved.get(), account);
@@ -598,7 +598,7 @@ class AccountsManagerTest {
     when(accounts.getByPrincipalNameIdentifierAsync(pni))
         .thenReturn(CompletableFuture.completedFuture(Optional.of(account)));
 
-    Optional<Account> retrieved = accountsManager.getByPhoneNumberIdentifierAsync(pni).join();
+    Optional<Account> retrieved = accountsManager.getByprincipalNameIdentifierAsync(pni).join();
 
     assertTrue(retrieved.isPresent());
     assertSame(retrieved.get(), account);
@@ -847,7 +847,7 @@ class AccountsManagerTest {
 
     final Account reregisteredAccount = createAccount(e164, attributes);
 
-    assertTrue(phoneNumberIdentifiersByE164.containsKey(e164));
+    assertTrue(principalNameIdentifiersByE164.containsKey(e164));
     assertEquals(e164, reregisteredAccount.getPrincipal());
 
     verify(accounts)
@@ -863,7 +863,7 @@ class AccountsManagerTest {
         notNull());
 
     verify(keysManager, times(2)).deleteSingleUsePreKeys(existingUuid);
-    verify(keysManager, times(2)).deleteSingleUsePreKeys(phoneNumberIdentifiersByE164.get(e164));
+    verify(keysManager, times(2)).deleteSingleUsePreKeys(principalNameIdentifiersByE164.get(e164));
     verify(messagesManager, times(2)).clear(existingUuid);
     verify(profilesManager, times(2)).deleteAll(existingUuid, false);
     verify(disconnectionRequestManager).requestDisconnection(argThat(account ->
@@ -921,11 +921,11 @@ class AccountsManagerTest {
 
   @Test
   void testAddDevice() {
-    final String phoneNumber =
+    final String principal =
         PhoneNumberUtil.getInstance().format(PhoneNumberUtil.getInstance().getExampleNumber("US"),
             PhoneNumberUtil.PhoneNumberFormat.E164);
 
-    final Account account = AccountsHelper.generateTestAccount(phoneNumber, List.of(generateTestDevice(CLOCK.millis())));
+    final Account account = AccountsHelper.generateTestAccount(principal, List.of(generateTestDevice(CLOCK.millis())));
     final UUID aci = account.getIdentifier(IdentityType.ACI);
     final UUID pni = account.getIdentifier(IdentityType.PNI);
     account.setIdentityKey(new IdentityKey(ECKeyPair.generate().getPublicKey()));
@@ -1044,12 +1044,12 @@ class AccountsManagerTest {
 
     assertEquals(targetNumber, account.getPrincipal());
 
-    assertTrue(phoneNumberIdentifiersByE164.containsKey(targetNumber));
+    assertTrue(principalNameIdentifiersByE164.containsKey(targetNumber));
 
     verify(keysManager).deleteSingleUsePreKeys(originalPni);
-    verify(keysManager).deleteSingleUsePreKeys(phoneNumberIdentifiersByE164.get(targetNumber));
-    verify(keysManager).buildWriteItemForEcSignedPreKey(phoneNumberIdentifiersByE164.get(targetNumber), Device.PRIMARY_ID, ecSignedPreKey);
-    verify(keysManager).buildWriteItemForLastResortKey(phoneNumberIdentifiersByE164.get(targetNumber), Device.PRIMARY_ID, kemLastResortPreKey);
+    verify(keysManager).deleteSingleUsePreKeys(principalNameIdentifiersByE164.get(targetNumber));
+    verify(keysManager).buildWriteItemForEcSignedPreKey(principalNameIdentifiersByE164.get(targetNumber), Device.PRIMARY_ID, ecSignedPreKey);
+    verify(keysManager).buildWriteItemForLastResortKey(principalNameIdentifiersByE164.get(targetNumber), Device.PRIMARY_ID, kemLastResortPreKey);
   }
 
   @Test
@@ -1058,13 +1058,13 @@ class AccountsManagerTest {
     // the canonical form of numbers may change over time, so we use PNIs as stable identifiers
     final String newNumber = "+2290123456789";
     final ECKeyPair pniIdentityKeyPair = ECKeyPair.generate();
-    final UUID phoneNumberIdentifier = UUID.randomUUID();
+    final UUID principalNameIdentifier = UUID.randomUUID();
 
-    Account account = AccountsHelper.generateTestAccount(originalNumber, UUID.randomUUID(), phoneNumberIdentifier,
+    Account account = AccountsHelper.generateTestAccount(originalNumber, UUID.randomUUID(), principalNameIdentifier,
         List.of(DevicesHelper.createDevice(Device.PRIMARY_ID)), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
 
-    phoneNumberIdentifiersByE164.put(originalNumber, account.getPrincipalNameIdentifier());
-    phoneNumberIdentifiersByE164.put(newNumber, account.getPrincipalNameIdentifier());
+    principalNameIdentifiersByE164.put(originalNumber, account.getPrincipalNameIdentifier());
+    principalNameIdentifiersByE164.put(newNumber, account.getPrincipalNameIdentifier());
     account = accountsManager.changePrincipal(account,
         newNumber,
         new IdentityKey(pniIdentityKeyPair.getPublicKey()),
@@ -1073,7 +1073,7 @@ class AccountsManagerTest {
         Map.of(Device.PRIMARY_ID, 1));
 
     assertEquals(newNumber, account.getPrincipal());
-    assertEquals(phoneNumberIdentifier, account.getIdentifier(IdentityType.PNI));
+    assertEquals(principalNameIdentifier, account.getIdentifier(IdentityType.PNI));
     verify(accounts, never()).delete(any(), any());
   }
 
@@ -1103,8 +1103,8 @@ class AccountsManagerTest {
 
     assertEquals(targetNumber, account.getPrincipal());
 
-    assertTrue(phoneNumberIdentifiersByE164.containsKey(targetNumber));
-    final UUID newPni = phoneNumberIdentifiersByE164.get(targetNumber);
+    assertTrue(principalNameIdentifiersByE164.containsKey(targetNumber));
+    final UUID newPni = principalNameIdentifiersByE164.get(targetNumber);
 
     verify(keysManager).deleteSingleUsePreKeys(existingAccountUuid);
     verify(keysManager).deleteSingleUsePreKeys(originalPni);
@@ -1147,9 +1147,9 @@ class AccountsManagerTest {
 
     assertEquals(targetNumber, updatedAccount.getPrincipal());
 
-    assertTrue(phoneNumberIdentifiersByE164.containsKey(targetNumber));
+    assertTrue(principalNameIdentifiersByE164.containsKey(targetNumber));
 
-    final UUID newPni = phoneNumberIdentifiersByE164.get(targetNumber);
+    final UUID newPni = principalNameIdentifiersByE164.get(targetNumber);
     verify(keysManager).deleteSingleUsePreKeys(existingAccountUuid);
     verify(keysManager, atLeastOnce()).deleteSingleUsePreKeys(targetPni);
     verify(keysManager).deleteSingleUsePreKeys(newPni);

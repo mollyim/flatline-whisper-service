@@ -322,10 +322,10 @@ public class ProfileAnonymousGrpcServiceTest extends SimpleBaseGrpcTest<ProfileA
     final byte[] emoji = TestRandomUtil.nextBytes(60);
     final byte[] about = TestRandomUtil.nextBytes(156);
     final byte[] paymentAddress = TestRandomUtil.nextBytes(582);
-    final byte[] phoneNumberSharing = TestRandomUtil.nextBytes(29);
+    final byte[] principalSharing = TestRandomUtil.nextBytes(29);
     final String avatar = "profiles/" + ProfileTestHelper.generateRandomBase64FromByteArray(16);
 
-    final VersionedProfile profile = new VersionedProfile(accountVersion, name, avatar, emoji, about, paymentAddress, phoneNumberSharing, new byte[0]);
+    final VersionedProfile profile = new VersionedProfile(accountVersion, name, avatar, emoji, about, paymentAddress, principalSharing, new byte[0]);
 
     when(account.getCurrentProfileVersion()).thenReturn(Optional.ofNullable(accountVersion));
     when(account.isUnrestrictedUnidentifiedAccess()).thenReturn(false);
@@ -352,7 +352,7 @@ public class ProfileAnonymousGrpcServiceTest extends SimpleBaseGrpcTest<ProfileA
         .setAbout(ByteString.copyFrom(about))
         .setAboutEmoji(ByteString.copyFrom(emoji))
         .setAvatar(avatar)
-        .setPhoneNumberSharing(ByteString.copyFrom(phoneNumberSharing));
+        .setPhoneNumberSharing(ByteString.copyFrom(principalSharing));
 
     if (expectResponseHasPaymentAddress) {
       expectedResponseBuilder.setPaymentAddress(ByteString.copyFrom(paymentAddress));

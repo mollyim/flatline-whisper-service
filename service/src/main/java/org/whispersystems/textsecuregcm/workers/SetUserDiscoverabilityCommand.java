@@ -34,7 +34,7 @@ public class SetUserDiscoverabilityCommand extends AbstractCommandWithDependenci
         .dest("user")
         .type(String.class)
         .required(true)
-        .help("the user (UUID or E164) for whom to change discoverability");
+        .help("the user (UUID or principal) for whom to change discoverability");
 
     subparser.addArgument("-d", "--discoverable")
         .dest("discoverable")

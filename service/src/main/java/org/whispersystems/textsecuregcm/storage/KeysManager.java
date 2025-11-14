@@ -66,7 +66,7 @@ public class KeysManager {
   }
 
   public List<TransactWriteItem> buildWriteItemsForNewDevice(final UUID accountIdentifier,
-      final UUID phoneNumberIdentifier,
+      final UUID principalNameIdentifier,
       final byte deviceId,
       final ECSignedPreKey aciSignedPreKey,
       final ECSignedPreKey pniSignedPreKey,
@@ -75,21 +75,21 @@ public class KeysManager {
 
     return List.of(
         ecSignedPreKeys.buildTransactWriteItemForInsertion(accountIdentifier, deviceId, aciSignedPreKey),
-        ecSignedPreKeys.buildTransactWriteItemForInsertion(phoneNumberIdentifier, deviceId, pniSignedPreKey),
+        ecSignedPreKeys.buildTransactWriteItemForInsertion(principalNameIdentifier, deviceId, pniSignedPreKey),
         pqLastResortKeys.buildTransactWriteItemForInsertion(accountIdentifier, deviceId, aciPqLastResortPreKey),
-        pqLastResortKeys.buildTransactWriteItemForInsertion(phoneNumberIdentifier, deviceId, pniLastResortPreKey)
+        pqLastResortKeys.buildTransactWriteItemForInsertion(principalNameIdentifier, deviceId, pniLastResortPreKey)
     );
   }
 
   public List<TransactWriteItem> buildWriteItemsForRemovedDevice(final UUID accountIdentifier,
-      final UUID phoneNumberIdentifier,
+      final UUID principalNameIdentifier,
       final byte deviceId) {
 
     return List.of(
         ecSignedPreKeys.buildTransactWriteItemForDeletion(accountIdentifier, deviceId),
-        ecSignedPreKeys.buildTransactWriteItemForDeletion(phoneNumberIdentifier, deviceId),
+        ecSignedPreKeys.buildTransactWriteItemForDeletion(principalNameIdentifier, deviceId),
         pqLastResortKeys.buildTransactWriteItemForDeletion(accountIdentifier, deviceId),
-        pqLastResortKeys.buildTransactWriteItemForDeletion(phoneNumberIdentifier, deviceId)
+        pqLastResortKeys.buildTransactWriteItemForDeletion(principalNameIdentifier, deviceId)
     );
   }
 

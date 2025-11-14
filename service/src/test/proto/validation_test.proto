@@ -29,7 +29,7 @@ service AnonymousService {
 }
 
 message ValidationsRequest {
-  optional string number = 1 [(require.e164) = true];
+  optional string principal = 1 [(require.principal) = true];
 
   optional string fixedSizeString = 2 [(require.exactlySize) = 5];
   optional string rangeSizeString = 3 [(require.size) = {min: 3, max: 8}];

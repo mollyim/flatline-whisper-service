@@ -30,7 +30,7 @@ import org.whispersystems.textsecuregcm.storage.DynamoDbExtensionSchema.Tables;
 import org.whispersystems.textsecuregcm.util.CompletableFutureTestUtil;
 import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException;
 
-class PhoneNumberIdentifiersTest {
+class principalNameIdentifiersTest {
 
   @RegisterExtension
   static DynamoDbExtension DYNAMO_DB_EXTENSION = new DynamoDbExtension(Tables.PNI);
@@ -44,7 +44,7 @@ class PhoneNumberIdentifiersTest {
   }
 
   @Test
-  void getPhoneNumberIdentifier() {
+  void getprincipalNameIdentifier() {
     final String number = "+18005551234";
     final String differentNumber = "+18005556789";
 
@@ -56,7 +56,7 @@ class PhoneNumberIdentifiersTest {
   }
 
   @Test
-  void generatePhoneNumberIdentifier() {
+  void generateprincipalNameIdentifier() {
     final List<String> numbers = List.of("+18005551234", "+18005556789");
     // Should set both PNIs to a new random PNI
     final UUID pni = principalNameIdentifiers.setPniIfRequired(numbers.getFirst(), numbers, Collections.emptyMap()).join();
@@ -66,7 +66,7 @@ class PhoneNumberIdentifiersTest {
   }
 
   @Test
-  void generatePhoneNumberIdentifierOneFormExists() {
+  void generateprincipalNameIdentifierOneFormExists() {
     final String firstNumber = "+18005551234";
     final String secondNumber = "+18005556789";
     final String thirdNumber = "+1800555456";
@@ -86,7 +86,7 @@ class PhoneNumberIdentifiersTest {
   }
 
   @Test
-  void getPhoneNumberIdentifierExistingMapping() {
+  void getprincipalNameIdentifierExistingMapping() {
     final String newFormatBeninE164 = PhoneNumberUtil.getInstance()
         .format(PhoneNumberUtil.getInstance().getExampleNumber("BJ"), PhoneNumberUtil.PhoneNumberFormat.E164);
 
@@ -207,23 +207,23 @@ class PhoneNumberIdentifiersTest {
   }
 
   @Test
-  void regeneratePhoneNumberIdentifierMappings() {
+  void regenerateprincipalNameIdentifierMappings() {
     // libphonenumber 8.13.50 and on generate new-format numbers for Benin
     final String newFormatBeninE164 = PhoneNumberUtil.getInstance()
         .format(PhoneNumberUtil.getInstance().getExampleNumber("BJ"), PhoneNumberUtil.PhoneNumberFormat.E164);
     final String oldFormatBeninE164 = newFormatBeninE164.replaceFirst("01", "");
 
-    final UUID phoneNumberIdentifier = UUID.randomUUID();
+    final UUID principalNameIdentifier = UUID.randomUUID();
 
     final Account account = mock(Account.class);
     when(account.getPrincipal()).thenReturn(newFormatBeninE164);
-    when(account.getIdentifier(IdentityType.PNI)).thenReturn(phoneNumberIdentifier);
+    when(account.getIdentifier(IdentityType.PNI)).thenReturn(principalNameIdentifier);
 
-    principalNameIdentifiers.regeneratePhoneNumberIdentifierMappings(account).join();
+    principalNameIdentifiers.regenerateprincipalNameIdentifierMappings(account).join();
 
-    assertEquals(phoneNumberIdentifier, principalNameIdentifiers.getPrincipalNameIdentifier(newFormatBeninE164).join());
-    assertEquals(phoneNumberIdentifier, principalNameIdentifiers.getPrincipalNameIdentifier(oldFormatBeninE164).join());
+    assertEquals(principalNameIdentifier, principalNameIdentifiers.getPrincipalNameIdentifier(newFormatBeninE164).join());
+    assertEquals(principalNameIdentifier, principalNameIdentifiers.getPrincipalNameIdentifier(oldFormatBeninE164).join());
     assertEquals(Set.of(newFormatBeninE164, oldFormatBeninE164),
-        new HashSet<>(principalNameIdentifiers.getPrincipal(phoneNumberIdentifier).join()));
+        new HashSet<>(principalNameIdentifiers.getPrincipal(principalNameIdentifier).join()));
   }
 }

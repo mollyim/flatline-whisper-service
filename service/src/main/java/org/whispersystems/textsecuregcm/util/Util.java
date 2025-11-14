@@ -29,6 +29,7 @@ import java.util.random.RandomGenerator;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 
+// FLT(uoemai): TODO: Implement utilities for generic principals.
 public class Util {
 
   private static final RandomGenerator RANDOM_GENERATOR = new Random();
@@ -44,46 +45,46 @@ public class Util {
   public static final Function<Object, Response> ASYNC_EMPTY_RESPONSE = ignored -> Response.noContent().build();
 
   /**
-   * Checks that the given number is a valid, E164-normalized phone number.
+   * Checks that the given number is a valid, normalized principal.
    *
-   * @param number the number to check
+   * @param principal the principal to check
    *
-   * @throws ImpossiblePhoneNumberException if the given number is not a valid phone number at all
-   * @throws NonNormalizedPrincipalException if the given number is a valid phone number, but isn't E164-normalized
+   * @throws ImpossiblePrincipalNumberException if the given principal is not a valid principal at all
+   * @throws NonNormalizedPrincipalException if the given number is a valid principal, but isn't normalized
    */
-  public static void requireNormalizedNumber(final String number) throws ImpossiblePhoneNumberException, NonNormalizedPrincipalException {
-    if (!PHONE_NUMBER_UTIL.isPossibleNumber(number, null)) {
-      throw new ImpossiblePhoneNumberException();
+  public static void requireNormalizedPrincipal(final String principal) throws ImpossiblePrincipalNumberException, NonNormalizedPrincipalException {
+    if (!PHONE_NUMBER_UTIL.isPossibleNumber(principal, null)) {
+      throw new ImpossiblePrincipalNumberException();
     }
 
     try {
-      final PhoneNumber inputNumber = PHONE_NUMBER_UTIL.parse(number, null);
+      final PhoneNumber inputPrincipal = PHONE_NUMBER_UTIL.parse(principal, null);
 
       // For normalization, we want to format from a version parsed with the country code removed.
       // This handles some cases of "possible", but non-normalized input numbers with a doubled country code, that is
       // with the format "+{country code} {country code} {national number}"
-      final int countryCode = inputNumber.getCountryCode();
+      final int countryCode = inputPrincipal.getCountryCode();
       final String region = PHONE_NUMBER_UTIL.getRegionCodeForCountryCode(countryCode);
 
       final PhoneNumber normalizedNumber = switch (region) {
         // the country code has no associated region. Be lenient (and simple) and accept the input number
-        case "ZZ", "001" -> inputNumber;
+        case "ZZ", "001" -> inputPrincipal;
         default -> {
           final String maybeLeadingZero =
-              inputNumber.hasItalianLeadingZero() && inputNumber.isItalianLeadingZero() ? "0" : "";
+              inputPrincipal.hasItalianLeadingZero() && inputPrincipal.isItalianLeadingZero() ? "0" : "";
           yield PHONE_NUMBER_UTIL.parse(
-              maybeLeadingZero + inputNumber.getNationalNumber(), region);
+              maybeLeadingZero + inputPrincipal.getNationalNumber(), region);
         }
       };
 
       final String normalizedE164 = PHONE_NUMBER_UTIL.format(normalizedNumber,
           PhoneNumberFormat.E164);
 
-      if (!number.equals(normalizedE164)) {
-        throw new NonNormalizedPrincipalException(number, normalizedE164);
+      if (!principal.equals(normalizedE164)) {
+        throw new NonNormalizedPrincipalException(principal, normalizedE164);
       }
     } catch (final NumberParseException e) {
-      throw new ImpossiblePhoneNumberException(e);
+      throw new ImpossiblePrincipalNumberException(e);
     }
   }
 
@@ -97,8 +98,8 @@ public class Util {
 
   public static String getRegion(final String number) {
     try {
-      final PhoneNumber phoneNumber = PHONE_NUMBER_UTIL.parse(number, null);
-      return StringUtils.defaultIfBlank(PHONE_NUMBER_UTIL.getRegionCodeForNumber(phoneNumber), "ZZ");
+      final PhoneNumber principal = PHONE_NUMBER_UTIL.parse(number, null);
+      return StringUtils.defaultIfBlank(PHONE_NUMBER_UTIL.getRegionCodeForNumber(principal), "ZZ");
     } catch (final NumberParseException e) {
       return "ZZ";
     }
@@ -106,13 +107,13 @@ public class Util {
 
   /**
    * Returns a list of equivalent principals to the given principal. This is useful in cases where the identity
-   * provider has changed the principal format or in cases where multiple formats of a principal string may be valid
+   * provider has changed the principal format or in cases where multiple formats of a principal may be valid
    * in different circumstances.
    *
    * @apiNote In Flatline, this method currently returns a list only containing the given principal.
    * In the future, definition of alternate principal forms may be exposed to Flatline operators.
    *
-   * @param principal the principal string for which to find equivalent forms
+   * @param principal the principal for which to find equivalent forms
    *
    * @return a list of principals equivalent to the given principal, including the given principal. The given principal
    * will always be the first element of the list.
@@ -139,11 +140,11 @@ public class Util {
       return e164s.stream().findFirst();
     }
     try {
-      final List<PhoneNumber> phoneNumbers = new ArrayList<>(e164s.size());
+      final List<PhoneNumber> principals = new ArrayList<>(e164s.size());
       for (String e164 : e164s) {
-        phoneNumbers.add(PHONE_NUMBER_UTIL.parse(e164, null));
+        principals.add(PHONE_NUMBER_UTIL.parse(e164, null));
       }
-      final Set<String> regions = phoneNumbers.stream().map(PHONE_NUMBER_UTIL::getRegionCodeForNumber).collect(Collectors.toSet());
+      final Set<String> regions = principals.stream().map(PHONE_NUMBER_UTIL::getRegionCodeForNumber).collect(Collectors.toSet());
       if (regions.size() != 1) {
         throw new IllegalArgumentException("Numbers from different countries cannot be equivalent alternate forms");
       }
@@ -191,27 +192,27 @@ public class Util {
   /**
    * Benin changed phone number formats from +229 XXXXXXXX to +229 01XXXXXXXX on November 30, 2024
    *
-   * @param phoneNumber the phone number to check.
+   * @param principal the phone number to check.
    * @return whether the provided phone number is an old-format Benin phone number
    */
-  public static boolean isOldFormatBeninPhoneNumber(final Phonenumber.PhoneNumber phoneNumber) {
-    return "BJ".equals(PHONE_NUMBER_UTIL.getRegionCodeForNumber(phoneNumber)) &&
-        PHONE_NUMBER_UTIL.getNationalSignificantNumber(phoneNumber).length() == 8;
+  public static boolean isOldFormatBeninPhoneNumber(final Phonenumber.PhoneNumber principal) {
+    return "BJ".equals(PHONE_NUMBER_UTIL.getRegionCodeForNumber(principal)) &&
+        PHONE_NUMBER_UTIL.getNationalSignificantNumber(principal).length() == 8;
   }
 
   /**
    * If applicable, return the canonical form of the provided phone number.
    * This is relevant in cases where a numbering authority has changed the numbering format for a region.
    *
-   * @param phoneNumber the phone number to canonicalize.
+   * @param principal the phone number to canonicalize.
    * @return the canonical phone number if applicable, otherwise the original phone number.
    */
-  public static Phonenumber.PhoneNumber canonicalizePhoneNumber(final Phonenumber.PhoneNumber phoneNumber)
+  public static Phonenumber.PhoneNumber canonicalizePhoneNumber(final Phonenumber.PhoneNumber principal)
       throws NumberParseException, ObsoletePhoneNumberFormatException {
-    if (isOldFormatBeninPhoneNumber(phoneNumber)) {
+    if (isOldFormatBeninPhoneNumber(principal)) {
       throw new ObsoletePhoneNumberFormatException("bj");
     }
-    return phoneNumber;
+    return principal;
   }
 
   public static byte[] truncate(byte[] element, int length) {

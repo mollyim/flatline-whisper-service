@@ -731,12 +731,12 @@ class RegistrationControllerTest {
                     SESSION_EXPIRATION_SECONDS))));
 
     final UUID accountIdentifier = UUID.randomUUID();
-    final UUID phoneNumberIdentifier = UUID.randomUUID();
+    final UUID principalNameIdentifier = UUID.randomUUID();
     final Device device = mock(Device.class);
 
     final Account account = MockUtils.buildMock(Account.class, a -> {
       when(a.getUuid()).thenReturn(accountIdentifier);
-      when(a.getPrincipalNameIdentifier()).thenReturn(phoneNumberIdentifier);
+      when(a.getPrincipalNameIdentifier()).thenReturn(principalNameIdentifier);
       when(a.getPrimaryDevice()).thenReturn(device);
     });
 

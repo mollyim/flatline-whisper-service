@@ -899,7 +899,7 @@ class MessageControllerTest {
 
       verify(reportMessageManager).report(Optional.of(senderNumber), Optional.of(senderAci), Optional.of(senderPni),
           messageGuid, AuthHelper.VALID_UUID, Optional.empty(), userAgent);
-      verify(accountsManager, never()).findRecentlyDeletedPhoneNumberIdentifier(any(UUID.class));
+      verify(accountsManager, never()).findRecentlyDeletedprincipalNameIdentifier(any(UUID.class));
       verify(PRINCIPAL_NAME_IDENTIFIERS, never()).getPrincipal(any());
     }
   }
@@ -964,7 +964,7 @@ class MessageControllerTest {
 
       verify(reportMessageManager).report(Optional.of(senderNumber), Optional.of(senderAci), Optional.of(senderPni),
           messageGuid, AuthHelper.VALID_UUID, Optional.empty(), userAgent);
-      verify(accountsManager, never()).findRecentlyDeletedPhoneNumberIdentifier(any(UUID.class));
+      verify(accountsManager, never()).findRecentlyDeletedprincipalNameIdentifier(any(UUID.class));
       verify(PRINCIPAL_NAME_IDENTIFIERS, never()).getPrincipal(any());
     }
   }
@@ -983,7 +983,7 @@ class MessageControllerTest {
     when(account.getPrincipalNameIdentifier()).thenReturn(senderPni);
 
     when(accountsManager.getByAccountIdentifier(senderAci)).thenReturn(Optional.empty());
-    when(accountsManager.findRecentlyDeletedPhoneNumberIdentifier(senderAci)).thenReturn(Optional.of(senderPni));
+    when(accountsManager.findRecentlyDeletedprincipalNameIdentifier(senderAci)).thenReturn(Optional.of(senderPni));
     when(PRINCIPAL_NAME_IDENTIFIERS.getPrincipal(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderNumber)));
 
     try (final Response response =
@@ -1015,7 +1015,7 @@ class MessageControllerTest {
     when(account.getPrincipalNameIdentifier()).thenReturn(senderPni);
 
     when(accountsManager.getByAccountIdentifier(senderAci)).thenReturn(Optional.of(account));
-    when(accountsManager.findRecentlyDeletedPhoneNumberIdentifier(senderAci)).thenReturn(Optional.of(senderPni));
+    when(accountsManager.findRecentlyDeletedprincipalNameIdentifier(senderAci)).thenReturn(Optional.of(senderPni));
     when(PRINCIPAL_NAME_IDENTIFIERS.getPrincipal(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderNumber)));
 
     Entity<SpamReport> entity = Entity.entity(new SpamReport(new byte[3]), "application/json");
@@ -1035,7 +1035,7 @@ class MessageControllerTest {
           eq(AuthHelper.VALID_UUID),
           argThat(maybeBytes -> maybeBytes.map(bytes -> Arrays.equals(bytes, new byte[3])).orElse(false)),
           any());
-      verify(accountsManager, never()).findRecentlyDeletedPhoneNumberIdentifier(any(UUID.class));
+      verify(accountsManager, never()).findRecentlyDeletedprincipalNameIdentifier(any(UUID.class));
       verify(PRINCIPAL_NAME_IDENTIFIERS, never()).getPrincipal(any());
     }
 
@@ -1078,7 +1078,7 @@ class MessageControllerTest {
     when(account.getPrincipalNameIdentifier()).thenReturn(senderPni);
 
     when(accountsManager.getByAccountIdentifier(senderAci)).thenReturn(Optional.of(account));
-    when(accountsManager.findRecentlyDeletedPhoneNumberIdentifier(senderAci)).thenReturn(Optional.of(senderPni));
+    when(accountsManager.findRecentlyDeletedprincipalNameIdentifier(senderAci)).thenReturn(Optional.of(senderPni));
     when(PRINCIPAL_NAME_IDENTIFIERS.getPrincipal(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderNumber)));
 
     try (final Response response =

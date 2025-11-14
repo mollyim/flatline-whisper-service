@@ -236,12 +236,12 @@ class VerificationControllerTest {
     try (Response response = request.post(Entity.json(createSessionJson(requestedNumber, "token", "fcm")))) {
       assertEquals(HttpStatus.SC_OK, response.getStatus());
 
-      final ArgumentCaptor<Phonenumber.PhoneNumber> phoneNumberArgumentCaptor = ArgumentCaptor.forClass(
+      final ArgumentCaptor<Phonenumber.PhoneNumber> principalArgumentCaptor = ArgumentCaptor.forClass(
           Phonenumber.PhoneNumber.class);
-      verify(registrationServiceClient).createRegistrationSession(phoneNumberArgumentCaptor.capture(), anyString(), anyBoolean(), any());
-      final Phonenumber.PhoneNumber phoneNumber = phoneNumberArgumentCaptor.getValue();
+      verify(registrationServiceClient).createRegistrationSession(principalArgumentCaptor.capture(), anyString(), anyBoolean(), any());
+      final Phonenumber.PhoneNumber principal = principalArgumentCaptor.getValue();
 
-      assertEquals(expectedNumber, PhoneNumberUtil.getInstance().format(phoneNumber, PhoneNumberUtil.PhoneNumberFormat.E164));
+      assertEquals(expectedNumber, PhoneNumberUtil.getInstance().format(principal, PhoneNumberUtil.PhoneNumberFormat.E164));
     }
   }
 
