@@ -46,12 +46,9 @@ public @interface Principal {
       if (Objects.isNull(value)) {
         return true;
       }
-      if (!value.startsWith("+")) {
-        return false;
-      }
       try {
         Util.requireNormalizedPrincipal(value);
-      } catch (final ImpossiblePrincipalNumberException | NonNormalizedPrincipalException e) {
+      } catch (final InvalidPrincipalException | NonNormalizedPrincipalException e) {
         return false;
       }
       return true;

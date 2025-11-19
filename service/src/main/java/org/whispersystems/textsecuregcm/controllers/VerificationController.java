@@ -113,8 +113,6 @@ public class VerificationController {
   private static final String CHALLENGE_PRESENT_TAG_NAME = "present";
   private static final String CHALLENGE_MATCH_TAG_NAME = "matches";
   private static final String CAPTCHA_ATTEMPT_COUNTER_NAME = name(VerificationController.class, "captcha");
-  private static final String COUNTRY_CODE_TAG_NAME = "countryCode";
-  private static final String REGION_CODE_TAG_NAME = "regionCode";
   private static final String SCORE_TAG_NAME = "score";
   private static final String CODE_REQUESTED_COUNTER_NAME = name(VerificationController.class, "codeRequested");
   private static final String VERIFICATION_TRANSPORT_TAG_NAME = "transport";
@@ -182,7 +180,10 @@ public class VerificationController {
 
     final Phonenumber.PhoneNumber phoneNumber;
     try {
-      phoneNumber = Util.canonicalizePhoneNumber(PhoneNumberUtil.getInstance().parse(request.principal(), null));
+      // FLT(uoemai): Canonicalization no longer applies to phone numbers specifically, only to principals.
+      //              With principals, technically equivalent phone numbers are treated as different principals.
+      //              TODO: Migrate verification to principals.
+      phoneNumber = PhoneNumberUtil.getInstance().parse(Util.canonicalizePrincipal(request.principal()), null);
     } catch (final NumberParseException e) {
       throw new ServerErrorException("could not parse already validated number", Response.Status.INTERNAL_SERVER_ERROR);
     }
@@ -380,8 +381,6 @@ public class VerificationController {
     }
 
     Metrics.counter(PUSH_CHALLENGE_COUNTER_NAME,
-            COUNTRY_CODE_TAG_NAME, Util.getCountryCode(registrationServiceSession.principal()),
-            REGION_CODE_TAG_NAME, Util.getRegion(registrationServiceSession.principal()),
             CHALLENGE_PRESENT_TAG_NAME, Boolean.toString(pushChallengePresent),
             CHALLENGE_MATCH_TAG_NAME, Boolean.toString(pushChallengeMatches))
         .increment();
@@ -443,8 +442,6 @@ public class VerificationController {
       Metrics.counter(CAPTCHA_ATTEMPT_COUNTER_NAME, Tags.of(
               Tag.of(SUCCESS_TAG_NAME, String.valueOf(assessmentResult.isValid(captchaScoreThreshold))),
               UserAgentTagUtil.getPlatformTag(userAgent),
-              Tag.of(COUNTRY_CODE_TAG_NAME, Util.getCountryCode(registrationServiceSession.principal())),
-              Tag.of(REGION_CODE_TAG_NAME, Util.getRegion(registrationServiceSession.principal())),
               Tag.of(SCORE_TAG_NAME, assessmentResult.getScoreString())))
           .increment();
 
@@ -643,8 +640,6 @@ public class VerificationController {
 
     Metrics.counter(CODE_REQUESTED_COUNTER_NAME, Tags.of(
             UserAgentTagUtil.getPlatformTag(userAgent),
-            Tag.of(COUNTRY_CODE_TAG_NAME, Util.getCountryCode(registrationServiceSession.principal())),
-            Tag.of(REGION_CODE_TAG_NAME, Util.getRegion(registrationServiceSession.principal())),
             Tag.of(VERIFICATION_TRANSPORT_TAG_NAME, verificationCodeRequest.transport().toString())))
         .increment();
 
@@ -736,8 +731,6 @@ public class VerificationController {
 
     Metrics.counter(VERIFIED_COUNTER_NAME, Tags.of(
             UserAgentTagUtil.getPlatformTag(userAgent),
-            Tag.of(COUNTRY_CODE_TAG_NAME, Util.getCountryCode(registrationServiceSession.principal())),
-            Tag.of(REGION_CODE_TAG_NAME, Util.getRegion(registrationServiceSession.principal())),
             Tag.of(SUCCESS_TAG_NAME, Boolean.toString(resultSession.verified()))))
         .increment();
 

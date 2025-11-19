@@ -22,7 +22,7 @@ public class DynamicConfiguration {
 
   @JsonProperty
   @Valid
-  private Map<String, DynamicE164ExperimentEnrollmentConfiguration> e164Experiments = Collections.emptyMap();
+  private Map<String, DynamicPrincipalExperimentEnrollmentConfiguration> principalExperiments = Collections.emptyMap();
 
   @JsonProperty
   @Valid
@@ -73,9 +73,9 @@ public class DynamicConfiguration {
     return Optional.ofNullable(experiments.get(experimentName));
   }
 
-  public Optional<DynamicE164ExperimentEnrollmentConfiguration> getE164ExperimentEnrollmentConfiguration(
+  public Optional<DynamicPrincipalExperimentEnrollmentConfiguration> getPrincipalExperimentEnrollmentConfiguration(
       final String experimentName) {
-    return Optional.ofNullable(e164Experiments.get(experimentName));
+    return Optional.ofNullable(principalExperiments.get(experimentName));
   }
 
   public Map<String, RateLimiterConfig> getLimits() {

@@ -61,7 +61,6 @@ public class ExternalServiceCredentialsAnonymousGrpcService extends
         svrCredentialsGenerator,
         MAX_SVR_PASSWORD_AGE_SECONDS);
 
-    // FLT(uoemai): TODO: Replace this one code is rebuilt from protobuf.
     return Mono.fromFuture(() -> accountsManager.getByPrincipalAsync(request.getPrincipal()))
         // the username associated with the provided principal
         .map(maybeAccount -> maybeAccount.map(Account::getUuid)

@@ -908,7 +908,9 @@ public class MessageController {
         logger.warn("Could not find source: {}", sourceAci.get());
         sourcePni = accountsManager.findRecentlyDeletedprincipalNameIdentifier(sourceAci.get());
         sourcePrincipal = sourcePni.flatMap(pni ->
-            Util.getCanonicalNumber(principalNameIdentifiers.getPrincipal(pni).join()));
+            // FLT(uoemai): Although this logic is kept for compatibility and future proofing,
+            //              only a single cannonical principal should be associated with a PNI.
+            Util.getCanonicalPrincipal(principalNameIdentifiers.getPrincipal(pni).join()));
       } else {
         sourcePrincipal = sourceAccount.map(Account::getPrincipal);
         sourcePni = sourceAccount.map(Account::getPrincipalNameIdentifier);

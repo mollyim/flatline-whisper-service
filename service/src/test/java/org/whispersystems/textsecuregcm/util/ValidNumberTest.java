@@ -35,7 +35,7 @@ class ValidNumberTest {
 
   @Test
   void requireNormalizedNumberNull() {
-    assertThrows(ImpossiblePrincipalNumberException.class, () -> Util.requireNormalizedPrincipal(null));
+    assertThrows(InvalidPrincipalException.class, () -> Util.requireNormalizedPrincipal(null));
   }
 
   @ParameterizedTest
@@ -50,7 +50,7 @@ class ValidNumberTest {
       "+1415123123a"
   })
   void requireNormalizedNumberImpossibleNumber(final String number) {
-    assertThrows(ImpossiblePrincipalNumberException.class, () -> Util.requireNormalizedPrincipal(number));
+    assertThrows(InvalidPrincipalException.class, () -> Util.requireNormalizedPrincipal(number));
   }
 
   @ParameterizedTest

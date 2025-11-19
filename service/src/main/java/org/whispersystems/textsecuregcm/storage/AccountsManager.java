@@ -118,7 +118,6 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
 
   private static final String CREATE_COUNTER_NAME       = name(AccountsManager.class, "createCounter");
   private static final String DELETE_COUNTER_NAME       = name(AccountsManager.class, "deleteCounter");
-  private static final String COUNTRY_CODE_TAG_NAME     = "country";
   private static final String DELETION_REASON_TAG_NAME  = "reason";
   private static final String TIMESTAMP_BASED_TRANSFER_ARCHIVE_KEY_COUNTER_NAME = name(AccountsManager.class, "timestampRedisKeyCounter");
   private static final String REGISTRATION_ID_BASED_TRANSFER_ARCHIVE_KEY_COUNTER_NAME = name(AccountsManager.class,"registrationIdRedisKeyCounter");
@@ -1243,7 +1242,6 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
 
           if (throwable == null) {
             Metrics.counter(DELETE_COUNTER_NAME,
-                    COUNTRY_CODE_TAG_NAME, Util.getCountryCode(account.getPrincipal()),
                     DELETION_REASON_TAG_NAME, deletionReason.tagValue)
                 .increment();
           } else {

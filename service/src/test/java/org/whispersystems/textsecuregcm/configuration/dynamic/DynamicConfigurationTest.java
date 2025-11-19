@@ -131,77 +131,52 @@ class DynamicConfigurationTest {
       final DynamicConfiguration emptyConfig =
           DynamicConfigurationManager.parseConfiguration(emptyConfigYaml, DynamicConfiguration.class).orElseThrow();
 
-      assertFalse(emptyConfig.getE164ExperimentEnrollmentConfiguration("test").isPresent());
+      assertFalse(emptyConfig.getPrincipalExperimentEnrollmentConfiguration("test").isPresent());
     }
 
     {
       final String experimentConfigYaml = REQUIRED_CONFIG.concat("""
-          e164Experiments:
+          principalExperiments:
             percentageOnly:
               enrollmentPercentage: 17
-            e164sCountryCodesAndPercentage:
-              enrolledE164s:
-                - +120255551212
-                - +3655323174
-              excludedE164s:
-                - +120255551213
-                - +3655323175
+            principalsAndPercentage:
+              enrolledPrincipals:
+                - user.account1@example.com
+                - user.account2@example.com
+              excludedPrincipals:
+                - user.account3@example.com
+                - user.account4@example.com
               enrollmentPercentage: 46
-              excludedCountryCodes:
-                - 47
-              includedCountryCodes:
-                - 56
-            e164sAndExcludedCodes:
-              enrolledE164s:
-                - +120255551212
-              excludedCountryCodes:
-                - 47
           """);
 
       final DynamicConfiguration config =
           DynamicConfigurationManager.parseConfiguration(experimentConfigYaml, DynamicConfiguration.class).orElseThrow();
 
-      assertFalse(config.getE164ExperimentEnrollmentConfiguration("unconfigured").isPresent());
+      assertFalse(config.getPrincipalExperimentEnrollmentConfiguration("unconfigured").isPresent());
 
       {
-        final Optional<DynamicE164ExperimentEnrollmentConfiguration> percentageOnly = config
-            .getE164ExperimentEnrollmentConfiguration("percentageOnly");
+        final Optional<DynamicPrincipalExperimentEnrollmentConfiguration> percentageOnly = config
+            .getPrincipalExperimentEnrollmentConfiguration("percentageOnly");
         assertTrue(percentageOnly.isPresent());
         assertEquals(17,
             percentageOnly.get().getEnrollmentPercentage());
         assertEquals(Collections.emptySet(),
-            percentageOnly.get().getEnrolledE164s());
+            percentageOnly.get().getEnrolledPrincipals());
         assertEquals(Collections.emptySet(),
-            percentageOnly.get().getExcludedE164s());
+            percentageOnly.get().getExcludedPrincipals());
       }
 
       {
-        final Optional<DynamicE164ExperimentEnrollmentConfiguration> e164sCountryCodesAndPercentage = config
-            .getE164ExperimentEnrollmentConfiguration("e164sCountryCodesAndPercentage");
+        final Optional<DynamicPrincipalExperimentEnrollmentConfiguration> principalsAndPercentage = config
+            .getPrincipalExperimentEnrollmentConfiguration("principalsAndPercentage");
 
-        assertTrue(e164sCountryCodesAndPercentage.isPresent());
+        assertTrue(principalsAndPercentage.isPresent());
         assertEquals(46,
-            e164sCountryCodesAndPercentage.get().getEnrollmentPercentage());
-        assertEquals(Set.of("+120255551212", "+3655323174"),
-            e164sCountryCodesAndPercentage.get().getEnrolledE164s());
-        assertEquals(Set.of("+120255551213", "+3655323175"),
-            e164sCountryCodesAndPercentage.get().getExcludedE164s());
-        assertEquals(Set.of("47"),
-            e164sCountryCodesAndPercentage.get().getExcludedCountryCodes());
-        assertEquals(Set.of("56"),
-            e164sCountryCodesAndPercentage.get().getIncludedCountryCodes());
-      }
-
-      {
-        final Optional<DynamicE164ExperimentEnrollmentConfiguration> e164sAndExcludedCodes = config
-            .getE164ExperimentEnrollmentConfiguration("e164sAndExcludedCodes");
-        assertTrue(e164sAndExcludedCodes.isPresent());
-        assertEquals(0, e164sAndExcludedCodes.get().getEnrollmentPercentage());
-        assertEquals(Set.of("+120255551212"),
-            e164sAndExcludedCodes.get().getEnrolledE164s());
-        assertTrue(e164sAndExcludedCodes.get().getExcludedE164s().isEmpty());
-        assertEquals(Set.of("47"),
-            e164sAndExcludedCodes.get().getExcludedCountryCodes());
+            principalsAndPercentage.get().getEnrollmentPercentage());
+        assertEquals(Set.of("user.account1@example.com", "user.account2@example.com"),
+            principalsAndPercentage.get().getEnrolledPrincipals());
+        assertEquals(Set.of("user.account3@example.com", "user.account4@example.com"),
+            principalsAndPercentage.get().getExcludedPrincipals());
       }
     }
   }

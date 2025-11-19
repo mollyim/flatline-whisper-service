@@ -35,7 +35,6 @@ public class PushChallengeManager {
   private static final String PLATFORM_TAG_NAME = "platform";
   private static final String SENT_TAG_NAME = "sent";
   private static final String SUCCESS_TAG_NAME = "success";
-  private static final String SOURCE_COUNTRY_TAG_NAME = "sourceCountry";
 
   public PushChallengeManager(final PushNotificationManager pushNotificationManager,
       final PushChallengeDynamoDb pushChallengeDynamoDb) {
@@ -74,7 +73,6 @@ public class PushChallengeManager {
 
     Metrics.counter(CHALLENGE_REQUESTED_COUNTER_NAME,
         PLATFORM_TAG_NAME, platform,
-        SOURCE_COUNTRY_TAG_NAME, Util.getCountryCode(account.getPrincipal()),
         SENT_TAG_NAME, String.valueOf(sent)).increment();
   }
 
@@ -98,7 +96,6 @@ public class PushChallengeManager {
 
     Metrics.counter(CHALLENGE_ANSWERED_COUNTER_NAME,
         PLATFORM_TAG_NAME, platform,
-        SOURCE_COUNTRY_TAG_NAME, Util.getCountryCode(account.getPrincipal()),
         SUCCESS_TAG_NAME, String.valueOf(success)).increment();
 
     return success;

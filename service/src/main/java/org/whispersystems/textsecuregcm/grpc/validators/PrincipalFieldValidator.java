@@ -10,7 +10,7 @@ import static org.whispersystems.textsecuregcm.grpc.validators.ValidatorUtils.in
 import com.google.protobuf.Descriptors;
 import io.grpc.StatusException;
 import java.util.Set;
-import org.whispersystems.textsecuregcm.util.ImpossiblePrincipalNumberException;
+import org.whispersystems.textsecuregcm.util.InvalidPrincipalException;
 import org.whispersystems.textsecuregcm.util.NonNormalizedPrincipalException;
 import org.whispersystems.textsecuregcm.util.Util;
 
@@ -31,7 +31,7 @@ public class PrincipalFieldValidator extends BaseFieldValidator<Boolean> {
       final String fieldValue) throws StatusException {
     try {
       Util.requireNormalizedPrincipal(fieldValue);
-    } catch (final ImpossiblePrincipalNumberException | NonNormalizedPrincipalException e) {
+    } catch (final InvalidPrincipalException | NonNormalizedPrincipalException e) {
       throw invalidArgument("value is not in principal format");
     }
   }

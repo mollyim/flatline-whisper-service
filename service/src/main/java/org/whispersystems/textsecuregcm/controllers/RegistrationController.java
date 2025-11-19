@@ -161,8 +161,6 @@ public class RegistrationController {
         userAgent);
 
     Metrics.counter(ACCOUNT_CREATED_COUNTER_NAME, Tags.of(UserAgentTagUtil.getPlatformTag(userAgent),
-            Tag.of(COUNTRY_CODE_TAG_NAME, Util.getCountryCode(principal)),
-            Tag.of(REGION_CODE_TAG_NAME, Util.getRegion(principal)),
             Tag.of(VERIFICATION_TYPE_TAG_NAME, verificationType.name())))
         .increment();
 

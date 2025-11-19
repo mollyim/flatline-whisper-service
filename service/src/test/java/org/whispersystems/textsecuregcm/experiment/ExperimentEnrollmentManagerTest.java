@@ -29,7 +29,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicConfiguration;
 import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicExperimentEnrollmentConfiguration;
-import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicE164ExperimentEnrollmentConfiguration;
+import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicPrincipalExperimentEnrollmentConfiguration;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 
@@ -37,7 +37,7 @@ class ExperimentEnrollmentManagerTest {
 
   private DynamicExperimentEnrollmentConfiguration.UuidSelector uuidSelector;
   private DynamicExperimentEnrollmentConfiguration experimentEnrollmentConfiguration;
-  private DynamicE164ExperimentEnrollmentConfiguration e164ExperimentEnrollmentConfiguration;
+  private DynamicPrincipalExperimentEnrollmentConfiguration principalExperimentEnrollmentConfiguration;
 
   private ExperimentEnrollmentManager experimentEnrollmentManager;
 
@@ -47,12 +47,12 @@ class ExperimentEnrollmentManagerTest {
   private static final UUID ACCOUNT_UUID = UUID.randomUUID();
   private static final UUID EXCLUDED_UUID = UUID.randomUUID();
   private static final String UUID_EXPERIMENT_NAME = "uuid_test";
-  private static final String E164_AND_UUID_EXPERIMENT_NAME = "e164_uuid_test";
+  private static final String PRINCIPAL_AND_UUID_EXPERIMENT_NAME = "principal_uuid_test";
 
-  private static final String NOT_ENROLLED_164 = "+632025551212";
-  private static final String ENROLLED_164 = "+12025551212";
-  private static final String EXCLUDED_164 = "+18005551212";
-  private static final String E164_EXPERIMENT_NAME = "e164_test";
+  private static final String NOT_ENROLLED_PRINCIPAL = "not.enrolled.user@example.com";
+  private static final String ENROLLED_PRINCIPAL = "enrolled.user@example.com";
+  private static final String EXCLUDED_PRINCIPAL = "excluded.user@example.com";
+  private static final String PRINCIPAL_EXPERIMENT_NAME = "principal_test";
 
   @BeforeEach
   void setUp() {
@@ -67,18 +67,18 @@ class ExperimentEnrollmentManagerTest {
 
     experimentEnrollmentConfiguration = mock(DynamicExperimentEnrollmentConfiguration.class);
     when(experimentEnrollmentConfiguration.getUuidSelector()).thenReturn(uuidSelector);
-    e164ExperimentEnrollmentConfiguration = mock(
-        DynamicE164ExperimentEnrollmentConfiguration.class);
+    principalExperimentEnrollmentConfiguration = mock(
+        DynamicPrincipalExperimentEnrollmentConfiguration.class);
 
     when(dynamicConfigurationManager.getConfiguration()).thenReturn(dynamicConfiguration);
     when(dynamicConfiguration.getExperimentEnrollmentConfiguration(UUID_EXPERIMENT_NAME))
         .thenReturn(Optional.of(experimentEnrollmentConfiguration));
-    when(dynamicConfiguration.getE164ExperimentEnrollmentConfiguration(E164_EXPERIMENT_NAME))
-        .thenReturn(Optional.of(e164ExperimentEnrollmentConfiguration));
-    when(dynamicConfiguration.getExperimentEnrollmentConfiguration(E164_AND_UUID_EXPERIMENT_NAME))
+    when(dynamicConfiguration.getPrincipalExperimentEnrollmentConfiguration(PRINCIPAL_EXPERIMENT_NAME))
+        .thenReturn(Optional.of(principalExperimentEnrollmentConfiguration));
+    when(dynamicConfiguration.getExperimentEnrollmentConfiguration(PRINCIPAL_AND_UUID_EXPERIMENT_NAME))
         .thenReturn(Optional.of(experimentEnrollmentConfiguration));
-    when(dynamicConfiguration.getE164ExperimentEnrollmentConfiguration(E164_AND_UUID_EXPERIMENT_NAME))
-        .thenReturn(Optional.of(e164ExperimentEnrollmentConfiguration));
+    when(dynamicConfiguration.getPrincipalExperimentEnrollmentConfiguration(PRINCIPAL_AND_UUID_EXPERIMENT_NAME))
+        .thenReturn(Optional.of(principalExperimentEnrollmentConfiguration));
 
     account = mock(Account.class);
     when(account.getUuid()).thenReturn(ACCOUNT_UUID);
@@ -127,72 +127,60 @@ class ExperimentEnrollmentManagerTest {
   }
 
   @Test
-  void testIsEnrolled_E164AndUuidExperiment() {
-    when(e164ExperimentEnrollmentConfiguration.getIncludedCountryCodes()).thenReturn(Set.of("1"));
-    when(e164ExperimentEnrollmentConfiguration.getEnrollmentPercentage()).thenReturn(0);
-    when(e164ExperimentEnrollmentConfiguration.getEnrolledE164s()).thenReturn(Collections.emptySet());
-    when(e164ExperimentEnrollmentConfiguration.getExcludedE164s()).thenReturn(Collections.emptySet());
-    when(e164ExperimentEnrollmentConfiguration.getExcludedCountryCodes()).thenReturn(Collections.emptySet());
+  void testIsEnrolled_PrincipalAndUuidExperiment() {
+    when(principalExperimentEnrollmentConfiguration.getEnrollmentPercentage()).thenReturn(0);
+    when(principalExperimentEnrollmentConfiguration.getEnrolledPrincipals()).thenReturn(Collections.emptySet());
+    when(principalExperimentEnrollmentConfiguration.getExcludedPrincipals()).thenReturn(Collections.emptySet());
 
     // test UUID enrollment is prioritized
     when(uuidSelector.getUuids()).thenReturn(Set.of(ACCOUNT_UUID));
     when(uuidSelector.getUuidEnrollmentPercentage()).thenReturn(100);
-    assertTrue(experimentEnrollmentManager.isEnrolled(NOT_ENROLLED_164, account.getUuid(), E164_AND_UUID_EXPERIMENT_NAME));
+    assertTrue(experimentEnrollmentManager.isEnrolled(NOT_ENROLLED_PRINCIPAL, account.getUuid(), PRINCIPAL_AND_UUID_EXPERIMENT_NAME));
     when(uuidSelector.getUuidEnrollmentPercentage()).thenReturn(0);
-    assertFalse(experimentEnrollmentManager.isEnrolled(NOT_ENROLLED_164, account.getUuid(), E164_AND_UUID_EXPERIMENT_NAME));
-    assertFalse(experimentEnrollmentManager.isEnrolled(ENROLLED_164, account.getUuid(), E164_AND_UUID_EXPERIMENT_NAME));
+    assertFalse(experimentEnrollmentManager.isEnrolled(NOT_ENROLLED_PRINCIPAL, account.getUuid(), PRINCIPAL_AND_UUID_EXPERIMENT_NAME));
+    assertFalse(experimentEnrollmentManager.isEnrolled(ENROLLED_PRINCIPAL, account.getUuid(), PRINCIPAL_AND_UUID_EXPERIMENT_NAME));
 
     // test fallback from UUID enrollment to general enrollment percentage
     when(uuidSelector.getUuids()).thenReturn(Collections.emptySet());
     when(experimentEnrollmentConfiguration.getEnrollmentPercentage()).thenReturn(100);
-    assertTrue(experimentEnrollmentManager.isEnrolled(NOT_ENROLLED_164, account.getUuid(), E164_AND_UUID_EXPERIMENT_NAME));
-    assertTrue(experimentEnrollmentManager.isEnrolled(ENROLLED_164, account.getUuid(), E164_AND_UUID_EXPERIMENT_NAME));
+    assertTrue(experimentEnrollmentManager.isEnrolled(NOT_ENROLLED_PRINCIPAL, account.getUuid(), PRINCIPAL_AND_UUID_EXPERIMENT_NAME));
+    assertTrue(experimentEnrollmentManager.isEnrolled(ENROLLED_PRINCIPAL, account.getUuid(), PRINCIPAL_AND_UUID_EXPERIMENT_NAME));
 
-    // test fallback from UUID/general enrollment to e164 enrollment
+    // test fallback from UUID/general enrollment to principal enrollment
     when(experimentEnrollmentConfiguration.getEnrollmentPercentage()).thenReturn(0);
-    assertTrue(experimentEnrollmentManager.isEnrolled(ENROLLED_164, account.getUuid(), E164_AND_UUID_EXPERIMENT_NAME));
-    assertFalse(experimentEnrollmentManager.isEnrolled(NOT_ENROLLED_164, account.getUuid(), E164_AND_UUID_EXPERIMENT_NAME));
-    when(e164ExperimentEnrollmentConfiguration.getEnrollmentPercentage()).thenReturn(100);
-    assertTrue(experimentEnrollmentManager.isEnrolled(ENROLLED_164, account.getUuid(), E164_AND_UUID_EXPERIMENT_NAME));
-    assertTrue(experimentEnrollmentManager.isEnrolled(NOT_ENROLLED_164, account.getUuid(), E164_AND_UUID_EXPERIMENT_NAME));
+    assertTrue(experimentEnrollmentManager.isEnrolled(ENROLLED_PRINCIPAL, account.getUuid(), PRINCIPAL_AND_UUID_EXPERIMENT_NAME));
+    assertFalse(experimentEnrollmentManager.isEnrolled(NOT_ENROLLED_PRINCIPAL, account.getUuid(), PRINCIPAL_AND_UUID_EXPERIMENT_NAME));
+    when(principalExperimentEnrollmentConfiguration.getEnrollmentPercentage()).thenReturn(100);
+    assertTrue(experimentEnrollmentManager.isEnrolled(ENROLLED_PRINCIPAL, account.getUuid(), PRINCIPAL_AND_UUID_EXPERIMENT_NAME));
+    assertTrue(experimentEnrollmentManager.isEnrolled(NOT_ENROLLED_PRINCIPAL, account.getUuid(), PRINCIPAL_AND_UUID_EXPERIMENT_NAME));
   }
 
   @ParameterizedTest
   @MethodSource
-  void testIsEnrolled_E164Experiment(final String e164, final String experimentName,
-      final Set<String> enrolledE164s, final Set<String> excludedE164s, final Set<String> includedCountryCodes,
-      final Set<String> excludedCountryCodes,
+  void testIsEnrolled_PrincipalExperiment(final String principal, final String experimentName,
+      final Set<String> enrolledPrincipals, final Set<String> excludedPrincipals,
       final int enrollmentPercentage,
       final boolean expectEnrolled, final String message) {
 
-    when(e164ExperimentEnrollmentConfiguration.getEnrolledE164s()).thenReturn(enrolledE164s);
-    when(e164ExperimentEnrollmentConfiguration.getExcludedE164s()).thenReturn(excludedE164s);
-    when(e164ExperimentEnrollmentConfiguration.getEnrollmentPercentage()).thenReturn(enrollmentPercentage);
-    when(e164ExperimentEnrollmentConfiguration.getIncludedCountryCodes()).thenReturn(includedCountryCodes);
-    when(e164ExperimentEnrollmentConfiguration.getExcludedCountryCodes()).thenReturn(excludedCountryCodes);
+    when(principalExperimentEnrollmentConfiguration.getEnrolledPrincipals()).thenReturn(enrolledPrincipals);
+    when(principalExperimentEnrollmentConfiguration.getExcludedPrincipals()).thenReturn(excludedPrincipals);
+    when(principalExperimentEnrollmentConfiguration.getEnrollmentPercentage()).thenReturn(enrollmentPercentage);
 
-    assertEquals(expectEnrolled, experimentEnrollmentManager.isEnrolled(e164, experimentName), message);
+    assertEquals(expectEnrolled, experimentEnrollmentManager.isEnrolled(principal, experimentName), message);
   }
 
-  @SuppressWarnings("unused")
-  static Stream<Arguments> testIsEnrolled_E164Experiment() {
+  static Stream<Arguments> testIsEnrolled_PrincipalExperiment() {
     return Stream.of(
-        Arguments.of(ENROLLED_164, E164_EXPERIMENT_NAME, Collections.emptySet(), Collections.emptySet(),
+        Arguments.of(ENROLLED_PRINCIPAL, PRINCIPAL_EXPERIMENT_NAME, Collections.emptySet(), Collections.emptySet(),
             Collections.emptySet(), Collections.emptySet(), 0, false, "default configuration expects no enrollment"),
-        Arguments.of(ENROLLED_164, E164_EXPERIMENT_NAME + "-unrelated-experiment", Collections.emptySet(),
+        Arguments.of(ENROLLED_PRINCIPAL, PRINCIPAL_EXPERIMENT_NAME + "-unrelated-experiment", Collections.emptySet(),
             Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), 0, false,
             "unknown experiment expects no enrollment"),
-        Arguments.of(ENROLLED_164, E164_EXPERIMENT_NAME, Set.of(ENROLLED_164), Set.of(EXCLUDED_164),
-            Collections.emptySet(), Collections.emptySet(), 0, true, "explicitly enrolled E164 overrides 0% rollout"),
-        Arguments.of(ENROLLED_164, E164_EXPERIMENT_NAME, Set.of(ENROLLED_164), Set.of(EXCLUDED_164),
-            Collections.emptySet(), Set.of("1"), 0, true, "explicitly enrolled E164 overrides excluded country code"),
-        Arguments.of(ENROLLED_164, E164_EXPERIMENT_NAME, Collections.emptySet(), Collections.emptySet(), Set.of("1"),
-            Collections.emptySet(), 0, true, "included country code overrides 0% rollout"),
-        Arguments.of(EXCLUDED_164, E164_EXPERIMENT_NAME, Collections.emptySet(), Set.of(EXCLUDED_164), Set.of("1"),
-            Collections.emptySet(), 100, false, "excluded E164 overrides 100% rollout"),
-        Arguments.of(ENROLLED_164, E164_EXPERIMENT_NAME, Collections.emptySet(), Collections.emptySet(),
-            Collections.emptySet(), Set.of("1"), 100, false, "excluded country code overrides 100% rollout"),
-        Arguments.of(ENROLLED_164, E164_EXPERIMENT_NAME, Collections.emptySet(), Collections.emptySet(),
+        Arguments.of(ENROLLED_PRINCIPAL, PRINCIPAL_EXPERIMENT_NAME, Set.of(ENROLLED_PRINCIPAL), Set.of(EXCLUDED_PRINCIPAL),
+            Collections.emptySet(), Collections.emptySet(), 0, true, "explicitly enrolled principal overrides 0% rollout"),
+        Arguments.of(EXCLUDED_PRINCIPAL, PRINCIPAL_EXPERIMENT_NAME, Collections.emptySet(), Set.of(EXCLUDED_PRINCIPAL), Set.of("1"),
+            Collections.emptySet(), 100, false, "excluded principal overrides 100% rollout"),
+        Arguments.of(ENROLLED_PRINCIPAL, PRINCIPAL_EXPERIMENT_NAME, Collections.emptySet(), Collections.emptySet(),
             Collections.emptySet(), Collections.emptySet(), 100, true, "enrollment expected for 100% rollout")
     );
   }
