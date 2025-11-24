@@ -49,9 +49,9 @@ class ExperimentEnrollmentManagerTest {
   private static final String UUID_EXPERIMENT_NAME = "uuid_test";
   private static final String PRINCIPAL_AND_UUID_EXPERIMENT_NAME = "principal_uuid_test";
 
-  private static final String NOT_ENROLLED_PRINCIPAL = "not.enrolled.user@example.com";
-  private static final String ENROLLED_PRINCIPAL = "enrolled.user@example.com";
-  private static final String EXCLUDED_PRINCIPAL = "excluded.user@example.com";
+  private static final String NOT_ENROLLED_PRINCIPAL = "not.enrolled.principal@example.com";
+  private static final String ENROLLED_PRINCIPAL = "enrolled.principal@example.com";
+  private static final String EXCLUDED_PRINCIPAL = "excluded.principal@example.com";
   private static final String PRINCIPAL_EXPERIMENT_NAME = "principal_test";
 
   @BeforeEach

@@ -85,15 +85,15 @@ public class SecureValueRecovery2ControllerTest {
     private static final UUID USER_1 = UUID.randomUUID();
     private static final UUID USER_2 = UUID.randomUUID();
     private static final UUID USER_3 = UUID.randomUUID();
-    private static final String E164_VALID = "+18005550123";
-    private static final String E164_INVALID = "1(800)555-0123";
+    private static final String PRINCIPAL_VALID = "valid.principal@example.com";
+    private static final String PRINCIPAL_INVALID = "invalid.principal.¥€Š";
 
     private final String pathPrefix;
 
     @BeforeEach
     public void before() throws Exception {
       Mockito.reset(ACCOUNTS_MANAGER);
-      Mockito.when(ACCOUNTS_MANAGER.getByPrincipal(E164_VALID)).thenReturn(Optional.of(account(USER_1)));
+      Mockito.when(ACCOUNTS_MANAGER.getByPrincipal(PRINCIPAL_VALID)).thenReturn(Optional.of(account(USER_1)));
     }
 
     protected SecureValueRecoveryControllerBaseTest(final String pathPrefix) {
@@ -173,7 +173,7 @@ public class SecureValueRecovery2ControllerTest {
         final Map<String, CheckStatus> expected,
         final long nowMillis) {
       CLOCK.setTimeMillis(nowMillis);
-      final AuthCheckRequest request = new AuthCheckRequest(E164_VALID, List.copyOf(expected.keySet()));
+      final AuthCheckRequest request = new AuthCheckRequest(PRINCIPAL_VALID, List.copyOf(expected.keySet()));
       final Response response = RESOURCES.getJerseyTest().target(pathPrefix + "/auth/check")
           .request()
           .post(Entity.entity(request, MediaType.APPLICATION_JSON));
@@ -196,7 +196,7 @@ public class SecureValueRecovery2ControllerTest {
 
       CLOCK.setTimeMillis(day(25));
 
-      final AuthCheckRequest in = new AuthCheckRequest(E164_VALID, List.copyOf(expected.keySet()));
+      final AuthCheckRequest in = new AuthCheckRequest(PRINCIPAL_VALID, List.copyOf(expected.keySet()));
 
       final Response response = RESOURCES.getJerseyTest()
           .target(pathPrefix + "/auth/check")
@@ -210,8 +210,8 @@ public class SecureValueRecovery2ControllerTest {
     }
 
     @Test
-    public void testHttpResponseCodeWhenInvalidNumber() {
-      final AuthCheckRequest in = new AuthCheckRequest(E164_INVALID, Collections.singletonList("1"));
+    public void testHttpResponseCodeWhenInvalidPrincipal() {
+      final AuthCheckRequest in = new AuthCheckRequest(PRINCIPAL_INVALID, Collections.singletonList("1"));
       final Response response = RESOURCES.getJerseyTest()
           .target(pathPrefix + "/auth/check")
           .request()
@@ -224,13 +224,13 @@ public class SecureValueRecovery2ControllerTest {
 
     @Test
     public void testHttpResponseCodeWhenTooManyTokens() {
-      final AuthCheckRequest inOkay = new AuthCheckRequest(E164_VALID, List.of(
+      final AuthCheckRequest inOkay = new AuthCheckRequest(PRINCIPAL_VALID, List.of(
           "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"
       ));
-      final AuthCheckRequest inTooMany = new AuthCheckRequest(E164_VALID, List.of(
+      final AuthCheckRequest inTooMany = new AuthCheckRequest(PRINCIPAL_VALID, List.of(
           "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"
       ));
-      final AuthCheckRequest inNoTokens = new AuthCheckRequest(E164_VALID, Collections.emptyList());
+      final AuthCheckRequest inNoTokens = new AuthCheckRequest(PRINCIPAL_VALID, Collections.emptyList());
 
       final Response responseOkay = RESOURCES.getJerseyTest()
           .target(pathPrefix + "/auth/check")
@@ -261,7 +261,7 @@ public class SecureValueRecovery2ControllerTest {
           .request()
           .post(Entity.entity("""
             {
-              "number": "123"
+              "principal": "123"
             }
             """, MediaType.APPLICATION_JSON));
 
@@ -271,7 +271,7 @@ public class SecureValueRecovery2ControllerTest {
     }
 
     @Test
-    public void testHttpResponseCodeWhenNumberMissing() {
+    public void testHttpResponseCodeWhenPrincipalMissing() {
       final Response response = RESOURCES.getJerseyTest()
           .target(pathPrefix + "/auth/check")
           .request()
@@ -293,7 +293,7 @@ public class SecureValueRecovery2ControllerTest {
           .request()
           .post(Entity.entity("""
             {
-              "number": "+18005550123",
+              "principal": "user.account@example.com",
               "passwords": ["aaa:bbb"],
               "unexpected": "value"
             }
@@ -311,7 +311,7 @@ public class SecureValueRecovery2ControllerTest {
           .request()
           .post(Entity.entity("""
             {
-              "number": "+18005550123",
+              "principal": "user.account@example.com",
               "passwords": ["aaa:bbb"]
             }
             """, MediaType.APPLICATION_JSON));
@@ -324,7 +324,7 @@ public class SecureValueRecovery2ControllerTest {
           .request()
           .post(Entity.entity("""
             {
-              "number": "+18005550123",
+              "principal": "user.account@example.com",
               "tokens": ["aaa:bbb"]
             }
             """, MediaType.APPLICATION_JSON));

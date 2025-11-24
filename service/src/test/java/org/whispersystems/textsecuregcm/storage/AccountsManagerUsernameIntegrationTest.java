@@ -67,7 +67,7 @@ class AccountsManagerUsernameIntegrationTest {
   @RegisterExtension
   static final DynamoDbExtension DYNAMO_DB_EXTENSION = new DynamoDbExtension(
       Tables.ACCOUNTS,
-      Tables.NUMBERS,
+      Tables.PRINCIPALS,
       Tables.USERNAMES,
       Tables.DELETED_ACCOUNTS,
       Tables.PNI,
@@ -118,7 +118,7 @@ class AccountsManagerUsernameIntegrationTest {
         DYNAMO_DB_EXTENSION.getDynamoDbClient(),
         DYNAMO_DB_EXTENSION.getDynamoDbAsyncClient(),
         Tables.ACCOUNTS.tableName(),
-        Tables.NUMBERS.tableName(),
+        Tables.PRINCIPALS.tableName(),
         Tables.PNI_ASSIGNMENTS.tableName(),
         Tables.USERNAMES.tableName(),
         Tables.DELETED_ACCOUNTS.tableName(),

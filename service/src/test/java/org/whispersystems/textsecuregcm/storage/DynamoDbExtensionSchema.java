@@ -106,7 +106,7 @@ public final class DynamoDbExtensionSchema {
             .attributeType(ScalarAttributeType.S).build()),
         List.of(), List.of()),
 
-    NUMBERS("numbers_test",
+    PRINCIPALS("principals_test",
         Accounts.ATTR_ACCOUNT_PRINCIPAL,
         null,
         List.of(AttributeDefinition.builder()

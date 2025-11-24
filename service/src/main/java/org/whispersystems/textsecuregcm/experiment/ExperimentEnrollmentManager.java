@@ -88,8 +88,8 @@ public class ExperimentEnrollmentManager {
       }
 
       // FLT(uoemai): Here, it was possible to enroll accounts by country code.
-      // In Flatline, there is no guarantee that the principal will contain country information.
-      // A similar effect could be achieved by enrolling based on principal prefixes or suffixes.
+      // In Flatline, there is no guarantee that the principal will contain this or any other information.
+      // In the future perhaps we should allow enrolling principals based on substrings, prefixes or suffixes.
 
       return isEnrolled(principal, config.getEnrollmentPercentage(), experimentName);
 

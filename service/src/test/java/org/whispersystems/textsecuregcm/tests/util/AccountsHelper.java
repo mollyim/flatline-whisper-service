@@ -36,13 +36,13 @@ import org.whispersystems.textsecuregcm.util.SystemMapper;
 
 public class AccountsHelper {
 
-  public static Account generateTestAccount(String number, List<Device> devices) {
-    return generateTestAccount(number, UUID.randomUUID(), UUID.randomUUID(), devices, null);
+  public static Account generateTestAccount(String principal, List<Device> devices) {
+    return generateTestAccount(principal, UUID.randomUUID(), UUID.randomUUID(), devices, null);
   }
 
-  public static Account generateTestAccount(String number, UUID uuid, final UUID principalNameIdentifier, List<Device> devices, byte[] unidentifiedAccessKey) {
+  public static Account generateTestAccount(String principal, UUID uuid, final UUID principalNameIdentifier, List<Device> devices, byte[] unidentifiedAccessKey) {
     final Account account = new Account();
-    account.setPrincipal(number, principalNameIdentifier);
+    account.setPrincipal(principal, principalNameIdentifier);
     account.setUuid(uuid);
     devices.forEach(account::addDevice);
     account.setUnidentifiedAccessKey(unidentifiedAccessKey);
@@ -199,17 +199,17 @@ public class AccountsHelper {
       for (Stubbing stubbing : mockingDetails.getStubbings()) {
         switch (stubbing.getInvocation().getMethod().getName()) {
           case "getUuid" -> when(updatedAccount.getUuid()).thenAnswer(stubbing);
-          case "getprincipalNameIdentifier" -> when(updatedAccount.getPrincipalNameIdentifier()).thenAnswer(stubbing);
+          case "getPrincipalNameIdentifier" -> when(updatedAccount.getPrincipalNameIdentifier()).thenAnswer(stubbing);
           case "getIdentifier" -> when(updatedAccount.getIdentifier(stubbing.getInvocation().getArgument(0))).thenAnswer(stubbing);
           case "isIdentifiedBy" -> when(updatedAccount.isIdentifiedBy(stubbing.getInvocation().getArgument(0))).thenAnswer(stubbing);
-          case "getNumber" -> when(updatedAccount.getPrincipal()).thenAnswer(stubbing);
+          case "getPrincipal" -> when(updatedAccount.getPrincipal()).thenAnswer(stubbing);
           case "getUsername" -> when(updatedAccount.getUsernameHash()).thenAnswer(stubbing);
           case "getUsernameHash" -> when(updatedAccount.getUsernameHash()).thenAnswer(stubbing);
           case "getUsernameLinkHandle" -> when(updatedAccount.getUsernameLinkHandle()).thenAnswer(stubbing);
           case "getDevices" -> when(updatedAccount.getDevices()).thenAnswer(stubbing);
           case "getDevice" -> when(updatedAccount.getDevice(stubbing.getInvocation().getArgument(0))).thenAnswer(stubbing);
           case "getPrimaryDevice" -> when(updatedAccount.getPrimaryDevice()).thenAnswer(stubbing);
-          case "isDiscoverableByPhoneNumber" -> when(updatedAccount.isDiscoverableByPrincipal()).thenAnswer(stubbing);
+          case "isDiscoverableByPrincipal" -> when(updatedAccount.isDiscoverableByPrincipal()).thenAnswer(stubbing);
           case "getNextDeviceId" -> when(updatedAccount.getNextDeviceId()).thenAnswer(stubbing);
           case "hasCapability" -> when(updatedAccount.hasCapability(stubbing.getInvocation().getArgument(0))).thenAnswer(stubbing);
           case "getRegistrationLock" -> when(updatedAccount.getRegistrationLock()).thenAnswer(stubbing);

@@ -109,7 +109,7 @@ class AccountsTest {
   @RegisterExtension
   static final DynamoDbExtension DYNAMO_DB_EXTENSION = new DynamoDbExtension(
       Tables.ACCOUNTS,
-      Tables.NUMBERS,
+      Tables.PRINCIPALS,
       Tables.PNI_ASSIGNMENTS,
       Tables.USERNAMES,
       Tables.DELETED_ACCOUNTS,
@@ -138,7 +138,7 @@ class AccountsTest {
         DYNAMO_DB_EXTENSION.getDynamoDbClient(),
         DYNAMO_DB_EXTENSION.getDynamoDbAsyncClient(),
         Tables.ACCOUNTS.tableName(),
-        Tables.NUMBERS.tableName(),
+        Tables.PRINCIPALS.tableName(),
         Tables.PNI_ASSIGNMENTS.tableName(),
         Tables.USERNAMES.tableName(),
         Tables.DELETED_ACCOUNTS.tableName(),
@@ -338,7 +338,7 @@ class AccountsTest {
       final TransactWriteItem principalConstraintPut = TransactWriteItem.builder()
           .put(
               Put.builder()
-                  .tableName(Tables.NUMBERS.tableName())
+                  .tableName(Tables.PRINCIPALS.tableName())
                   .item(Map.of(
                       Accounts.ATTR_ACCOUNT_PRINCIPAL, AttributeValues.fromString(account.getPrincipal()),
                       Accounts.KEY_ACCOUNT_UUID, AttributeValues.fromUUID(account.getUuid())))
@@ -615,7 +615,7 @@ class AccountsTest {
         mock(DynamoDbClient.class),
         dynamoDbAsyncClient,
         Tables.ACCOUNTS.tableName(),
-        Tables.NUMBERS.tableName(),
+        Tables.PRINCIPALS.tableName(),
         Tables.PNI_ASSIGNMENTS.tableName(),
         Tables.USERNAMES.tableName(),
         Tables.DELETED_ACCOUNTS.tableName(),
@@ -706,7 +706,7 @@ class AccountsTest {
         mock(DynamoDbClient.class),
         dynamoDbAsyncClient,
         Tables.ACCOUNTS.tableName(),
-        Tables.NUMBERS.tableName(),
+        Tables.PRINCIPALS.tableName(),
         Tables.PNI_ASSIGNMENTS.tableName(),
         Tables.USERNAMES.tableName(),
         Tables.DELETED_ACCOUNTS.tableName(),
@@ -1117,7 +1117,7 @@ class AccountsTest {
         mock(DynamoDbClient.class),
         dbAsyncClient,
         Tables.ACCOUNTS.tableName(),
-        Tables.NUMBERS.tableName(),
+        Tables.PRINCIPALS.tableName(),
         Tables.PNI_ASSIGNMENTS.tableName(),
         Tables.USERNAMES.tableName(),
         Tables.DELETED_ACCOUNTS.tableName(),
@@ -1163,7 +1163,7 @@ class AccountsTest {
         mock(DynamoDbClient.class),
         dbAsyncClient,
         Tables.ACCOUNTS.tableName(),
-        Tables.NUMBERS.tableName(),
+        Tables.PRINCIPALS.tableName(),
         Tables.PNI_ASSIGNMENTS.tableName(),
         Tables.USERNAMES.tableName(),
         Tables.DELETED_ACCOUNTS.tableName(),
@@ -1267,7 +1267,7 @@ class AccountsTest {
         mock(DynamoDbClient.class),
         dbAsyncClient,
         Tables.ACCOUNTS.tableName(),
-        Tables.NUMBERS.tableName(),
+        Tables.PRINCIPALS.tableName(),
         Tables.PNI_ASSIGNMENTS.tableName(),
         Tables.USERNAMES.tableName(),
         Tables.DELETED_ACCOUNTS.tableName(),
@@ -1782,7 +1782,7 @@ class AccountsTest {
 
     // Check that bare constraint records are written as expected
     assertEquals(Optional.of(account.getIdentifier(IdentityType.ACI)),
-        getConstraintValue(Tables.NUMBERS.tableName(), Accounts.ATTR_ACCOUNT_PRINCIPAL, AttributeValues.fromString(account.getPrincipal())));
+        getConstraintValue(Tables.PRINCIPALS.tableName(), Accounts.ATTR_ACCOUNT_PRINCIPAL, AttributeValues.fromString(account.getPrincipal())));
 
     assertEquals(Optional.of(account.getIdentifier(IdentityType.ACI)),
         getConstraintValue(Tables.PNI_ASSIGNMENTS.tableName(), Accounts.ATTR_PNI_UUID, AttributeValues.fromUUID(account.getIdentifier(IdentityType.PNI))));
@@ -1811,7 +1811,7 @@ class AccountsTest {
 
     final Map<String, AttributeValue> originalE164ConstraintItem =
         DYNAMO_DB_EXTENSION.getDynamoDbClient().getItem(GetItemRequest.builder()
-                .tableName(Tables.NUMBERS.tableName())
+                .tableName(Tables.PRINCIPALS.tableName())
                 .key(Map.of(Accounts.ATTR_ACCOUNT_PRINCIPAL, AttributeValues.fromString(account.getPrincipal())))
                 .build())
             .item();
@@ -1836,7 +1836,7 @@ class AccountsTest {
 
     final Map<String, AttributeValue> regeneratedE164ConstraintItem =
         DYNAMO_DB_EXTENSION.getDynamoDbClient().getItem(GetItemRequest.builder()
-                .tableName(Tables.NUMBERS.tableName())
+                .tableName(Tables.PRINCIPALS.tableName())
                 .key(Map.of(Accounts.ATTR_ACCOUNT_PRINCIPAL, AttributeValues.fromString(account.getPrincipal())))
                 .build())
             .item();
@@ -1955,7 +1955,7 @@ class AccountsTest {
   private void assertPhoneNumberConstraintExists(final String number, final UUID uuid) {
     final GetItemResponse numberConstraintResponse = DYNAMO_DB_EXTENSION.getDynamoDbClient().getItem(
         GetItemRequest.builder()
-            .tableName(Tables.NUMBERS.tableName())
+            .tableName(Tables.PRINCIPALS.tableName())
             .key(Map.of(Accounts.ATTR_ACCOUNT_PRINCIPAL, AttributeValues.fromString(number)))
             .build());
 
@@ -1966,7 +1966,7 @@ class AccountsTest {
   private void assertPhoneNumberConstraintDoesNotExist(final String number) {
     final GetItemResponse numberConstraintResponse = DYNAMO_DB_EXTENSION.getDynamoDbClient().getItem(
         GetItemRequest.builder()
-            .tableName(Tables.NUMBERS.tableName())
+            .tableName(Tables.PRINCIPALS.tableName())
             .key(Map.of(Accounts.ATTR_ACCOUNT_PRINCIPAL, AttributeValues.fromString(number)))
             .build());
 

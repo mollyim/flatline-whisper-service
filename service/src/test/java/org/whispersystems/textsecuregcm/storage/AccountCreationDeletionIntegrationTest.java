@@ -13,7 +13,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -62,7 +61,7 @@ public class AccountCreationDeletionIntegrationTest {
       DynamoDbExtensionSchema.Tables.CLIENT_PUBLIC_KEYS,
       DynamoDbExtensionSchema.Tables.DELETED_ACCOUNTS,
       DynamoDbExtensionSchema.Tables.DELETED_ACCOUNTS_LOCK,
-      DynamoDbExtensionSchema.Tables.NUMBERS,
+      DynamoDbExtensionSchema.Tables.PRINCIPALS,
       DynamoDbExtensionSchema.Tables.PNI,
       DynamoDbExtensionSchema.Tables.PNI_ASSIGNMENTS,
       DynamoDbExtensionSchema.Tables.USERNAMES,
@@ -118,7 +117,7 @@ public class AccountCreationDeletionIntegrationTest {
         DYNAMO_DB_EXTENSION.getDynamoDbClient(),
         DYNAMO_DB_EXTENSION.getDynamoDbAsyncClient(),
         DynamoDbExtensionSchema.Tables.ACCOUNTS.tableName(),
-        DynamoDbExtensionSchema.Tables.NUMBERS.tableName(),
+        DynamoDbExtensionSchema.Tables.PRINCIPALS.tableName(),
         DynamoDbExtensionSchema.Tables.PNI_ASSIGNMENTS.tableName(),
         DynamoDbExtensionSchema.Tables.USERNAMES.tableName(),
         DynamoDbExtensionSchema.Tables.DELETED_ACCOUNTS.tableName(),
@@ -189,11 +188,9 @@ public class AccountCreationDeletionIntegrationTest {
   @CartesianTest
   @CartesianTest.MethodFactory("createAccount")
   void createAccount(final DeliveryChannels deliveryChannels,
-      final boolean discoverableByPhoneNumber) throws InterruptedException {
+      final boolean discoverableByPrincipal) throws InterruptedException {
 
-    final String number = PhoneNumberUtil.getInstance().format(
-        PhoneNumberUtil.getInstance().getExampleNumber("US"),
-        PhoneNumberUtil.PhoneNumberFormat.E164);
+    final String principal = "user.account@example.com";
 
     final String password = RandomStringUtils.secure().nextAlphanumeric(16);
     final String signalAgent = RandomStringUtils.secure().nextAlphabetic(3);
@@ -209,7 +206,7 @@ public class AccountCreationDeletionIntegrationTest {
         pniRegistrationId,
         deviceName,
         registrationLockSecret,
-        discoverableByPhoneNumber,
+        discoverableByPrincipal,
         deviceCapabilities);
 
     final List<AccountBadge> badges = new ArrayList<>(List.of(new AccountBadge(
@@ -234,7 +231,7 @@ public class AccountCreationDeletionIntegrationTest {
         ? Optional.of(new GcmRegistrationId(deliveryChannels.fcmToken()))
         : Optional.empty();
 
-    final Account account = accountsManager.create(number,
+    final Account account = accountsManager.create(principal,
         accountAttributes,
         badges,
         new IdentityKey(aciKeyPair.getPublicKey()),
@@ -256,14 +253,14 @@ public class AccountCreationDeletionIntegrationTest {
         null);
 
     assertExpectedStoredAccount(account,
-        number,
+        principal,
         password,
         signalAgent,
         deliveryChannels,
         registrationId,
         pniRegistrationId,
         deviceName,
-        discoverableByPhoneNumber,
+        discoverableByPrincipal,
         deviceCapabilities,
         badges,
         maybeApnRegistrationId,
@@ -290,18 +287,16 @@ public class AccountCreationDeletionIntegrationTest {
             new DeliveryChannels(false, "apns-token", null),
             new DeliveryChannels(false, null, "fcm-token"))
 
-        // discoverableByPhoneNumber
+        // discoverableByPrincipal
         .argumentsForNextParameter(true, false);
   }
 
   @CartesianTest
   @CartesianTest.MethodFactory("createAccount")
   void reregisterAccount(final DeliveryChannels deliveryChannels,
-      final boolean discoverableByPhoneNumber) throws InterruptedException {
+      final boolean discoverableByPrincipal) throws InterruptedException {
 
-    final String number = PhoneNumberUtil.getInstance().format(
-        PhoneNumberUtil.getInstance().getExampleNumber("US"),
-        PhoneNumberUtil.PhoneNumberFormat.E164);
+    final String principal = "user.account@example.com";
 
     final UUID existingAccountUuid;
     {
@@ -313,7 +308,7 @@ public class AccountCreationDeletionIntegrationTest {
       final KEMSignedPreKey aciPqLastResortPreKey = KeysHelper.signedKEMPreKey(3, aciKeyPair);
       final KEMSignedPreKey pniPqLastResortPreKey = KeysHelper.signedKEMPreKey(4, pniKeyPair);
 
-      final Account existingAccount = accountsManager.create(number,
+      final Account existingAccount = accountsManager.create(principal,
           new AccountAttributes(true, 1, 1, "name".getBytes(StandardCharsets.UTF_8), "registration-lock", false, Set.of()),
           Collections.emptyList(),
           new IdentityKey(aciKeyPair.getPublicKey()),
@@ -350,7 +345,7 @@ public class AccountCreationDeletionIntegrationTest {
         pniRegistrationId,
         deviceName,
         registrationLockSecret,
-        discoverableByPhoneNumber,
+        discoverableByPrincipal,
         deviceCapabilities);
 
     final List<AccountBadge> badges = new ArrayList<>(List.of(new AccountBadge(
@@ -375,7 +370,7 @@ public class AccountCreationDeletionIntegrationTest {
         ? Optional.of(new GcmRegistrationId(deliveryChannels.fcmToken()))
         : Optional.empty();
 
-    final Account reregisteredAccount = accountsManager.create(number,
+    final Account reregisteredAccount = accountsManager.create(principal,
         accountAttributes,
         badges,
         new IdentityKey(aciKeyPair.getPublicKey()),
@@ -396,14 +391,14 @@ public class AccountCreationDeletionIntegrationTest {
         null);
 
     assertExpectedStoredAccount(reregisteredAccount,
-        number,
+        principal,
         password,
         signalAgent,
         deliveryChannels,
         registrationId,
         pniRegistrationId,
         deviceName,
-        discoverableByPhoneNumber,
+        discoverableByPrincipal,
         deviceCapabilities,
         badges,
         maybeApnRegistrationId,
@@ -422,9 +417,7 @@ public class AccountCreationDeletionIntegrationTest {
 
   @Test
   void deleteAccount() throws InterruptedException {
-    final String number = PhoneNumberUtil.getInstance().format(
-        PhoneNumberUtil.getInstance().getExampleNumber("US"),
-        PhoneNumberUtil.PhoneNumberFormat.E164);
+    final String principal = "user.account@example.com";
 
     final String password = RandomStringUtils.secure().nextAlphanumeric(16);
     final String signalAgent = RandomStringUtils.secure().nextAlphabetic(3);
@@ -456,7 +449,7 @@ public class AccountCreationDeletionIntegrationTest {
     final KEMSignedPreKey aciPqLastResortPreKey = KeysHelper.signedKEMPreKey(3, aciKeyPair);
     final KEMSignedPreKey pniPqLastResortPreKey = KeysHelper.signedKEMPreKey(4, pniKeyPair);
 
-    final Account account = accountsManager.create(number,
+    final Account account = accountsManager.create(principal,
         accountAttributes,
         badges,
         new IdentityKey(aciKeyPair.getPublicKey()),
@@ -504,7 +497,7 @@ public class AccountCreationDeletionIntegrationTest {
       final int registrationId,
       final int pniRegistrationId,
       final byte[] deviceName,
-      final boolean discoverableByPhoneNumber,
+      final boolean discoverableByPrincipal,
       final Set<DeviceCapability> deviceCapabilities,
       final List<AccountBadge> badges,
       final Optional<ApnRegistrationId> maybeApnRegistrationId,
@@ -523,7 +516,7 @@ public class AccountCreationDeletionIntegrationTest {
     assertEquals(registrationId, primaryDevice.getRegistrationId(IdentityType.ACI));
     assertEquals(pniRegistrationId, primaryDevice.getRegistrationId(IdentityType.PNI));
     assertArrayEquals(deviceName, primaryDevice.getName());
-    assertEquals(discoverableByPhoneNumber, account.isDiscoverableByPrincipal());
+    assertEquals(discoverableByPrincipal, account.isDiscoverableByPrincipal());
     assertEquals(deviceCapabilities, primaryDevice.getCapabilities());
     assertEquals(badges, account.getBadges());
 

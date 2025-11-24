@@ -92,7 +92,7 @@ public class ValidatingInterceptorTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"15551234567", "", "123", "+1 555 1234567", "asdf"})
+  @ValueSource(strings = {"", " ", "   ", "invalid.principal.¥€Š", "invalid.principal.\uD83D\uDE45"})
   public void testPrincipalValidationFailure(final String invalidPrincipal) throws Exception {
     assertStatusException(Status.INVALID_ARGUMENT, () -> stub.validationsEndpoint(
         builderWithValidDefaults()

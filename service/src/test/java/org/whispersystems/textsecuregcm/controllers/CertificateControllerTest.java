@@ -128,7 +128,7 @@ class CertificateControllerTest {
     assertTrue(caPublicKey.verifySignature(serverCertificateHolder.getCertificate().toByteArray(),
         serverCertificateHolder.getSignature().toByteArray()));
 
-    assertEquals(certificate.getSender(), AuthHelper.VALID_NUMBER);
+    assertEquals(certificate.getSender(), AuthHelper.VALID_PRINCIPAL);
     assertEquals(certificate.getSenderDevice(), 1L);
     assertTrue(certificate.hasSenderUuid());
     assertEquals(AuthHelper.VALID_UUID.toString(), certificate.getSenderUuid());
@@ -158,18 +158,18 @@ class CertificateControllerTest {
     assertTrue(caPublicKey.verifySignature(serverCertificateHolder.getCertificate().toByteArray(),
         serverCertificateHolder.getSignature().toByteArray()));
 
-    assertEquals(certificate.getSender(), AuthHelper.VALID_NUMBER);
+    assertEquals(certificate.getSender(), AuthHelper.VALID_PRINCIPAL);
     assertEquals(certificate.getSenderDevice(), 1L);
     assertEquals(certificate.getSenderUuid(), AuthHelper.VALID_UUID.toString());
     assertArrayEquals(certificate.getIdentityKey().toByteArray(), AuthHelper.VALID_IDENTITY.serialize());
   }
 
   @Test
-  void testValidCertificateWithUuidNoE164() throws Exception {
+  void testValidCertificateWithUuidNoPrincipal() throws Exception {
     DeliveryCertificate certificateObject = resources.getJerseyTest()
         .target("/v1/certificate/delivery")
         .queryParam("includeUuid", "true")
-        .queryParam("includeE164", "false")
+        .queryParam("includePrincipal", "false")
         .request()
         .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
         .get(DeliveryCertificate.class);

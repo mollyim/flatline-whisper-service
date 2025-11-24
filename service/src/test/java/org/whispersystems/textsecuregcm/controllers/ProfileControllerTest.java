@@ -210,14 +210,14 @@ class ProfileControllerTest {
 
     when(accountsManager.getByServiceIdentifier(any())).thenReturn(Optional.empty());
 
-    when(accountsManager.getByPrincipal(AuthHelper.VALID_NUMBER_TWO)).thenReturn(Optional.of(profileAccount));
+    when(accountsManager.getByPrincipal(AuthHelper.VALID_PRINCIPAL_TWO)).thenReturn(Optional.of(profileAccount));
     when(accountsManager.getByAccountIdentifier(AuthHelper.VALID_UUID_TWO)).thenReturn(Optional.of(profileAccount));
     when(accountsManager.getByPrincipalNameIdentifier(AuthHelper.VALID_PNI_TWO)).thenReturn(Optional.of(profileAccount));
     when(accountsManager.getByServiceIdentifier(new AciServiceIdentifier(AuthHelper.VALID_UUID_TWO))).thenReturn(Optional.of(profileAccount));
     when(accountsManager.getByServiceIdentifier(new PniServiceIdentifier(AuthHelper.VALID_PNI_TWO))).thenReturn(Optional.of(profileAccount));
     when(accountsManager.getByUsernameHash(USERNAME_HASH)).thenReturn(CompletableFuture.completedFuture(Optional.of(profileAccount)));
 
-    when(accountsManager.getByPrincipal(AuthHelper.VALID_NUMBER)).thenReturn(Optional.of(capabilitiesAccount));
+    when(accountsManager.getByPrincipal(AuthHelper.VALID_PRINCIPAL)).thenReturn(Optional.of(capabilitiesAccount));
     when(accountsManager.getByAccountIdentifier(AuthHelper.VALID_UUID)).thenReturn(Optional.of(capabilitiesAccount));
     when(accountsManager.getByServiceIdentifier(new AciServiceIdentifier(AuthHelper.VALID_UUID))).thenReturn(Optional.of(capabilitiesAccount));
 
@@ -791,7 +791,7 @@ class ProfileControllerTest {
   @Test
   void testSetProfilePaymentAddressCountryNotAllowed() throws InvalidInputException {
     when(dynamicPaymentsConfiguration.getDisallowedPrefixes())
-        .thenReturn(List.of(AuthHelper.VALID_NUMBER_TWO.substring(0, 3)));
+        .thenReturn(List.of(AuthHelper.VALID_PRINCIPAL_TWO.substring(0, 3)));
 
     final ProfileKeyCommitment commitment = new ProfileKey(new byte[32]).getCommitment(new ServiceId.Aci(AuthHelper.VALID_UUID));
 
@@ -821,7 +821,7 @@ class ProfileControllerTest {
   void testSetProfilePaymentAddressCountryNotAllowedExistingPaymentAddress(
       final boolean existingPaymentAddressOnProfile) throws InvalidInputException {
     when(dynamicPaymentsConfiguration.getDisallowedPrefixes())
-        .thenReturn(List.of(AuthHelper.VALID_NUMBER_TWO.substring(0, 3)));
+        .thenReturn(List.of(AuthHelper.VALID_PRINCIPAL_TWO.substring(0, 3)));
 
     final ProfileKeyCommitment commitment = new ProfileKey(new byte[32]).getCommitment(new ServiceId.Aci(AuthHelper.VALID_UUID));
     final byte[] name = TestRandomUtil.nextBytes(81);

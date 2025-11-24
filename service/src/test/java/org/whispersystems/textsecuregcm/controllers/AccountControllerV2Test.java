@@ -20,8 +20,6 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.i18n.phonenumbers.PhoneNumberUtil;
-import com.google.i18n.phonenumbers.Phonenumber;
 import io.dropwizard.auth.AuthValueFactoryProvider;
 import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 import io.dropwizard.testing.junit5.ResourceExtension;
@@ -105,9 +103,7 @@ class AccountControllerV2Test {
   private static final ECKeyPair IDENTITY_KEY_PAIR = ECKeyPair.generate();
   private static final IdentityKey IDENTITY_KEY = new IdentityKey(IDENTITY_KEY_PAIR.getPublicKey());
 
-  private static final String NEW_NUMBER = PhoneNumberUtil.getInstance().format(
-      PhoneNumberUtil.getInstance().getExampleNumber("US"),
-      PhoneNumberUtil.PhoneNumberFormat.E164);
+  private static final String NEW_PRINCIPAL = "user.account@example.com";
 
   private final AccountsManager accountsManager = mock(AccountsManager.class);
   private final ChangePrincipalManager changePrincipalManager = mock(ChangePrincipalManager.class);
@@ -176,69 +172,69 @@ class AccountControllerV2Test {
     }
 
     @Test
-    void changeNumberSuccess() throws Exception {
+    void changePrincipalSuccess() throws Exception {
 
       when(registrationServiceClient.getSession(any(), any()))
           .thenReturn(CompletableFuture.completedFuture(
-              Optional.of(new RegistrationServiceSession(new byte[16], NEW_NUMBER, true, null, null, null,
+              Optional.of(new RegistrationServiceSession(new byte[16], NEW_PRINCIPAL, true, null, null, null,
                   SESSION_EXPIRATION_SECONDS))));
 
       final AccountIdentityResponse accountIdentityResponse =
           resources.getJerseyTest()
-              .target("/v2/accounts/number")
+              .target("/v2/accounts/principal")
               .request()
               .header(HttpHeaders.AUTHORIZATION,
                   AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
               .put(Entity.entity(
-                  new ChangePrincipalRequest(encodeSessionId("session"), null, NEW_NUMBER, "123", IDENTITY_KEY,
+                  new ChangePrincipalRequest(encodeSessionId("session"), null, NEW_PRINCIPAL, "123", IDENTITY_KEY,
                       Collections.emptyList(),
                       Map.of(Device.PRIMARY_ID, KeysHelper.signedECPreKey(1, IDENTITY_KEY_PAIR)),
                       Map.of(Device.PRIMARY_ID, KeysHelper.signedKEMPreKey(2, IDENTITY_KEY_PAIR)),
                       Map.of(Device.PRIMARY_ID, 17)),
                   MediaType.APPLICATION_JSON_TYPE), AccountIdentityResponse.class);
 
-      verify(changePrincipalManager).changePrincipal(eq(AuthHelper.VALID_ACCOUNT), eq(NEW_NUMBER), any(), any(), any(),
+      verify(changePrincipalManager).changePrincipal(eq(AuthHelper.VALID_ACCOUNT), eq(NEW_PRINCIPAL), any(), any(), any(),
           any(), any(), any());
 
       assertEquals(AuthHelper.VALID_UUID, accountIdentityResponse.uuid());
-      assertEquals(NEW_NUMBER, accountIdentityResponse.principal());
+      assertEquals(NEW_PRINCIPAL, accountIdentityResponse.principal());
       assertNotEquals(AuthHelper.VALID_PNI, accountIdentityResponse.pni());
     }
 
     @Test
-    void changeNumberSameNumber() throws Exception {
+    void changePrincipalSamePrincipal() throws Exception {
       final AccountIdentityResponse accountIdentityResponse =
           resources.getJerseyTest()
-              .target("/v2/accounts/number")
+              .target("/v2/accounts/principal")
               .request()
               .header(HttpHeaders.AUTHORIZATION,
                   AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
               .put(Entity.entity(
-                  new ChangePrincipalRequest(encodeSessionId("session"), null, AuthHelper.VALID_NUMBER, null, IDENTITY_KEY,
+                  new ChangePrincipalRequest(encodeSessionId("session"), null, AuthHelper.VALID_PRINCIPAL, null, IDENTITY_KEY,
                       Collections.emptyList(),
                       Map.of(Device.PRIMARY_ID, KeysHelper.signedECPreKey(1, IDENTITY_KEY_PAIR)),
                       Map.of(Device.PRIMARY_ID, KeysHelper.signedKEMPreKey(2, IDENTITY_KEY_PAIR)),
                       Map.of(Device.PRIMARY_ID, 17)),
                   MediaType.APPLICATION_JSON_TYPE), AccountIdentityResponse.class);
 
-      verify(changePrincipalManager).changePrincipal(eq(AuthHelper.VALID_ACCOUNT), eq(AuthHelper.VALID_NUMBER), any(), any(), any(),
+      verify(changePrincipalManager).changePrincipal(eq(AuthHelper.VALID_ACCOUNT), eq(AuthHelper.VALID_PRINCIPAL), any(), any(), any(),
           any(), any(), any());
 
       assertEquals(AuthHelper.VALID_UUID, accountIdentityResponse.uuid());
-      assertEquals(AuthHelper.VALID_NUMBER, accountIdentityResponse.principal());
+      assertEquals(AuthHelper.VALID_PRINCIPAL, accountIdentityResponse.principal());
       assertEquals(AuthHelper.VALID_PNI, accountIdentityResponse.pni());
     }
 
     @Test
-    void changeNumberNonNormalizedNumber() {
+    void changePrincipalNonNormalizedPrincipal() {
       try (Response response = resources.getJerseyTest()
-          .target("/v2/accounts/number")
+          .target("/v2/accounts/principal")
           .request()
           .header(HttpHeaders.AUTHORIZATION,
               AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
           .put(Entity.entity(
-              // +4407700900111 is a valid number but not normalized - it has an optional '0' after the country code
-              new ChangePrincipalRequest(encodeSessionId("session"), null, "+4407700900111", null,
+              // FLT(uoemai): The principal string " valid.principal " is valid but not normalized. It is not trimmed.
+              new ChangePrincipalRequest(encodeSessionId("session"), null, " valid.principal ", null,
                   new IdentityKey(ECKeyPair.generate().getPublicKey()),
                   Collections.emptyList(),
                   Collections.emptyMap(), null, Collections.emptyMap()),
@@ -250,7 +246,7 @@ class AccountControllerV2Test {
     @Test
     void unprocessableRequestJson() {
       final Invocation.Builder request = resources.getJerseyTest()
-          .target("/v2/accounts/number")
+          .target("/v2/accounts/principal")
           .request()
           .header(HttpHeaders.AUTHORIZATION,
               AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD));
@@ -262,9 +258,9 @@ class AccountControllerV2Test {
     @Test
     void missingBasicAuthorization() {
       final Invocation.Builder request = resources.getJerseyTest()
-          .target("/v2/accounts/number")
+          .target("/v2/accounts/principal")
           .request();
-      try (Response response = request.put(Entity.json(requestJson("sessionId", NEW_NUMBER)))) {
+      try (Response response = request.put(Entity.json(requestJson("sessionId", NEW_PRINCIPAL)))) {
         assertEquals(401, response.getStatus());
       }
     }
@@ -272,7 +268,7 @@ class AccountControllerV2Test {
     @Test
     void invalidBasicAuthorization() {
       final Invocation.Builder request = resources.getJerseyTest()
-          .target("/v2/accounts/number")
+          .target("/v2/accounts/principal")
           .request()
           .header(HttpHeaders.AUTHORIZATION, "Basic but-invalid");
       try (Response response = request.put(Entity.json(invalidRequestJson()))) {
@@ -283,7 +279,7 @@ class AccountControllerV2Test {
     @Test
     void invalidRequestBody() {
       final Invocation.Builder request = resources.getJerseyTest()
-          .target("/v2/accounts/number")
+          .target("/v2/accounts/principal")
           .request()
           .header(HttpHeaders.AUTHORIZATION,
               AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD));
@@ -297,16 +293,17 @@ class AccountControllerV2Test {
     void invalidRegistrationId(final Integer pniRegistrationId, final int expectedStatusCode) {
       when(registrationServiceClient.getSession(any(), any()))
           .thenReturn(CompletableFuture.completedFuture(
-              Optional.of(new RegistrationServiceSession(new byte[16], NEW_NUMBER, true, null, null, null,
+              Optional.of(new RegistrationServiceSession(new byte[16], NEW_PRINCIPAL, true, null, null, null,
                   SESSION_EXPIRATION_SECONDS))));
-      final ChangePrincipalRequest changePrincipalRequest = new ChangePrincipalRequest(encodeSessionId("session"), null, NEW_NUMBER, "123", IDENTITY_KEY,
+      final ChangePrincipalRequest changePrincipalRequest = new ChangePrincipalRequest(encodeSessionId("session"), null,
+          NEW_PRINCIPAL, "123", IDENTITY_KEY,
           Collections.emptyList(),
           Map.of(Device.PRIMARY_ID, KeysHelper.signedECPreKey(1, IDENTITY_KEY_PAIR)),
           Map.of(Device.PRIMARY_ID, KeysHelper.signedKEMPreKey(2, IDENTITY_KEY_PAIR)),
           Map.of(Device.PRIMARY_ID, pniRegistrationId));
 
       try (final Response response = resources.getJerseyTest()
-          .target("/v2/accounts/number")
+          .target("/v2/accounts/principal")
           .request()
           .header(HttpHeaders.AUTHORIZATION,
               AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
@@ -327,16 +324,16 @@ class AccountControllerV2Test {
     }
 
     @Test
-    void rateLimitedNumber() throws Exception {
+    void rateLimitedPrincipal() throws Exception {
       doThrow(new RateLimitExceededException(null))
           .when(registrationLimiter).validate(anyString());
 
       final Invocation.Builder request = resources.getJerseyTest()
-          .target("/v2/accounts/number")
+          .target("/v2/accounts/principal")
           .request()
           .header(HttpHeaders.AUTHORIZATION,
               AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD));
-      try (Response response = request.put(Entity.json(requestJson("sessionId", NEW_NUMBER)))) {
+      try (Response response = request.put(Entity.json(requestJson("sessionId", NEW_PRINCIPAL)))) {
         assertEquals(429, response.getStatus());
       }
     }
@@ -347,11 +344,11 @@ class AccountControllerV2Test {
           .thenReturn(CompletableFuture.failedFuture(new RuntimeException()));
 
       final Invocation.Builder request = resources.getJerseyTest()
-          .target("/v2/accounts/number")
+          .target("/v2/accounts/principal")
           .request()
           .header(HttpHeaders.AUTHORIZATION,
               AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD));
-      try (Response response = request.put(Entity.json(requestJson("sessionId", NEW_NUMBER)))) {
+      try (Response response = request.put(Entity.json(requestJson("sessionId", NEW_PRINCIPAL)))) {
         assertEquals(HttpStatus.SC_SERVICE_UNAVAILABLE, response.getStatus());
       }
     }
@@ -364,11 +361,11 @@ class AccountControllerV2Test {
           .thenReturn(CompletableFuture.completedFuture(Optional.ofNullable(session)));
 
       final Invocation.Builder request = resources.getJerseyTest()
-          .target("/v2/accounts/number")
+          .target("/v2/accounts/principal")
           .request()
           .header(HttpHeaders.AUTHORIZATION,
               AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD));
-      try (Response response = request.put(Entity.json(requestJson("sessionId", NEW_NUMBER)))) {
+      try (Response response = request.put(Entity.json(requestJson("sessionId", NEW_PRINCIPAL)))) {
         assertEquals(expectedStatus, response.getStatus(), message);
       }
     }
@@ -376,11 +373,11 @@ class AccountControllerV2Test {
     static Stream<Arguments> registrationServiceSessionCheck() {
       return Stream.of(
           Arguments.of(null, 401, "session not found"),
-          Arguments.of(new RegistrationServiceSession(new byte[16], "+18005551234", false, null, null, null,
+          Arguments.of(new RegistrationServiceSession(new byte[16], "another.user.account@example.com", false, null, null, null,
                   SESSION_EXPIRATION_SECONDS), 400,
-              "session number mismatch"),
+              "session principal mismatch"),
           Arguments.of(
-              new RegistrationServiceSession(new byte[16], NEW_NUMBER, false, null, null, null,
+              new RegistrationServiceSession(new byte[16], NEW_PRINCIPAL, false, null, null, null,
                   SESSION_EXPIRATION_SECONDS),
               401,
               "session not verified")
@@ -393,7 +390,7 @@ class AccountControllerV2Test {
       when(registrationServiceClient.getSession(any(), any()))
           .thenReturn(
               CompletableFuture.completedFuture(
-                  Optional.of(new RegistrationServiceSession(new byte[16], NEW_NUMBER, true, null, null, null,
+                  Optional.of(new RegistrationServiceSession(new byte[16], NEW_PRINCIPAL, true, null, null, null,
                       SESSION_EXPIRATION_SECONDS))));
 
       when(accountsManager.getByPrincipal(any())).thenReturn(Optional.of(mock(Account.class)));
@@ -406,11 +403,11 @@ class AccountControllerV2Test {
           .when(registrationLockVerificationManager).verifyRegistrationLock(any(), any(), any(), any(), any());
 
       final Invocation.Builder request = resources.getJerseyTest()
-          .target("/v2/accounts/number")
+          .target("/v2/accounts/principal")
           .request()
           .header(HttpHeaders.AUTHORIZATION,
               AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD));
-      try (Response response = request.put(Entity.json(requestJson("sessionId", NEW_NUMBER)))) {
+      try (Response response = request.put(Entity.json(requestJson("sessionId", NEW_PRINCIPAL)))) {
         assertEquals(error.getExpectedStatus(), response.getStatus());
       }
     }
@@ -425,21 +422,21 @@ class AccountControllerV2Test {
           .thenReturn(true);
 
       final Invocation.Builder request = resources.getJerseyTest()
-          .target("/v2/accounts/number")
+          .target("/v2/accounts/principal")
           .request()
           .header(HttpHeaders.AUTHORIZATION,
               AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD));
       final byte[] recoveryPassword = new byte[32];
-      try (Response response = request.put(Entity.json(requestJsonRecoveryPassword(recoveryPassword, NEW_NUMBER)))) {
+      try (Response response = request.put(Entity.json(requestJsonRecoveryPassword(recoveryPassword, NEW_PRINCIPAL)))) {
         assertEquals(200, response.getStatus());
 
         final AccountIdentityResponse accountIdentityResponse = response.readEntity(AccountIdentityResponse.class);
 
-        verify(changePrincipalManager).changePrincipal(eq(AuthHelper.VALID_ACCOUNT), eq(NEW_NUMBER), any(), any(), any(),
+        verify(changePrincipalManager).changePrincipal(eq(AuthHelper.VALID_ACCOUNT), eq(NEW_PRINCIPAL), any(), any(), any(),
             any(), any(), any());
 
         assertEquals(AuthHelper.VALID_UUID, accountIdentityResponse.uuid());
-        assertEquals(NEW_NUMBER, accountIdentityResponse.principal());
+        assertEquals(NEW_PRINCIPAL, accountIdentityResponse.principal());
         assertNotEquals(AuthHelper.VALID_PNI, accountIdentityResponse.pni());
       }
     }
@@ -450,11 +447,11 @@ class AccountControllerV2Test {
           .thenReturn(CompletableFuture.completedFuture(false));
 
       final Invocation.Builder request = resources.getJerseyTest()
-          .target("/v2/accounts/number")
+          .target("/v2/accounts/principal")
           .request()
           .header(HttpHeaders.AUTHORIZATION,
               AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD));
-      try (Response response = request.put(Entity.json(requestJsonRecoveryPassword(new byte[32], NEW_NUMBER)))) {
+      try (Response response = request.put(Entity.json(requestJsonRecoveryPassword(new byte[32], NEW_PRINCIPAL)))) {
         assertEquals(403, response.getStatus());
       }
     }
@@ -468,12 +465,12 @@ class AccountControllerV2Test {
           .thenReturn(CompletableFuture.completedFuture(true));
 
       final Invocation.Builder request = resources.getJerseyTest()
-          .target("/v2/accounts/number")
+          .target("/v2/accounts/principal")
           .request()
           .header(HttpHeaders.AUTHORIZATION,
               AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD));
       final byte[] recoveryPassword = new byte[32];
-      try (Response response = request.put(Entity.json(requestJsonRecoveryPassword(recoveryPassword, NEW_NUMBER)))) {
+      try (Response response = request.put(Entity.json(requestJsonRecoveryPassword(recoveryPassword, NEW_PRINCIPAL)))) {
         assertEquals(200, response.getStatus());
       }
     }
@@ -485,12 +482,12 @@ class AccountControllerV2Test {
           .thenReturn(CompletableFuture.completedFuture(true));
 
       final Invocation.Builder request = resources.getJerseyTest()
-          .target("/v2/accounts/number")
+          .target("/v2/accounts/principal")
           .request()
           .header(HttpHeaders.AUTHORIZATION,
               AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD));
       final byte[] recoveryPassword = new byte[32];
-      try (Response response = request.put(Entity.json(requestJsonRecoveryPassword(recoveryPassword, NEW_NUMBER)))) {
+      try (Response response = request.put(Entity.json(requestJsonRecoveryPassword(recoveryPassword, NEW_PRINCIPAL)))) {
         assertEquals(403, response.getStatus());
       }
     }
@@ -500,7 +497,7 @@ class AccountControllerV2Test {
 
       when(registrationServiceClient.getSession(any(), any()))
           .thenReturn(CompletableFuture.completedFuture(
-              Optional.of(new RegistrationServiceSession(new byte[16], NEW_NUMBER, true, null, null, null,
+              Optional.of(new RegistrationServiceSession(new byte[16], NEW_PRINCIPAL, true, null, null, null,
                   SESSION_EXPIRATION_SECONDS))));
 
       reset(changePrincipalManager);
@@ -508,12 +505,12 @@ class AccountControllerV2Test {
           .thenThrow(MessageTooLargeException.class);
 
       try (final Response response = resources.getJerseyTest()
-              .target("/v2/accounts/number")
+              .target("/v2/accounts/principal")
               .request()
               .header(HttpHeaders.AUTHORIZATION,
                   AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
               .put(Entity.entity(
-                  new ChangePrincipalRequest(encodeSessionId("session"), null, NEW_NUMBER, "123", IDENTITY_KEY,
+                  new ChangePrincipalRequest(encodeSessionId("session"), null, NEW_PRINCIPAL, "123", IDENTITY_KEY,
                       Collections.emptyList(),
                       Map.of(Device.PRIMARY_ID, KeysHelper.signedECPreKey(1, IDENTITY_KEY_PAIR)),
                       Map.of(Device.PRIMARY_ID, KeysHelper.signedKEMPreKey(2, IDENTITY_KEY_PAIR)),
@@ -527,8 +524,8 @@ class AccountControllerV2Test {
     /**
      * Valid request JSON with the given Recovery Password
      */
-    private static String requestJsonRecoveryPassword(final byte[] recoveryPassword, final String newNumber) {
-      return requestJson("", recoveryPassword, newNumber, 123);
+    private static String requestJsonRecoveryPassword(final byte[] recoveryPassword, final String newPrincipal) {
+      return requestJson("", recoveryPassword, newPrincipal, 123);
     }
 
     /**
@@ -536,7 +533,7 @@ class AccountControllerV2Test {
      */
     private static String requestJson(final String sessionId,
         final byte[] recoveryPassword,
-        final String newNumber,
+        final String newPrincipal,
         final Integer pniRegistrationId) {
 
       final ECSignedPreKey pniSignedPreKey = KeysHelper.signedECPreKey(1, IDENTITY_KEY_PAIR);
@@ -546,7 +543,7 @@ class AccountControllerV2Test {
           {
             "sessionId": "%s",
             "recoveryPassword": "%s",
-            "number": "%s",
+            "principal": "%s",
             "reglock": "1234",
             "pniIdentityKey": "%s",
             "deviceMessages": [],
@@ -556,7 +553,7 @@ class AccountControllerV2Test {
           }
           """, encodeSessionId(sessionId),
           encodeRecoveryPassword(recoveryPassword),
-          newNumber,
+          newPrincipal,
           Base64.getEncoder().encodeToString(IDENTITY_KEY.serialize()),
           pniSignedPreKey.keyId(), Base64.getEncoder().encodeToString(pniSignedPreKey.serializedPublicKey()), Base64.getEncoder().encodeToString(pniSignedPreKey.signature()),
           pniLastResortPreKey.keyId(), Base64.getEncoder().encodeToString(pniLastResortPreKey.serializedPublicKey()), Base64.getEncoder().encodeToString(pniLastResortPreKey.signature()),
@@ -566,8 +563,8 @@ class AccountControllerV2Test {
     /**
      * Valid request JSON with the give session ID
      */
-    private static String requestJson(final String sessionId, final String newNumber) {
-      return requestJson(sessionId, new byte[0], newNumber, 123);
+    private static String requestJson(final String sessionId, final String newPrincipal) {
+      return requestJson(sessionId, new byte[0], newPrincipal, 123);
     }
 
     /**
@@ -604,7 +601,7 @@ class AccountControllerV2Test {
   }
 
   @Nested
-  class PhoneNumberDiscoverability {
+  class PrincipalDiscoverability {
 
     @BeforeEach
     void setup() {
@@ -613,9 +610,9 @@ class AccountControllerV2Test {
     }
 
     @Test
-    void testSetPhoneNumberDiscoverability() {
+    void testSetPrincipalDiscoverability() {
       Response response = resources.getJerseyTest()
-          .target("/v2/accounts/phone_number_discoverability")
+          .target("/v2/accounts/principal_discoverability")
           .request()
           .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
           .put(Entity.json(new PrincipalDiscoverabilityRequest(true)));
@@ -628,15 +625,15 @@ class AccountControllerV2Test {
     }
 
     @Test
-    void testSetNullPhoneNumberDiscoverability() {
+    void testSetNullPrincipalDiscoverability() {
       Response response = resources.getJerseyTest()
-          .target("/v2/accounts/phone_number_discoverability")
+          .target("/v2/accounts/principal_discoverability")
           .request()
           .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
           .put(Entity.json(
               """
                   {
-                    "discoverableByPhoneNumber": null
+                    "discoverableByPrincipal": null
                   }
                   """));
 
@@ -689,9 +686,9 @@ class AccountControllerV2Test {
     }
 
     static Stream<Arguments> testGetAccountDataReport() {
-      final String examplePrincipal1 = "account.principal@example.com"; // Email address as principal.
-      final String account2Principal = "second.account.principal"; // Account name as principal.
-      final String account3Principal = toE164(PhoneNumberUtil.getInstance().getExampleNumber("IN")); // Phone number as principal.
+      final String account1Principal = "user.account1@example.com";
+      final String account2Principal = "user.account2@example.com";
+      final String account3Principal = "user.account3@example.com";
 
       final Instant account1Device1Created = Instant.ofEpochSecond(1669323142); // 2022-11-24T20:52:22Z
       final Instant account1Device2Created = Instant.ofEpochSecond(1679155122); // 2023-03-18T15:58:42Z
@@ -709,7 +706,7 @@ class AccountControllerV2Test {
 
       return Stream.of(
           Arguments.of(
-              buildTestAccountForDataReport(UUID.randomUUID(), examplePrincipal1,
+              buildTestAccountForDataReport(UUID.randomUUID(), account2Principal,
                   true, true,
                   Collections.emptyList(),
                   List.of(new DeviceData(Device.PRIMARY_ID, account1Device1LastSeen, account1Device1Created, null),
@@ -731,11 +728,11 @@ class AccountControllerV2Test {
                         Last seen: 2023-03-15T00:00:00Z
                         User-agent: OWP
                       """,
-                  examplePrincipal1,
+                  account2Principal,
                   account1Device1LastSeen)
           ),
           Arguments.of(
-              buildTestAccountForDataReport(UUID.randomUUID(), account2Principal,
+              buildTestAccountForDataReport(UUID.randomUUID(), account1Principal,
                   false, true,
                   List.of(new AccountBadge("badge_a", badgeAExpiration, true)),
                   List.of(new DeviceData(Device.PRIMARY_ID, account2Device1LastSeen, account2Device1Created, "OWI"))),
@@ -754,7 +751,7 @@ class AccountControllerV2Test {
                         Created: 2022-07-29T19:30:01Z
                         Last seen: %s
                         User-agent: OWI
-                      """, account2Principal,
+                      """, account1Principal,
                   badgeAExpiration,
                   account2Device1LastSeen)
           ),
@@ -833,10 +830,6 @@ class AccountControllerV2Test {
 
     private record DeviceData(byte id, Instant lastSeen, Instant created, @Nullable String userAgent) {
 
-    }
-
-    private static String toE164(Phonenumber.PhoneNumber principal) {
-      return PhoneNumberUtil.getInstance().format(principal, PhoneNumberUtil.PhoneNumberFormat.E164);
     }
   }
 }

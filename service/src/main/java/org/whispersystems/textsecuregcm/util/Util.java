@@ -42,8 +42,8 @@ public class Util {
    * @throws NonNormalizedPrincipalException if the given principal is a valid principal, but isn't normalized
    */
   public static void requireNormalizedPrincipal(final String principal) throws InvalidPrincipalException, NonNormalizedPrincipalException {
-    // FLT(uoemai): Principals cannot be null.
-    if (principal == null) {
+    // FLT(uoemai): Principals cannot be null, empty or blank.
+    if (principal == null || principal.isBlank()) {
       throw new InvalidPrincipalException();
     }
 

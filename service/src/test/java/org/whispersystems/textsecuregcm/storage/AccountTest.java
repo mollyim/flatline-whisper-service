@@ -98,12 +98,12 @@ class AccountTest {
   }
 
   @Test
-  void testDiscoverableByPhoneNumber() {
-    final Account account = AccountsHelper.generateTestAccount("+14152222222", UUID.randomUUID(), UUID.randomUUID(), List.of(recentPrimaryDevice),
+  void testDiscoverableByPrincipal() {
+    final Account account = AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), List.of(recentPrimaryDevice),
         "1234".getBytes());
 
     assertTrue(account.isDiscoverableByPrincipal(),
-        "Freshly-loaded legacy accounts should be discoverable by phone number.");
+        "Freshly-loaded legacy accounts should be discoverable by principal.");
 
     account.setDiscoverableByPrincipal(false);
     assertFalse(account.isDiscoverableByPrincipal());
@@ -117,21 +117,21 @@ class AccountTest {
     final Device mockDevice = mock(Device.class);
     when(mockDevice.getId()).thenReturn(Device.PRIMARY_ID);
 
-    assertTrue(AccountsHelper.generateTestAccount("+18005551234", UUID.randomUUID(), UUID.randomUUID(),
+    assertTrue(AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(),
         List.of(mockDevice),
         "1234".getBytes(StandardCharsets.UTF_8)).hasCapability(DeviceCapability.DELETE_SYNC));
 
-    assertTrue(AccountsHelper.generateTestAccount("+18005551234", UUID.randomUUID(), UUID.randomUUID(),
+    assertTrue(AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(),
         List.of(mockDevice),
         "1234".getBytes(StandardCharsets.UTF_8)).hasCapability(DeviceCapability.STORAGE_SERVICE_RECORD_KEY_ROTATION));
 
-    assertFalse(AccountsHelper.generateTestAccount("+18005551234", UUID.randomUUID(), UUID.randomUUID(),
+    assertFalse(AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(),
         List.of(mockDevice),
         "1234".getBytes(StandardCharsets.UTF_8)).hasCapability(DeviceCapability.TRANSFER));
   }
 
   void stale() {
-    final Account account = AccountsHelper.generateTestAccount("+14151234567", UUID.randomUUID(), UUID.randomUUID(), Collections.emptyList(),
+    final Account account = AccountsHelper.generateTestAccount("stale.account@example.com", UUID.randomUUID(), UUID.randomUUID(), Collections.emptyList(),
         new byte[0]);
 
     assertDoesNotThrow(account::getPrincipal);
@@ -147,7 +147,7 @@ class AccountTest {
 
     final List<Device> devices = List.of(createDevice(Device.PRIMARY_ID));
 
-    final Account account = AccountsHelper.generateTestAccount("+14151234567", UUID.randomUUID(), UUID.randomUUID(), devices, new byte[0]);
+    final Account account = AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), devices, new byte[0]);
 
     final byte deviceId2 = 2;
     assertThat(account.getNextDeviceId()).isEqualTo(deviceId2);
@@ -174,7 +174,7 @@ class AccountTest {
   void replaceDevice() {
     final Device firstDevice = createDevice(Device.PRIMARY_ID);
     final Device secondDevice = createDevice(Device.PRIMARY_ID);
-    final Account account = AccountsHelper.generateTestAccount("+14151234567", UUID.randomUUID(), UUID.randomUUID(), List.of(firstDevice), new byte[0]);
+    final Account account = AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), List.of(firstDevice), new byte[0]);
 
     assertEquals(List.of(firstDevice), account.getDevices());
 
@@ -185,7 +185,7 @@ class AccountTest {
 
   @Test
   void addAndRemoveBadges() {
-    final Account account = AccountsHelper.generateTestAccount("+14151234567", UUID.randomUUID(), UUID.randomUUID(), List.of(createDevice(Device.PRIMARY_ID)), new byte[0]);
+    final Account account = AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), List.of(createDevice(Device.PRIMARY_ID)), new byte[0]);
     final TestClock clock = TestClock.pinned(Instant.ofEpochSecond(40));
 
     account.addBadge(clock, new AccountBadge("foo", Instant.ofEpochSecond(42), false));
