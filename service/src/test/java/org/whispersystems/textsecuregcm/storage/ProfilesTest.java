@@ -150,11 +150,11 @@ public class ProfilesTest {
     final byte[] differentEmoji = TestRandomUtil.nextBytes(60);
     final byte[] differentAbout = TestRandomUtil.nextBytes(156);
     final String differentAvatar = "profiles/" + ProfileTestHelper.generateRandomBase64FromByteArray(16);
-    final byte[] differentPhoneNumberSharing = TestRandomUtil.nextBytes(29);
+    final byte[] differentPrincipalSharing = TestRandomUtil.nextBytes(29);
     final byte[] differentCommitment = new ProfileKey(TestRandomUtil.nextBytes(32)).getCommitment(new ServiceId.Aci(ACI)).serialize();
 
     VersionedProfile updated = new VersionedProfile(validProfile.version(), differentName, differentAvatar, differentEmoji, differentAbout, null,
-        differentPhoneNumberSharing, differentCommitment);
+        differentPrincipalSharing, differentCommitment);
     profiles.set(ACI, updated);
 
     retrieved = profiles.get(ACI, updated.version());

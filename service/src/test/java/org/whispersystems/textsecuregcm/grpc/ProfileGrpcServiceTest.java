@@ -26,8 +26,6 @@ import static org.whispersystems.textsecuregcm.grpc.GrpcTestUtils.assertRateLimi
 import static org.whispersystems.textsecuregcm.grpc.GrpcTestUtils.assertStatusException;
 
 import com.google.common.net.InetAddresses;
-import com.google.i18n.phonenumbers.PhoneNumberUtil;
-import com.google.i18n.phonenumbers.Phonenumber;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
 import java.nio.charset.StandardCharsets;
@@ -107,6 +105,7 @@ import org.whispersystems.textsecuregcm.tests.util.AccountsHelper;
 import org.whispersystems.textsecuregcm.tests.util.AuthHelper;
 import org.whispersystems.textsecuregcm.tests.util.ProfileTestHelper;
 import org.whispersystems.textsecuregcm.util.MockUtils;
+import org.whispersystems.textsecuregcm.util.Principal;
 import org.whispersystems.textsecuregcm.util.TestRandomUtil;
 import org.whispersystems.textsecuregcm.util.UUIDUtil;
 
@@ -164,9 +163,7 @@ public class ProfileGrpcServiceTest extends SimpleBaseGrpcTest<ProfileGrpcServic
         Map.of(1L, "TEST1", 2L, "TEST2", 3L, "TEST3")
     );
     final RateLimiters rateLimiters = mock(RateLimiters.class);
-    final String principal = PhoneNumberUtil.getInstance().format(
-        PhoneNumberUtil.getInstance().getExampleNumber("US"),
-        PhoneNumberUtil.PhoneNumberFormat.E164);
+    final String principal = "user.account@example.com";
 
     getMockRequestAttributesInterceptor().setRequestAttributes(new RequestAttributes(InetAddresses.forString("127.0.0.1"),
         "Signal-Android/1.2.3",
@@ -217,7 +214,7 @@ public class ProfileGrpcServiceTest extends SimpleBaseGrpcTest<ProfileGrpcServic
     final byte[] validAboutEmoji = new byte[60];
     final byte[] validAbout = new byte[540];
     final byte[] validPaymentAddress = new byte[582];
-    final byte[] validPhoneNumberSharing = new byte[29];
+    final byte[] validPrincipalSharing = new byte[29];
 
     final SetProfileRequest request = SetProfileRequest.newBuilder()
         .setVersion(VERSION)
@@ -226,7 +223,7 @@ public class ProfileGrpcServiceTest extends SimpleBaseGrpcTest<ProfileGrpcServic
         .setAboutEmoji(ByteString.copyFrom(validAboutEmoji))
         .setAbout(ByteString.copyFrom(validAbout))
         .setPaymentAddress(ByteString.copyFrom(validPaymentAddress))
-        .setPhoneNumberSharing(ByteString.copyFrom(validPhoneNumberSharing))
+        .setPrincipalSharing(ByteString.copyFrom(validPrincipalSharing))
         .setCommitment(ByteString.copyFrom(commitment))
         .build();
 
@@ -245,7 +242,7 @@ public class ProfileGrpcServiceTest extends SimpleBaseGrpcTest<ProfileGrpcServic
     assertThat(profile.aboutEmoji()).isEqualTo(validAboutEmoji);
     assertThat(profile.about()).isEqualTo(validAbout);
     assertThat(profile.paymentAddress()).isEqualTo(validPaymentAddress);
-    assertThat(profile.principalSharing()).isEqualTo(validPhoneNumberSharing);
+    assertThat(profile.principalSharing()).isEqualTo(validPrincipalSharing);
   }
 
   @ParameterizedTest
@@ -344,39 +341,6 @@ public class ProfileGrpcServiceTest extends SimpleBaseGrpcTest<ProfileGrpcServic
             .clearCommitment()
             .build())
     );
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void setPaymentAddressDisallowedCountry(final boolean hasExistingPaymentAddress) throws InvalidInputException {
-    final Phonenumber.PhoneNumber disallowedPhoneNumber = PhoneNumberUtil.getInstance().getExampleNumber("CU");
-    final byte[] commitment = new ProfileKey(new byte[32]).getCommitment(new ServiceId.Aci(AUTHENTICATED_ACI)).serialize();
-
-    final byte[] validPaymentAddress = new byte[582];
-    if (hasExistingPaymentAddress) {
-      when(profile.paymentAddress()).thenReturn(validPaymentAddress);
-    }
-
-    final SetProfileRequest request = SetProfileRequest.newBuilder()
-        .setVersion(VERSION)
-        .setName(ByteString.copyFrom(VALID_NAME))
-        .setAvatarChange(AvatarChange.AVATAR_CHANGE_UNCHANGED)
-        .setPaymentAddress(ByteString.copyFrom(validPaymentAddress))
-        .setCommitment(ByteString.copyFrom(commitment))
-        .build();
-    final String disallowedCountryCode = String.format("+%d", disallowedPhoneNumber.getCountryCode());
-    when(dynamicPaymentsConfiguration.getDisallowedPrefixes()).thenReturn(List.of(disallowedCountryCode));
-    when(account.getPrincipal()).thenReturn(PhoneNumberUtil.getInstance().format(
-        disallowedPhoneNumber,
-        PhoneNumberUtil.PhoneNumberFormat.E164));
-    when(profilesManager.get(any(), anyString())).thenReturn(Optional.of(profile));
-
-    if (hasExistingPaymentAddress) {
-      assertDoesNotThrow(() -> authenticatedServiceStub().setProfile(request),
-          "Payment address changes in disallowed countries should still be allowed if the account already has a valid payment address");
-    } else {
-      assertStatusException(Status.PERMISSION_DENIED, () -> authenticatedServiceStub().setProfile(request));
-    }
   }
 
   @Test
@@ -544,7 +508,7 @@ public class ProfileGrpcServiceTest extends SimpleBaseGrpcTest<ProfileGrpcServic
         .setAbout(ByteString.copyFrom(about))
         .setAboutEmoji(ByteString.copyFrom(emoji))
         .setAvatar(avatar)
-        .setPhoneNumberSharing(ByteString.copyFrom(principalSharing));
+        .setPrincipalSharing(ByteString.copyFrom(principalSharing));
 
     if (expectResponseHasPaymentAddress) {
       expectedResponseBuilder.setPaymentAddress(ByteString.copyFrom(paymentAddress));

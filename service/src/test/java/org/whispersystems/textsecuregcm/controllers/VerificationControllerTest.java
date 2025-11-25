@@ -66,7 +66,7 @@ import org.whispersystems.textsecuregcm.limits.RateLimiter;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
 import org.whispersystems.textsecuregcm.mappers.ImpossiblePrincipalExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.NonNormalizedPrincipalExceptionMapper;
-import org.whispersystems.textsecuregcm.mappers.ObsoletePhoneNumberFormatExceptionMapper;
+import org.whispersystems.textsecuregcm.mappers.ObsoletePrincipalFormatExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.RateLimitExceededExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.RegistrationServiceSenderExceptionMapper;
 import org.whispersystems.textsecuregcm.push.PushNotificationManager;
@@ -119,7 +119,7 @@ class VerificationControllerTest {
       .addProvider(new RateLimitExceededExceptionMapper())
       .addProvider(new ImpossiblePrincipalExceptionMapper())
       .addProvider(new NonNormalizedPrincipalExceptionMapper())
-      .addProvider(new ObsoletePhoneNumberFormatExceptionMapper())
+      .addProvider(new ObsoletePrincipalFormatExceptionMapper())
       .addProvider(new RegistrationServiceSenderExceptionMapper())
       .addProvider(new TestRemoteAddressFilterProvider("127.0.0.1"))
       .setMapper(SystemMapper.jsonMapper())

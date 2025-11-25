@@ -47,7 +47,7 @@ public class ProfileGrpcHelper {
         .setAbout(ByteString.copyFrom(profile.about()))
         .setAboutEmoji(ByteString.copyFrom(profile.aboutEmoji()))
         .setAvatar(profile.avatar())
-        .setPhoneNumberSharing(ByteString.copyFrom(profile.principalSharing()));
+        .setPrincipalSharing(ByteString.copyFrom(profile.principalSharing()));
 
     // Allow requests where either the version matches the latest version on Account or the latest version on Account
     // is empty to read the payment address.

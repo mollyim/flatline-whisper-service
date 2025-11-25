@@ -876,7 +876,7 @@ class ProfileControllerTest {
   }
 
   @Test
-  void testSetProfilePhoneNumberSharing() throws Exception {
+  void testSetProfilePrincipalSharing() throws Exception {
     final ProfileKeyCommitment commitment = new ProfileKey(new byte[32]).getCommitment(new ServiceId.Aci(AuthHelper.VALID_UUID));
     final byte[] name = TestRandomUtil.nextBytes(81);
     final byte[] principalSharing = TestRandomUtil.nextBytes(29);

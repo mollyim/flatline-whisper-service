@@ -47,7 +47,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.whispersystems.textsecuregcm.controllers.KeyTransparencyControllerTest.ACI;
 import static org.whispersystems.textsecuregcm.controllers.KeyTransparencyControllerTest.ACI_IDENTITY_KEY;
-import static org.whispersystems.textsecuregcm.controllers.KeyTransparencyControllerTest.NUMBER;
+import static org.whispersystems.textsecuregcm.controllers.KeyTransparencyControllerTest.PRINCIPAL;
 import static org.whispersystems.textsecuregcm.controllers.KeyTransparencyControllerTest.UNIDENTIFIED_ACCESS_KEY;
 import static org.whispersystems.textsecuregcm.controllers.KeyTransparencyControllerTest.USERNAME_HASH;
 import static org.whispersystems.textsecuregcm.grpc.GrpcTestUtils.assertRateLimitExceeded;
@@ -132,7 +132,7 @@ public class KeyTransparencyGrpcServiceTest extends SimpleBaseGrpcTest<KeyTransp
         Arguments.argumentSet("Non-positive consistency.last", Optional.of(aciBytes), Optional.of(ACI_IDENTITY_KEY), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(0L), Optional.of(4L)),
         Arguments.argumentSet("consistency.distinguished not provided",Optional.of(aciBytes), Optional.of(ACI_IDENTITY_KEY), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()),
         Arguments.argumentSet("Non-positive consistency.distinguished",Optional.of(aciBytes), Optional.of(ACI_IDENTITY_KEY), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(0L)),
-        Arguments.argumentSet("Principal can't be provided without an unidentified access key", Optional.of(aciBytes), Optional.of(ACI_IDENTITY_KEY), Optional.of(NUMBER), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(4L)),
+        Arguments.argumentSet("Principal can't be provided without an unidentified access key", Optional.of(aciBytes), Optional.of(ACI_IDENTITY_KEY), Optional.of(PRINCIPAL), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(4L)),
         Arguments.argumentSet("Unidentified access key can't be provided without principal", Optional.of(aciBytes), Optional.of(ACI_IDENTITY_KEY), Optional.empty(), Optional.of(UNIDENTIFIED_ACCESS_KEY), Optional.empty(), Optional.empty(), Optional.of(4L)),
         Arguments.argumentSet("Invalid username hash", Optional.of(aciBytes), Optional.of(ACI_IDENTITY_KEY), Optional.empty(), Optional.empty(), Optional.of(new byte[19]), Optional.empty(), Optional.of(4L))
     );
@@ -210,8 +210,8 @@ public class KeyTransparencyGrpcServiceTest extends SimpleBaseGrpcTest<KeyTransp
         Arguments.argumentSet("Invalid commitment index on ACI monitor request", Optional.of(constructAciMonitorRequest(ACI.toCompactByteArray(), new byte[31], 10)), Optional.empty(), Optional.empty(), Optional.of(4L), Optional.of(4L)),
         Arguments.argumentSet("Invalid entry position on ACI monitor request", Optional.of(constructAciMonitorRequest(ACI.toCompactByteArray(), new byte[32], 0)), Optional.empty(), Optional.empty(), Optional.of(4L), Optional.of(4L)),
         Arguments.argumentSet("Principal can't be blank", validAciMonitorRequest, Optional.of(constructPrincipalMonitorRequest("", new byte[32], 10)), Optional.empty(), Optional.of(4L), Optional.of(4L)),
-        Arguments.argumentSet("Invalid commitment index on principal monitor request", validAciMonitorRequest, Optional.of(constructPrincipalMonitorRequest(NUMBER, new byte[31], 10)), Optional.empty(), Optional.of(4L), Optional.of(4L)),
-        Arguments.argumentSet("Invalid entry position on principal monitor request", validAciMonitorRequest, Optional.of(constructPrincipalMonitorRequest(NUMBER, new byte[32], 0)), Optional.empty(), Optional.of(4L), Optional.of(4L)),
+        Arguments.argumentSet("Invalid commitment index on principal monitor request", validAciMonitorRequest, Optional.of(constructPrincipalMonitorRequest(PRINCIPAL, new byte[31], 10)), Optional.empty(), Optional.of(4L), Optional.of(4L)),
+        Arguments.argumentSet("Invalid entry position on principal monitor request", validAciMonitorRequest, Optional.of(constructPrincipalMonitorRequest(PRINCIPAL, new byte[32], 0)), Optional.empty(), Optional.of(4L), Optional.of(4L)),
         Arguments.argumentSet("Username hash can't be empty", validAciMonitorRequest, Optional.empty(), Optional.of(constructUsernameHashMonitorRequest(new byte[0], new byte[32], 10)), Optional.of(4L), Optional.of(4L)),
         Arguments.argumentSet("Invalid username hash length", validAciMonitorRequest, Optional.empty(), Optional.of(constructUsernameHashMonitorRequest(new byte[31], new byte[32], 10)), Optional.of(4L), Optional.of(4L)),
         Arguments.argumentSet("Invalid commitment index on username hash monitor request", validAciMonitorRequest, Optional.empty(), Optional.of(constructUsernameHashMonitorRequest(USERNAME_HASH, new byte[31], 10)), Optional.of(4L), Optional.of(4L)),

@@ -810,7 +810,7 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
       final Map<Byte, Integer> pniRegistrationIds) {
 
     account.getDevices()
-        .forEach(device -> device.setPhoneNumberIdentityRegistrationId(pniRegistrationIds.get(device.getId())));
+        .forEach(device -> device.setPrincipalNameIdentityRegistrationId(pniRegistrationIds.get(device.getId())));
 
     account.setPrincipalIdentityKey(pniIdentityKey);
   }

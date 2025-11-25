@@ -9,7 +9,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -63,8 +62,7 @@ public class IdleWakeupEligibilityCheckerTest {
 
     final Account account = mock(Account.class);
     when(account.getIdentifier(IdentityType.ACI)).thenReturn(UUID.randomUUID());
-    when(account.getPrincipal()).thenReturn(PhoneNumberUtil.getInstance().format(
-        PhoneNumberUtil.getInstance().getExampleNumber("US"), PhoneNumberUtil.PhoneNumberFormat.E164));
+    when(account.getPrincipal()).thenReturn("user.account@example.com");
 
     {
       // Long-idle device with push token and messages

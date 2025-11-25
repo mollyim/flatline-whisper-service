@@ -245,7 +245,7 @@ public class PrincipalNameIdentifiers {
         .whenComplete((ignored, throwable) -> sample.stop(GET_PNI_TIMER));
   }
 
-  CompletableFuture<Void> regenerateprincipalNameIdentifierMappings(final Account account) {
+  CompletableFuture<Void> regeneratePrincipalNameIdentifierMappings(final Account account) {
     return setPni(account.getPrincipal(), Util.getAlternateForms(account.getPrincipal()), account.getIdentifier(IdentityType.PNI))
         .thenRun(Util.NOOP);
   }

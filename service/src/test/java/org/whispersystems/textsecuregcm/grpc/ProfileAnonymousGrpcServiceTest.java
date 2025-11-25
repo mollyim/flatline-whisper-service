@@ -352,7 +352,7 @@ public class ProfileAnonymousGrpcServiceTest extends SimpleBaseGrpcTest<ProfileA
         .setAbout(ByteString.copyFrom(about))
         .setAboutEmoji(ByteString.copyFrom(emoji))
         .setAvatar(avatar)
-        .setPhoneNumberSharing(ByteString.copyFrom(principalSharing));
+        .setPrincipalSharing(ByteString.copyFrom(principalSharing));
 
     if (expectResponseHasPaymentAddress) {
       expectedResponseBuilder.setPaymentAddress(ByteString.copyFrom(paymentAddress));

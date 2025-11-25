@@ -258,7 +258,7 @@ class MessageControllerTest {
     final Device device = new Device();
     device.setId(id);
     device.setRegistrationId(registrationId);
-    device.setPhoneNumberIdentityRegistrationId(pniRegistrationId);
+    device.setPrincipalNameIdentityRegistrationId(pniRegistrationId);
     device.setFetchesMessages(enabled);
 
     return device;

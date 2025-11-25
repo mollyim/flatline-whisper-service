@@ -247,7 +247,7 @@ public class AuthHelper {
   }
 
   public static final class TestAccount {
-    public final String principal;
+    public final String                    principal;
     public final UUID                      uuid;
     public final String                    password;
     public final Account                   account                   = mock(Account.class);

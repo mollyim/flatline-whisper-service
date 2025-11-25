@@ -167,7 +167,7 @@ import org.whispersystems.textsecuregcm.mappers.ImpossiblePrincipalExceptionMapp
 import org.whispersystems.textsecuregcm.mappers.InvalidWebsocketAddressExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.JsonMappingExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.NonNormalizedPrincipalExceptionMapper;
-import org.whispersystems.textsecuregcm.mappers.ObsoletePhoneNumberFormatExceptionMapper;
+import org.whispersystems.textsecuregcm.mappers.ObsoletePrincipalFormatExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.RateLimitExceededExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.RegistrationServiceSenderExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.ServerRejectedExceptionMapper;
@@ -1244,7 +1244,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         new ImpossiblePrincipalExceptionMapper(),
         new NonNormalizedPrincipalExceptionMapper(),
         // FLT(uoemai): TODO: Remove this after migrating verification.
-        new ObsoletePhoneNumberFormatExceptionMapper(),
+        new ObsoletePrincipalFormatExceptionMapper(),
         new RegistrationServiceSenderExceptionMapper(),
         new SubscriptionExceptionMapper(),
         new JsonMappingExceptionMapper()

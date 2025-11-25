@@ -95,7 +95,7 @@ import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
 import org.whispersystems.textsecuregcm.storage.VerificationSessionManager;
 import org.whispersystems.textsecuregcm.util.ExceptionUtils;
-import org.whispersystems.textsecuregcm.util.ObsoletePhoneNumberFormatException;
+import org.whispersystems.textsecuregcm.util.ObsoletePrincipalFormatException;
 import org.whispersystems.textsecuregcm.util.Pair;
 import org.whispersystems.textsecuregcm.util.Util;
 
@@ -173,7 +173,7 @@ public class VerificationController {
       schema = @Schema(implementation = Integer.class)))
   public VerificationSessionResponse createSession(@NotNull @Valid final CreateVerificationSessionRequest request,
       @Context final ContainerRequestContext requestContext)
-      throws RateLimitExceededException, ObsoletePhoneNumberFormatException {
+      throws RateLimitExceededException, ObsoletePrincipalFormatException {
 
     final Pair<String, PushNotification.TokenType> pushTokenAndType = validateAndExtractPushToken(
         request.updateVerificationSessionRequest());

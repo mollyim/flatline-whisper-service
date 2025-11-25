@@ -19,8 +19,8 @@ service Profile {
    * Sets profile data and if needed, returns S3 credentials used by clients to upload an avatar.
    *
    * This RPC may fail with `PERMISSION_DENIED` if it attempts to set the MobileCoin wallet ID
-   * on an account whose profile does not currently have a MobileCoin wallet ID and
-   * whose phone number contains a disallowed country prefix.
+   * on an account whose profile does not currently have a MobileCoin wallet ID.
+   * FLT(uoemai): Previously, also when its phone number contained a disallowed country code.
    */
   rpc SetProfile(SetProfileRequest) returns (SetProfileResponse) {}
 
@@ -133,9 +133,9 @@ message SetProfileRequest {
    */
   repeated string badge_ids = 7;
   /**
-   * The ciphertext of the phone-number sharing setting on the profile. 29-byte encrypted boolean.
+   * The ciphertext of the principal sharing setting on the profile. 29-byte encrypted boolean.
    */
-  bytes phone_number_sharing = 8;
+  bytes principal_sharing = 8;
   /**
    * The profile key commitment. Used to issue a profile key credential response.
    * Must be set on the request.
@@ -194,9 +194,9 @@ message GetVersionedProfileResponse {
    */
   bytes payment_address = 5;
   /**
-   * The ciphertext of the phone-number sharing setting on the profile.
+   * The ciphertext of the principal sharing setting on the profile.
    */
-  bytes phone_number_sharing = 6;
+  bytes principal_sharing = 6;
 }
 
 message GetUnversionedProfileRequest {

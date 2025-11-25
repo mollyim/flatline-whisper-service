@@ -132,7 +132,7 @@ public class ProfileGrpcService extends SimpleProfileGrpc.ProfileImplBase {
             request.getAboutEmoji().toByteArray(),
             request.getAbout().toByteArray(),
             request.getPaymentAddress().toByteArray(),
-            request.getPhoneNumberSharing().toByteArray(),
+            request.getPrincipalSharing().toByteArray(),
             request.getCommitment().toByteArray()));
 
     accountsManager.update(account, a -> {

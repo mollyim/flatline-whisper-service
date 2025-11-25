@@ -20,7 +20,7 @@ public class NonNormalizedPrincipalExceptionMapper implements ExceptionMapper<No
   @Override
   public Response toResponse(final NonNormalizedPrincipalException exception) {
     return Response.status(Status.BAD_REQUEST)
-        .entity(new NonNormalizedPhoneNumberResponse(exception.getOriginalPrincipal(), exception.getNormalizedPrincipal()))
+        .entity(new NonNormalizedPrincipalResponse(exception.getOriginalPrincipal(), exception.getNormalizedPrincipal()))
         .build();
   }
 }

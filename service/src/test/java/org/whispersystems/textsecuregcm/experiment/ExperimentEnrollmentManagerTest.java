@@ -172,16 +172,15 @@ class ExperimentEnrollmentManagerTest {
   static Stream<Arguments> testIsEnrolled_PrincipalExperiment() {
     return Stream.of(
         Arguments.of(ENROLLED_PRINCIPAL, PRINCIPAL_EXPERIMENT_NAME, Collections.emptySet(), Collections.emptySet(),
-            Collections.emptySet(), Collections.emptySet(), 0, false, "default configuration expects no enrollment"),
-        Arguments.of(ENROLLED_PRINCIPAL, PRINCIPAL_EXPERIMENT_NAME + "-unrelated-experiment", Collections.emptySet(),
-            Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), 0, false,
-            "unknown experiment expects no enrollment"),
+            0, false, "default configuration expects no enrollment"),
+        Arguments.of(ENROLLED_PRINCIPAL, PRINCIPAL_EXPERIMENT_NAME + "-unrelated-experiment", Collections.emptySet(), Collections.emptySet(),
+            0, false, "unknown experiment expects no enrollment"),
         Arguments.of(ENROLLED_PRINCIPAL, PRINCIPAL_EXPERIMENT_NAME, Set.of(ENROLLED_PRINCIPAL), Set.of(EXCLUDED_PRINCIPAL),
-            Collections.emptySet(), Collections.emptySet(), 0, true, "explicitly enrolled principal overrides 0% rollout"),
-        Arguments.of(EXCLUDED_PRINCIPAL, PRINCIPAL_EXPERIMENT_NAME, Collections.emptySet(), Set.of(EXCLUDED_PRINCIPAL), Set.of("1"),
-            Collections.emptySet(), 100, false, "excluded principal overrides 100% rollout"),
+            0, true, "explicitly enrolled principal overrides 0% rollout"),
+        Arguments.of(EXCLUDED_PRINCIPAL, PRINCIPAL_EXPERIMENT_NAME, Collections.emptySet(), Set.of(EXCLUDED_PRINCIPAL),
+            100, false, "excluded principal overrides 100% rollout"),
         Arguments.of(ENROLLED_PRINCIPAL, PRINCIPAL_EXPERIMENT_NAME, Collections.emptySet(), Collections.emptySet(),
-            Collections.emptySet(), Collections.emptySet(), 100, true, "enrollment expected for 100% rollout")
+            100, true, "enrollment expected for 100% rollout")
     );
   }
 }
