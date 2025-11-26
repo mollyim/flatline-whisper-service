@@ -450,7 +450,7 @@
               "deprecationReason": null
             },
             {
-              "name": "principal",
+              "name": "phoneNumber",
               "description": "Phone number.",
               "args": [],
               "type": {
@@ -5812,7 +5812,7 @@
               "deprecationReason": null
             },
             {
-              "name": "principal",
+              "name": "phoneNumber",
               "description": "The phone number for this customer.",
               "args": [],
               "type": {
@@ -6108,7 +6108,7 @@
               "defaultValue": null
             },
             {
-              "name": "principal",
+              "name": "phoneNumber",
               "description": "The customer's phone number.",
               "type": {
                 "kind": "SCALAR",
@@ -6207,7 +6207,7 @@
               "defaultValue": null
             },
             {
-              "name": "principal",
+              "name": "phoneNumber",
               "description": "Find customers with a given phone number.",
               "type": {
                 "kind": "INPUT_OBJECT",
@@ -12106,7 +12106,7 @@
               "defaultValue": null
             },
             {
-              "name": "principal",
+              "name": "phoneNumber",
               "description": "The payer's phone number.",
               "type": {
                 "kind": "SCALAR",
@@ -19656,7 +19656,7 @@
               "defaultValue": null
             },
             {
-              "name": "principal",
+              "name": "phoneNumber",
               "description": "The phone number, in its canonical international [E.164 numbering plan\nformat](https://www.itu.int/rec/T-REC-E.164/en). The combined length of the\ncountry calling code (CC) and the national number must not be greater than 15\ndigits. The national number consists of a national destination code (NDC) and\nsubscriber number (SN).",
               "type": {
                 "kind": "NON_NULL",
@@ -26473,7 +26473,7 @@
               "defaultValue": null
             },
             {
-              "name": "principal",
+              "name": "phoneNumber",
               "description": "The billing phone number used for verification.",
               "type": {
                 "kind": "SCALAR",
@@ -26761,7 +26761,7 @@
               "defaultValue": null
             },
             {
-              "name": "principal",
+              "name": "phoneNumber",
               "description": "The shipping phone number used for verification.",
               "type": {
                 "kind": "SCALAR",
@@ -26919,7 +26919,7 @@
               "defaultValue": null
             },
             {
-              "name": "principal",
+              "name": "phoneNumber",
               "description": "The phone number associated with the transaction.",
               "type": {
                 "kind": "SCALAR",
@@ -29011,7 +29011,7 @@
               "defaultValue": null
             },
             {
-              "name": "principal",
+              "name": "phoneNumber",
               "description": "Phone number for the customer.",
               "type": {
                 "kind": "SCALAR",
@@ -32897,7 +32897,7 @@
               "deprecationReason": null
             },
             {
-              "name": "principal",
+              "name": "phoneNumber",
               "description": "The payer's phone number.",
               "args": [],
               "type": {
@@ -33001,7 +33001,7 @@
               "defaultValue": null
             },
             {
-              "name": "principal",
+              "name": "phoneNumber",
               "description": "The payer's phone number.",
               "type": {
                 "kind": "SCALAR",

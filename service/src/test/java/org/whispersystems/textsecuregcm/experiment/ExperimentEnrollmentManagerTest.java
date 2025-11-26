@@ -147,6 +147,7 @@ class ExperimentEnrollmentManagerTest {
     assertTrue(experimentEnrollmentManager.isEnrolled(ENROLLED_PRINCIPAL, account.getUuid(), PRINCIPAL_AND_UUID_EXPERIMENT_NAME));
 
     // test fallback from UUID/general enrollment to principal enrollment
+    when(principalExperimentEnrollmentConfiguration.getEnrolledPrincipals()).thenReturn(Set.of(ENROLLED_PRINCIPAL));
     when(experimentEnrollmentConfiguration.getEnrollmentPercentage()).thenReturn(0);
     assertTrue(experimentEnrollmentManager.isEnrolled(ENROLLED_PRINCIPAL, account.getUuid(), PRINCIPAL_AND_UUID_EXPERIMENT_NAME));
     assertFalse(experimentEnrollmentManager.isEnrolled(NOT_ENROLLED_PRINCIPAL, account.getUuid(), PRINCIPAL_AND_UUID_EXPERIMENT_NAME));

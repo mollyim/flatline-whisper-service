@@ -12,9 +12,10 @@ import java.util.List;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import org.whispersystems.textsecuregcm.util.Principal;
 
 public record AuthCheckRequest(@Schema(description = "The principal.")
-                               @NotNull String principal,
+                               @NotNull @Principal String principal,
                                @Schema(description = """
                                A list of SVR tokens, previously retrieved from `backup/auth`. Tokens should be the
                                of the form "username:password". May contain at most 10 tokens.""")

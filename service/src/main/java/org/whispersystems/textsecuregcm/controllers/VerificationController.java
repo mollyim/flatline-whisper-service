@@ -95,8 +95,10 @@ import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
 import org.whispersystems.textsecuregcm.storage.VerificationSessionManager;
 import org.whispersystems.textsecuregcm.util.ExceptionUtils;
+import org.whispersystems.textsecuregcm.util.InvalidPrincipalException;
 import org.whispersystems.textsecuregcm.util.ObsoletePrincipalFormatException;
 import org.whispersystems.textsecuregcm.util.Pair;
+import org.whispersystems.textsecuregcm.entities.Principal;
 import org.whispersystems.textsecuregcm.util.Util;
 
 @Path("/v1/verification")
@@ -160,9 +162,9 @@ public class VerificationController {
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
   @Operation(
-      summary = "Creates a new verification session for a specific phone number",
+      summary = "Creates a new verification session for a specific principal",
       description = """
-          Initiates a session to be able to verify the phone number for account registration. Check the response and 
+          Initiates a session to be able to verify the principal for account registration. Check the response and
           submit requested information at PATCH /session/{sessionId}
           """)
   @ApiResponse(responseCode = "200", description = "The verification session was created successfully", useReturnTypeSchema = true)
@@ -175,17 +177,27 @@ public class VerificationController {
       @Context final ContainerRequestContext requestContext)
       throws RateLimitExceededException, ObsoletePrincipalFormatException {
 
-    final Pair<String, PushNotification.TokenType> pushTokenAndType = validateAndExtractPushToken(
-        request.updateVerificationSessionRequest());
+    // FLT(uoemai): Use dummy verification handler during development.
+    // final Pair<String, PushNotification.TokenType> pushTokenAndType = validateAndExtractPushToken(
+    //    request.updateVerificationSessionRequest());
 
-    final Phonenumber.PhoneNumber phoneNumber;
+    final Principal principal;
     try {
       // FLT(uoemai): Canonicalization no longer applies to phone numbers specifically, only to principals.
       //              With principals, technically equivalent phone numbers are treated as different principals.
-      //              TODO: Migrate verification to principals.
-      phoneNumber = PhoneNumberUtil.getInstance().parse(Util.canonicalizePrincipal(request.principal()), null);
+      principal = Principal.parse(Util.canonicalizePrincipal(request.principal()));
+    } catch (final InvalidPrincipalException e) {
+      throw new ServerErrorException("could not parse already validated principal", Response.Status.INTERNAL_SERVER_ERROR);
+    }
+
+    // FLT(uoemai): At this point, we start assuming that the principal is a phone number.
+    //              This is only done in the interim, before registration is migrated to OIDC.
+    //              TODO: Migrate registration to use OIDC.
+    final Phonenumber.PhoneNumber phoneNumber;
+    try {
+      phoneNumber = PhoneNumberUtil.getInstance().parse(principal.getValue(), null);
     } catch (final NumberParseException e) {
-      throw new ServerErrorException("could not parse already validated number", Response.Status.INTERNAL_SERVER_ERROR);
+      throw new ServerErrorException("could not parse principal as phone number", Response.Status.INTERNAL_SERVER_ERROR);
     }
 
     final RegistrationServiceSession registrationServiceSession;
@@ -254,8 +266,8 @@ public class VerificationController {
 
     final String sourceHost = (String) requestContext.getProperty(RemoteAddressFilter.REMOTE_ADDRESS_ATTRIBUTE_NAME);
 
-    final Pair<String, PushNotification.TokenType> pushTokenAndType = validateAndExtractPushToken(
-        updateVerificationSessionRequest);
+    // final Pair<String, PushNotification.TokenType> pushTokenAndType = validateAndExtractPushToken(
+    //    updateVerificationSessionRequest);
 
     final RegistrationServiceSession registrationServiceSession = retrieveRegistrationServiceSession(encodedSessionId);
     VerificationSession verificationSession = retrieveVerificationSession(registrationServiceSession);
@@ -271,21 +283,20 @@ public class VerificationController {
 
       // FLT(uoemai): Use dummy handler as the first verification method during development.
       verificationSession = handleDummy(verificationSession);
-
       verificationSession = verificationCheck.updatedSession().orElse(verificationSession);
 
-      verificationSession = handlePushToken(pushTokenAndType, verificationSession);
+      // FLT(uoemai): The following additional verification methods are currently ignored in the Flatline prototype.
+      // verificationSession = handlePushToken(pushTokenAndType, verificationSession);
+      // verificationSession = handlePushChallenge(updateVerificationSessionRequest, registrationServiceSession,
+      //     verificationSession);
+      // verificationSession = handleCaptcha(sourceHost, updateVerificationSessionRequest, registrationServiceSession,
+      //    verificationSession, userAgent, verificationCheck.scoreThreshold());
 
-      verificationSession = handlePushChallenge(updateVerificationSessionRequest, registrationServiceSession,
-          verificationSession);
-
-      verificationSession = handleCaptcha(sourceHost, updateVerificationSessionRequest, registrationServiceSession,
-          verificationSession, userAgent, verificationCheck.scoreThreshold());
-    } catch (final RateLimitExceededException e) {
-
-      final Response response = buildResponseForRateLimitExceeded(verificationSession, registrationServiceSession,
-          e.getRetryDuration());
-      throw new ClientErrorException(response);
+    // FLT(uoemai): There are no rate limited verification methods currently in the Flatline prototype.
+    //} catch (final RateLimitExceededException e) {
+      // final Response response = buildResponseForRateLimitExceeded(verificationSession, registrationServiceSession,
+      //     e.getRetryDuration());
+      // throw new ClientErrorException(response);
 
     } catch (final ForbiddenException e) {
 

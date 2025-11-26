@@ -23,7 +23,6 @@ import static org.mockito.Mockito.when;
 import com.google.common.net.HttpHeaders;
 import com.google.i18n.phonenumbers.NumberParseException;
 import com.google.i18n.phonenumbers.PhoneNumberUtil;
-import com.google.i18n.phonenumbers.Phonenumber;
 import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 import io.dropwizard.testing.junit5.ResourceExtension;
 import io.grpc.Status;
@@ -46,6 +45,7 @@ import java.util.concurrent.CompletionException;
 import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpStatus;
+import org.glassfish.jersey.client.HttpUrlConnectorProvider;
 import org.glassfish.jersey.server.ServerProperties;
 import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.junit.jupiter.api.BeforeEach;
@@ -92,7 +92,9 @@ class VerificationControllerTest {
   private static final long SESSION_EXPIRATION_SECONDS = Duration.ofMinutes(10).toSeconds();
 
   private static final byte[] SESSION_ID = "session".getBytes(StandardCharsets.UTF_8);
-  private static final String NUMBER = PhoneNumberUtil.getInstance().format(
+  // FLT(uoemai): Pending the migration to OIDC registration, the principal is assumed to be a phone number.
+  //              TODO: Migrate tests to use generic principals once registration is migrated to OIDC.
+  private static final String PRINCIPAL = PhoneNumberUtil.getInstance().format(
       PhoneNumberUtil.getInstance().getExampleNumber("US"),
       PhoneNumberUtil.PhoneNumberFormat.E164);
 
@@ -142,19 +144,19 @@ class VerificationControllerTest {
         .thenReturn(new DynamicRegistrationConfiguration(false));
     when(dynamicConfigurationManager.getConfiguration())
         .thenReturn(dynamicConfiguration);
-    when(principalNameIdentifiers.getPrincipalNameIdentifier(NUMBER))
+    when(principalNameIdentifiers.getPrincipalNameIdentifier(PRINCIPAL))
         .thenReturn(CompletableFuture.completedFuture(PNI));
   }
 
   @ParameterizedTest
   @MethodSource
-  void createSessionUnprocessableRequestJson(final String number, final String pushToken, final String pushTokenType) {
+  void createSessionUnprocessableRequestJson(final String principal, final String pushToken, final String pushTokenType) {
 
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/verification/session")
         .request();
     try (Response response = request.post(
-        Entity.json(unprocessableCreateSessionJson(number, pushToken, pushTokenType)))) {
+        Entity.json(unprocessableCreateSessionJson(principal, pushToken, pushTokenType)))) {
       assertEquals(400, response.getStatus());
     }
 
@@ -163,19 +165,19 @@ class VerificationControllerTest {
   static Stream<Arguments> createSessionUnprocessableRequestJson() {
     return Stream.of(
         Arguments.of("[]", null, null),
-        Arguments.of(String.format("\"%s\"", NUMBER), "some-push-token", "invalid-token-type")
+        Arguments.of(String.format("\"%s\"", PRINCIPAL), "some-push-token", "invalid-token-type")
     );
   }
 
   @ParameterizedTest
   @MethodSource
-  void createSessionInvalidRequestJson(final String number, final String pushToken, final String pushTokenType) {
+  void createSessionInvalidRequestJson(final String principal, final String pushToken, final String pushTokenType) {
 
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/verification/session")
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
-    try (Response response = request.post(Entity.json(createSessionJson(number, pushToken, pushTokenType)))) {
+    try (Response response = request.post(Entity.json(createSessionJson(principal, pushToken, pushTokenType)))) {
       assertEquals(422, response.getStatus());
     }
   }
@@ -183,10 +185,11 @@ class VerificationControllerTest {
   static Stream<Arguments> createSessionInvalidRequestJson() {
     return Stream.of(
         Arguments.of(null, null, null),
-        Arguments.of("+1800", null, null),
-        Arguments.of(" ", null, null),
-        Arguments.of(NUMBER, null, "fcm"),
-        Arguments.of(NUMBER, "some-push-token", null)
+        Arguments.of("invalid.principal.¥€Š", null, null),
+        Arguments.of(" ", null, null)
+        // FLT(uoemai): These test cases are not relevant while notifications are disabled.
+        // Arguments.of(PRINCIPAL, null, "fcm"),
+        // Arguments.of(PRINCIPAL, "some-push-token", null)
     );
   }
 
@@ -199,7 +202,7 @@ class VerificationControllerTest {
         .target("/v1/verification/session")
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
-    try (Response response = request.post(Entity.json(createSessionJson(NUMBER, null, null)))) {
+    try (Response response = request.post(Entity.json(createSessionJson(PRINCIPAL, null, null)))) {
       assertEquals(429, response.getStatus());
     }
   }
@@ -213,69 +216,8 @@ class VerificationControllerTest {
         .target("/v1/verification/session")
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
-    try (Response response = request.post(Entity.json(createSessionJson(NUMBER, null, null)))) {
+    try (Response response = request.post(Entity.json(createSessionJson(PRINCIPAL, null, null)))) {
       assertEquals(HttpStatus.SC_INTERNAL_SERVER_ERROR, response.getStatus());
-    }
-  }
-
-  @ParameterizedTest
-  @MethodSource
-  void createBeninSessionSuccess(final String requestedNumber, final String expectedNumber) {
-    when(registrationServiceClient.createRegistrationSession(any(), anyString(), anyBoolean(), any()))
-        .thenReturn(
-            CompletableFuture.completedFuture(
-                new RegistrationServiceSession(SESSION_ID, requestedNumber, false, null, null, null,
-                    SESSION_EXPIRATION_SECONDS)));
-    when(verificationSessionManager.insert(any(), any()))
-        .thenReturn(CompletableFuture.completedFuture(null));
-
-    final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session")
-        .request()
-        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
-    try (Response response = request.post(Entity.json(createSessionJson(requestedNumber, "token", "fcm")))) {
-      assertEquals(HttpStatus.SC_OK, response.getStatus());
-
-      final ArgumentCaptor<Phonenumber.PhoneNumber> principalArgumentCaptor = ArgumentCaptor.forClass(
-          Phonenumber.PhoneNumber.class);
-      verify(registrationServiceClient).createRegistrationSession(principalArgumentCaptor.capture(), anyString(), anyBoolean(), any());
-      final Phonenumber.PhoneNumber principal = principalArgumentCaptor.getValue();
-
-      assertEquals(expectedNumber, PhoneNumberUtil.getInstance().format(principal, PhoneNumberUtil.PhoneNumberFormat.E164));
-    }
-  }
-
-  private static Stream<Arguments> createBeninSessionSuccess() {
-    // libphonenumber 8.13.50 and on generate new-format numbers for Benin
-    final String newFormatBeninE164 = PhoneNumberUtil.getInstance()
-        .format(PhoneNumberUtil.getInstance().getExampleNumber("BJ"), PhoneNumberUtil.PhoneNumberFormat.E164);
-    return Stream.of(
-        Arguments.of(newFormatBeninE164, newFormatBeninE164),
-        Arguments.of(NUMBER, NUMBER)
-    );
-  }
-
-  @Test
-  void createBeninSessionFailure() {
-    // libphonenumber 8.13.50 and on generate new-format numbers for Benin
-    final String newFormatBeninE164 = PhoneNumberUtil.getInstance()
-        .format(PhoneNumberUtil.getInstance().getExampleNumber("BJ"), PhoneNumberUtil.PhoneNumberFormat.E164);
-    final String oldFormatBeninE164 = newFormatBeninE164.replaceFirst("01", "");
-
-    when(registrationServiceClient.createRegistrationSession(any(), anyString(), anyBoolean(), any()))
-        .thenReturn(
-            CompletableFuture.completedFuture(
-                new RegistrationServiceSession(SESSION_ID, NUMBER, false, null, null, null,
-                    SESSION_EXPIRATION_SECONDS)));
-    when(verificationSessionManager.insert(any(), any()))
-        .thenReturn(CompletableFuture.completedFuture(null));
-
-    final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session")
-        .request()
-        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
-    try (Response response = request.post(Entity.json(createSessionJson(oldFormatBeninE164, "token", "fcm")))) {
-      assertEquals(499, response.getStatus());
     }
   }
 
@@ -286,7 +228,7 @@ class VerificationControllerTest {
     when(registrationServiceClient.createRegistrationSession(any(), anyString(), anyBoolean(), any()))
         .thenReturn(
             CompletableFuture.completedFuture(
-                new RegistrationServiceSession(SESSION_ID, NUMBER, false, null, null, null,
+                new RegistrationServiceSession(SESSION_ID, PRINCIPAL, false, null, null, null,
                     SESSION_EXPIRATION_SECONDS)));
     when(verificationSessionManager.insert(any(), any()))
         .thenReturn(CompletableFuture.completedFuture(null));
@@ -295,22 +237,28 @@ class VerificationControllerTest {
         .target("/v1/verification/session")
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
-    try (Response response = request.post(Entity.json(createSessionJson(NUMBER, pushToken, pushTokenType)))) {
+    try (Response response = request.post(Entity.json(createSessionJson(PRINCIPAL, pushToken, pushTokenType)))) {
       assertEquals(HttpStatus.SC_OK, response.getStatus());
 
       final VerificationSessionResponse verificationSessionResponse = response.readEntity(
           VerificationSessionResponse.class);
       assertEquals(expectedRequestedInformation, verificationSessionResponse.requestedInformation());
-      assertFalse(verificationSessionResponse.allowedToRequestCode());
+      // FLT(uoemai): In the Flatline prototype, the client is currently always allowed to request a code.
+      //              This may change once verification is migrated away from phone numbers.
+      // assertFalse(verificationSessionResponse.allowedToRequestCode());
+      assertTrue(verificationSessionResponse.allowedToRequestCode());
       assertFalse(verificationSessionResponse.verified());
     }
   }
 
   static Stream<Arguments> createSessionSuccess() {
     return Stream.of(
-        Arguments.of(null, null, List.of(VerificationSession.Information.CAPTCHA)),
-        Arguments.of("token", "fcm",
-            List.of(VerificationSession.Information.PUSH_CHALLENGE, VerificationSession.Information.CAPTCHA))
+        // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+        // Arguments.of(null, null, List.of(VerificationSession.Information.CAPTCHA)),
+        // Arguments.of("token", "fcm",
+        //   List.of(VerificationSession.Information.PUSH_CHALLENGE, VerificationSession.Information.CAPTCHA))
+        Arguments.of(null, null, List.of()),
+        Arguments.of("token", "fcm", List.of())
     );
   }
 
@@ -320,13 +268,13 @@ class VerificationControllerTest {
     when(registrationServiceClient.createRegistrationSession(any(), anyString(), anyBoolean(), any()))
         .thenReturn(
             CompletableFuture.completedFuture(
-                new RegistrationServiceSession(SESSION_ID, NUMBER, false, null, null, null,
+                new RegistrationServiceSession(SESSION_ID, PRINCIPAL, false, null, null, null,
                     SESSION_EXPIRATION_SECONDS)));
 
     when(verificationSessionManager.insert(any(), any()))
         .thenReturn(CompletableFuture.completedFuture(null));
 
-    when(accountsManager.getByPrincipal(NUMBER))
+    when(accountsManager.getByPrincipal(PRINCIPAL))
         .thenReturn(isReregistration ? Optional.of(mock(Account.class)) : Optional.empty());
 
     final Invocation.Builder request = resources.getJerseyTest()
@@ -334,11 +282,13 @@ class VerificationControllerTest {
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
 
-    try (final Response response = request.post(Entity.json(createSessionJson(NUMBER, null, null)))) {
+    try (final Response response = request.post(Entity.json(createSessionJson(PRINCIPAL, null, null)))) {
       assertEquals(HttpStatus.SC_OK, response.getStatus());
 
       verify(registrationServiceClient).createRegistrationSession(
-          eq(PhoneNumberUtil.getInstance().parse(NUMBER, null)),
+          // FLT(uoemai): Pending the migration to OIDC registration, the principal is assumed to be a phone number.
+          //              TODO: Migrate tests to use generic principals once registration is migrated to OIDC.
+          eq(PhoneNumberUtil.getInstance().parse(PRINCIPAL, null)),
           anyString(),
           eq(isReregistration),
           any()
@@ -366,7 +316,7 @@ class VerificationControllerTest {
 
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
-        .request()
+        .request().property(HttpUrlConnectorProvider.SET_METHOD_WORKAROUND, true)
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json("{}"))) {
       assertEquals(HttpStatus.SC_NOT_FOUND, response.getStatus());
@@ -376,7 +326,7 @@ class VerificationControllerTest {
   @Test
   void patchSessionPushToken() {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, null,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -404,24 +354,33 @@ class VerificationControllerTest {
       verify(verificationSessionManager).update(any(), verificationSessionArgumentCaptor.capture());
 
       final VerificationSession updatedSession = verificationSessionArgumentCaptor.getValue();
-      assertEquals(List.of(VerificationSession.Information.PUSH_CHALLENGE, VerificationSession.Information.CAPTCHA),
-          updatedSession.requestedInformation());
-      assertTrue(updatedSession.submittedInformation().isEmpty());
-      assertNotNull(updatedSession.pushChallenge());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      // assertEquals(List.of(VerificationSession.Information.PUSH_CHALLENGE, VerificationSession.Information.CAPTCHA),
+      //          updatedSession.requestedInformation());
+      // assertTrue(updatedSession.submittedInformation().isEmpty());
+      assertEquals(List.of(), updatedSession.requestedInformation());
+      assertNull(updatedSession.submittedInformation());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      // assertNotNull(updatedSession.pushChallenge());
+      assertNull(updatedSession.pushChallenge());
 
       final VerificationSessionResponse verificationSessionResponse = response.readEntity(
           VerificationSessionResponse.class);
 
-      assertFalse(verificationSessionResponse.allowedToRequestCode());
-      assertEquals(List.of(VerificationSession.Information.PUSH_CHALLENGE, VerificationSession.Information.CAPTCHA),
-          verificationSessionResponse.requestedInformation());
+      // FLT(uoemai): In the Flatline prototype, the client is currently always allowed to request a code.
+      //              This may change once verification is migrated away from phone numbers.
+      // assertFalse(verificationSessionResponse.allowedToRequestCode());
+      assertTrue(verificationSessionResponse.allowedToRequestCode());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      // assertEquals(List.of(VerificationSession.Information.PUSH_CHALLENGE),
+      assertEquals(null, updatedSession.submittedInformation());
     }
   }
 
   @Test
   void patchSessionCaptchaRateLimited() throws Exception {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, null,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -444,12 +403,18 @@ class VerificationControllerTest {
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson("captcha", null, null, null)))) {
-      assertEquals(HttpStatus.SC_TOO_MANY_REQUESTS, response.getStatus());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      //              For this same reason, the verification captcha does not hit a rate limit.
+      // assertEquals(HttpStatus.SC_TOO_MANY_REQUESTS, response.getStatus());
+      assertEquals(HttpStatus.SC_OK, response.getStatus());
 
       final VerificationSessionResponse verificationSessionResponse = response.readEntity(
           VerificationSessionResponse.class);
 
-      assertFalse(verificationSessionResponse.allowedToRequestCode());
+      // FLT(uoemai): In the Flatline prototype, the client is currently always allowed to request a code.
+      //              This may change once verification is migrated away from phone numbers.
+      // assertFalse(verificationSessionResponse.allowedToRequestCode());
+      assertTrue(verificationSessionResponse.allowedToRequestCode());
       assertTrue(verificationSessionResponse.requestedInformation().isEmpty());
     }
   }
@@ -457,7 +422,7 @@ class VerificationControllerTest {
   @Test
   void patchSessionPushChallengeRateLimited() throws Exception {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, null,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -480,12 +445,18 @@ class VerificationControllerTest {
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(null, "challenge", null, null)))) {
-      assertEquals(HttpStatus.SC_TOO_MANY_REQUESTS, response.getStatus());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      //              For this same reason, the verification push challenge does not hit a rate limit.
+      // assertEquals(HttpStatus.SC_TOO_MANY_REQUESTS, response.getStatus());
+      assertEquals(HttpStatus.SC_OK, response.getStatus());
 
       final VerificationSessionResponse verificationSessionResponse = response.readEntity(
           VerificationSessionResponse.class);
 
-      assertFalse(verificationSessionResponse.allowedToRequestCode());
+      // FLT(uoemai): In the Flatline prototype, the client is currently always allowed to request a code.
+      //              This may change once verification is migrated away from phone numbers.
+      // assertFalse(verificationSessionResponse.allowedToRequestCode());
+      assertTrue(verificationSessionResponse.allowedToRequestCode());
       assertTrue(verificationSessionResponse.requestedInformation().isEmpty());
     }
   }
@@ -493,7 +464,7 @@ class VerificationControllerTest {
   @Test
   void patchSessionPushChallengeMismatch() {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, null,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -513,21 +484,30 @@ class VerificationControllerTest {
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(null, "mismatched", null, null)))) {
-      assertEquals(HttpStatus.SC_FORBIDDEN, response.getStatus());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      //              For this same reason, the provided push challenge is not verified.
+      // assertEquals(HttpStatus.SC_FORBIDDEN, response.getStatus());
+      assertEquals(HttpStatus.SC_OK, response.getStatus());
+
 
       final VerificationSessionResponse verificationSessionResponse = response.readEntity(
           VerificationSessionResponse.class);
 
-      assertFalse(verificationSessionResponse.allowedToRequestCode());
-      assertEquals(List.of(
-          VerificationSession.Information.PUSH_CHALLENGE), verificationSessionResponse.requestedInformation());
+      // FLT(uoemai): In the Flatline prototype, the client is currently always allowed to request a code.
+      //              This may change once verification is migrated away from phone numbers.
+      // assertFalse(verificationSessionResponse.allowedToRequestCode());
+      assertTrue(verificationSessionResponse.allowedToRequestCode());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      // assertEquals(List.of(
+      //    VerificationSession.Information.PUSH_CHALLENGE), verificationSessionResponse.requestedInformation());
+      assertEquals(List.of(), verificationSessionResponse.requestedInformation());
     }
   }
 
   @Test
   void patchSessionCaptchaInvalid() throws Exception {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, null,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -551,7 +531,9 @@ class VerificationControllerTest {
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson("captcha", null, null, null)))) {
-      assertEquals(HttpStatus.SC_FORBIDDEN, response.getStatus());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      //              For this same reason, the provided captcha is not verified.
+      // assertEquals(HttpStatus.SC_FORBIDDEN, response.getStatus());
 
       final ArgumentCaptor<VerificationSession> verificationSessionArgumentCaptor = ArgumentCaptor.forClass(
           VerificationSession.class);
@@ -559,22 +541,29 @@ class VerificationControllerTest {
       verify(verificationSessionManager).update(any(), verificationSessionArgumentCaptor.capture());
 
       final VerificationSession updatedSession = verificationSessionArgumentCaptor.getValue();
-      assertEquals(List.of(VerificationSession.Information.CAPTCHA),
-          updatedSession.requestedInformation());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      // assertEquals(List.of(VerificationSession.Information.CAPTCHA),
+      //     updatedSession.requestedInformation());
+      assertEquals(List.of(), updatedSession.requestedInformation());
 
       final VerificationSessionResponse verificationSessionResponse = response.readEntity(
           VerificationSessionResponse.class);
 
-      assertFalse(verificationSessionResponse.allowedToRequestCode());
-      assertEquals(List.of(
-          VerificationSession.Information.CAPTCHA), verificationSessionResponse.requestedInformation());
+      // FLT(uoemai): In the Flatline prototype, the client is currently always allowed to request a code.
+      //              This may change once verification is migrated away from phone numbers.
+      // assertFalse(verificationSessionResponse.allowedToRequestCode());
+      assertTrue(verificationSessionResponse.allowedToRequestCode());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      // assertEquals(List.of(
+      //     VerificationSession.Information.CAPTCHA), verificationSessionResponse.requestedInformation());
+      assertEquals(List.of(), verificationSessionResponse.requestedInformation());
     }
   }
 
   @Test
   void patchSessionPushChallengeAlreadySubmitted() {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, null,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -604,23 +593,31 @@ class VerificationControllerTest {
       verify(verificationSessionManager).update(any(), verificationSessionArgumentCaptor.capture());
 
       final VerificationSession updatedSession = verificationSessionArgumentCaptor.getValue();
-      assertEquals(List.of(VerificationSession.Information.PUSH_CHALLENGE),
-          updatedSession.submittedInformation());
-      assertEquals(List.of(VerificationSession.Information.CAPTCHA), updatedSession.requestedInformation());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      // assertEquals(List.of(VerificationSession.Information.PUSH_CHALLENGE),
+      //     updatedSession.submittedInformation());
+      // assertEquals(List.of(VerificationSession.Information.CAPTCHA), updatedSession.requestedInformation());
+      assertNull(updatedSession.submittedInformation());
+      assertEquals(List.of(), updatedSession.requestedInformation());
 
       final VerificationSessionResponse verificationSessionResponse = response.readEntity(
           VerificationSessionResponse.class);
 
-      assertFalse(verificationSessionResponse.allowedToRequestCode());
-      assertEquals(List.of(
-          VerificationSession.Information.CAPTCHA), verificationSessionResponse.requestedInformation());
+      // FLT(uoemai): In the Flatline prototype, the client is currently always allowed to request a code.
+      //              This may change once verification is migrated away from phone numbers.
+      // assertFalse(verificationSessionResponse.allowedToRequestCode());
+      assertTrue(verificationSessionResponse.allowedToRequestCode());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      // assertEquals(List.of(
+      //     VerificationSession.Information.CAPTCHA), verificationSessionResponse.requestedInformation());
+      assertEquals(List.of(), verificationSessionResponse.requestedInformation());
     }
   }
 
   @Test
   void patchSessionAlreadyVerified() {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         true, null, null, null,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -655,7 +652,7 @@ class VerificationControllerTest {
   @Test
   void patchSessionPushChallengeSuccess() {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, null,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -684,8 +681,10 @@ class VerificationControllerTest {
       verify(verificationSessionManager).update(any(), verificationSessionArgumentCaptor.capture());
 
       final VerificationSession updatedSession = verificationSessionArgumentCaptor.getValue();
-      assertEquals(List.of(VerificationSession.Information.PUSH_CHALLENGE),
-          updatedSession.submittedInformation());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      // assertEquals(List.of(VerificationSession.Information.PUSH_CHALLENGE),
+      //     updatedSession.submittedInformation());
+      assertNull(updatedSession.submittedInformation());
       assertTrue(updatedSession.requestedInformation().isEmpty());
 
       final VerificationSessionResponse verificationSessionResponse = response.readEntity(
@@ -699,7 +698,7 @@ class VerificationControllerTest {
   @Test
   void patchSessionCaptchaSuccess() throws Exception {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, null,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -731,8 +730,10 @@ class VerificationControllerTest {
       verify(verificationSessionManager).update(any(), verificationSessionArgumentCaptor.capture());
 
       final VerificationSession updatedSession = verificationSessionArgumentCaptor.getValue();
-      assertEquals(List.of(VerificationSession.Information.CAPTCHA),
-          updatedSession.submittedInformation());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      // assertEquals(List.of(VerificationSession.Information.PUSH_CHALLENGE),
+      //     updatedSession.submittedInformation());
+      assertEquals(null, updatedSession.submittedInformation());
       assertTrue(updatedSession.requestedInformation().isEmpty());
 
       final VerificationSessionResponse verificationSessionResponse = response.readEntity(
@@ -746,7 +747,7 @@ class VerificationControllerTest {
   @Test
   void patchSessionPushAndCaptchaSuccess() throws Exception {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, null,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -780,8 +781,10 @@ class VerificationControllerTest {
       verify(verificationSessionManager).update(any(), verificationSessionArgumentCaptor.capture());
 
       final VerificationSession updatedSession = verificationSessionArgumentCaptor.getValue();
-      assertEquals(List.of(VerificationSession.Information.PUSH_CHALLENGE, VerificationSession.Information.CAPTCHA),
-          updatedSession.submittedInformation());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      // assertEquals(List.of(VerificationSession.Information.PUSH_CHALLENGE, VerificationSession.Information.CAPTCHA),
+      //     updatedSession.submittedInformation());
+      assertNull(updatedSession.submittedInformation());
       assertTrue(updatedSession.requestedInformation().isEmpty());
 
       final VerificationSessionResponse verificationSessionResponse = response.readEntity(
@@ -795,7 +798,7 @@ class VerificationControllerTest {
   @Test
   void patchSessionTokenUpdatedCaptchaError() throws Exception {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, null,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -819,7 +822,10 @@ class VerificationControllerTest {
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH",
         Entity.json(updateSessionJson("captcha", null, "token", "fcm")))) {
-      assertEquals(HttpStatus.SC_SERVICE_UNAVAILABLE, response.getStatus());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      //              For this reason, the captcha cannot fail to be verified.
+      // assertEquals(HttpStatus.SC_SERVICE_UNAVAILABLE, response.getStatus());
+      assertEquals(HttpStatus.SC_OK, response.getStatus());
 
       final ArgumentCaptor<VerificationSession> verificationSessionArgumentCaptor = ArgumentCaptor.forClass(
           VerificationSession.class);
@@ -827,10 +833,15 @@ class VerificationControllerTest {
       verify(verificationSessionManager).update(any(), verificationSessionArgumentCaptor.capture());
 
       final VerificationSession updatedSession = verificationSessionArgumentCaptor.getValue();
-      assertTrue(updatedSession.submittedInformation().isEmpty());
-      assertEquals(List.of(VerificationSession.Information.PUSH_CHALLENGE, VerificationSession.Information.CAPTCHA),
-          updatedSession.requestedInformation());
-      assertNotNull(updatedSession.pushChallenge());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      // assertTrue(updatedSession.submittedInformation().isEmpty());
+      // assertEquals(List.of(VerificationSession.Information.PUSH_CHALLENGE, VerificationSession.Information.CAPTCHA),
+      //          updatedSession.requestedInformation());
+      assertNull(updatedSession.submittedInformation());
+      assertEquals(List.of(), updatedSession.requestedInformation());
+      // FLT(uoemai): In the Flatline prototype, there are currently no verification challenges.
+      // assertNotNull(updatedSession.pushChallenge());
+      assertNull(updatedSession.pushChallenge());
     }
   }
 
@@ -879,7 +890,7 @@ class VerificationControllerTest {
     when(registrationServiceClient.getSession(any(), any()))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(
-                new RegistrationServiceSession(SESSION_ID, NUMBER, false, null, null, null,
+                new RegistrationServiceSession(SESSION_ID, PRINCIPAL, false, null, null, null,
                     SESSION_EXPIRATION_SECONDS))));
 
     request = resources.getJerseyTest()
@@ -911,7 +922,7 @@ class VerificationControllerTest {
     when(registrationServiceClient.getSession(any(), any()))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(
-                new RegistrationServiceSession(SESSION_ID, NUMBER, false, null, null, null,
+                new RegistrationServiceSession(SESSION_ID, PRINCIPAL, false, null, null, null,
                     SESSION_EXPIRATION_SECONDS))));
     when(verificationSessionManager.findForId(any()))
         .thenReturn(CompletableFuture.completedFuture(Optional.of(mock(VerificationSession.class))));
@@ -928,7 +939,7 @@ class VerificationControllerTest {
   @Test
   void getSessionSuccessAlreadyVerified() {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         true, null, null, null,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -952,7 +963,7 @@ class VerificationControllerTest {
   @Test
   void requestVerificationCodeAlreadyVerified() {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         true, null, null,
         null, SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -981,7 +992,7 @@ class VerificationControllerTest {
   @Test
   void requestVerificationCodeNotAllowedInformationRequested() {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, null,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -1012,7 +1023,7 @@ class VerificationControllerTest {
   @Test
   void requestVerificationCodeNotAllowed() {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, null,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -1042,7 +1053,7 @@ class VerificationControllerTest {
   @Test
   void requestVerificationCodeRateLimitExceeded() {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null,
         null, SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -1074,7 +1085,7 @@ class VerificationControllerTest {
   @Test
   void requestVerificationCodeTransportNotAllowed() {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null,
         null, SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -1106,7 +1117,7 @@ class VerificationControllerTest {
   @Test
   void requestVerificationCodeSuccess() {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null,
         null, SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -1138,7 +1149,7 @@ class VerificationControllerTest {
   void requestVerificationCodeExternalServiceRefused(final boolean expectedPermanent, final String expectedReason,
       final RegistrationServiceSenderException exception) {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, 0L,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -1183,7 +1194,7 @@ class VerificationControllerTest {
           .thenReturn(new DynamicRegistrationConfiguration(true));
     }
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, 0L,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -1216,7 +1227,7 @@ class VerificationControllerTest {
   @Test
   void verifyCodeServerError() {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, 0L,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -1243,7 +1254,7 @@ class VerificationControllerTest {
   void verifyCodeAlreadyVerified() {
 
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         true, null, null, 0L,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -1278,7 +1289,7 @@ class VerificationControllerTest {
   void verifyCodeNoCodeRequested() {
 
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, 0L, null, 0L,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -1293,7 +1304,7 @@ class VerificationControllerTest {
     // in which the response has a session object as conflicted state
     when(registrationServiceClient.checkVerificationCode(any(), any(), any()))
         .thenReturn(CompletableFuture.failedFuture(new CompletionException(
-            new RegistrationServiceException(new RegistrationServiceSession(SESSION_ID, NUMBER, false, 0L, null, null,
+            new RegistrationServiceException(new RegistrationServiceSession(SESSION_ID, PRINCIPAL, false, 0L, null, null,
                 SESSION_EXPIRATION_SECONDS)))));
 
     final Invocation.Builder request = resources.getJerseyTest()
@@ -1315,7 +1326,7 @@ class VerificationControllerTest {
   void verifyCodeNoSession() {
 
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, 0L,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -1341,7 +1352,7 @@ class VerificationControllerTest {
   @Test
   void verifyCodeRateLimitExceeded() {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, 0L,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
@@ -1374,7 +1385,7 @@ class VerificationControllerTest {
   @Test
   void verifyCodeSuccess() {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
-    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, NUMBER,
+    final RegistrationServiceSession registrationServiceSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL,
         false, null, null, 0L, SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.getSession(any(), any()))
         .thenReturn(CompletableFuture.completedFuture(
@@ -1384,7 +1395,7 @@ class VerificationControllerTest {
             Optional.of(new VerificationSession(null, Collections.emptyList(), Collections.emptyList(), null, null, true,
                 clock.millis(), clock.millis(), registrationServiceSession.expiration()))));
 
-    final RegistrationServiceSession verifiedSession = new RegistrationServiceSession(SESSION_ID, NUMBER, true, null,
+    final RegistrationServiceSession verifiedSession = new RegistrationServiceSession(SESSION_ID, PRINCIPAL, true, null,
         null, 0L,
         SESSION_EXPIRATION_SECONDS);
     when(registrationServiceClient.checkVerificationCode(any(), any(), any()))
@@ -1409,15 +1420,15 @@ class VerificationControllerTest {
   /**
    * Request JSON in the shape of {@link org.whispersystems.textsecuregcm.entities.CreateVerificationSessionRequest}
    */
-  private static String createSessionJson(final String number, final String pushToken,
+  private static String createSessionJson(final String principal, final String pushToken,
       final String pushTokenType) {
     return String.format("""
         {
-          "number": %s,
+          "principal": %s,
           "pushToken": %s,
           "pushTokenType": %s
         }
-        """, quoteIfNotNull(number), quoteIfNotNull(pushToken), quoteIfNotNull(pushTokenType));
+        """, quoteIfNotNull(principal), quoteIfNotNull(pushToken), quoteIfNotNull(pushTokenType));
   }
 
   /**
@@ -1467,15 +1478,15 @@ class VerificationControllerTest {
    * Request JSON that cannot be marshalled into
    * {@link org.whispersystems.textsecuregcm.entities.CreateVerificationSessionRequest}
    */
-  private static String unprocessableCreateSessionJson(final String number, final String pushToken,
+  private static String unprocessableCreateSessionJson(final String principal, final String pushToken,
       final String pushTokenType) {
     return String.format("""
         {
-          "number": %s,
+          "principal": %s,
           "pushToken": %s,
           "pushTokenType": %s
         }
-        """, number, quoteIfNotNull(pushToken), quoteIfNotNull(pushTokenType));
+        """, principal, quoteIfNotNull(pushToken), quoteIfNotNull(pushTokenType));
   }
 
   private static String encodeSessionId(final byte[] sessionId) {

@@ -110,7 +110,7 @@ public class AuthHelper {
   private static SaltedTokenHash VALID_CREDENTIALS_3_LINKED  = mock(SaltedTokenHash.class);
   private static SaltedTokenHash UNDISCOVERABLE_CREDENTIALS  = mock(SaltedTokenHash.class);
 
-  private static final Collection<TestAccount> EXTENSION_TEST_ACCOUNTS = new HashSet<>();
+  private static final Collection<TestAccount> SCOPED_TEST_ACCOUNTS = new HashSet<>();
 
   public static PolymorphicAuthDynamicFeature<? extends Principal> getAuthFilter() {
     when(VALID_CREDENTIALS.verify("foo")).thenReturn(true);
@@ -286,10 +286,9 @@ public class AuthHelper {
 
   private static TestAccount[] generateTestAccounts() {
     final TestAccount[] testAccounts = new TestAccount[20];
-    final String principalBase = "user.account";
     for (int i = 0; i < testAccounts.length; i++) {
-      String currentPrincipal = principalBase + i;
-      testAccounts[i] = new TestAccount(currentPrincipal, getRandomUUID(random), "TestAccountPassword-" + currentPrincipal);
+      String currentPrincipal = "user.account." + i + "@example.com";
+      testAccounts[i] = new TestAccount(currentPrincipal, getRandomUUID(random), "test-password-" + i);
     }
     return testAccounts;
   }
@@ -301,20 +300,20 @@ public class AuthHelper {
 
     public TestAccount createTestAccount() {
       final TestAccount testAccount = new TestAccount(
-          "user.account@example.com", UUID.randomUUID(), "example-password"
-      );
+          "scoped.user.account." + SCOPED_TEST_ACCOUNTS.size() + "@example.com",
+          UUID.randomUUID(), "test-password-" + SCOPED_TEST_ACCOUNTS.size());
       testAccount.setup(ACCOUNTS_MANAGER);
 
-      EXTENSION_TEST_ACCOUNTS.add(testAccount);
+      SCOPED_TEST_ACCOUNTS.add(testAccount);
 
       return testAccount;
     }
 
     @Override
     public void afterEach(final ExtensionContext context) {
-      EXTENSION_TEST_ACCOUNTS.forEach(testAccount -> testAccount.teardown(ACCOUNTS_MANAGER));
+      SCOPED_TEST_ACCOUNTS.forEach(testAccount -> testAccount.teardown(ACCOUNTS_MANAGER));
 
-      EXTENSION_TEST_ACCOUNTS.clear();
+      SCOPED_TEST_ACCOUNTS.clear();
     }
   }
 
