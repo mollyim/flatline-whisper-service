@@ -105,7 +105,7 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
 
   private static final Timer createTimer = Metrics.timer(name(AccountsManager.class, "create"));
   private static final Timer updateTimer = Metrics.timer(name(AccountsManager.class, "update"));
-  private static final Timer getByNumberTimer = Metrics.timer(name(AccountsManager.class, "getByNumber"));
+  private static final Timer getByPrincipalTimer = Metrics.timer(name(AccountsManager.class, "getByPrincipal"));
   private static final Timer getByUsernameHashTimer = Metrics.timer(name(AccountsManager.class, "getByUsernameHash"));
   private static final Timer getByUsernameLinkHandleTimer = Metrics.timer(name(AccountsManager.class, "getByUsernameLinkHandle"));
   private static final Timer getByUuidTimer = Metrics.timer(name(AccountsManager.class, "getByUuid"));
@@ -310,7 +310,7 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
     });
   }
 
-  public Account create(final String number,
+  public Account create(final String principal,
       final AccountAttributes accountAttributes,
       final List<AccountBadge> accountBadges,
       final IdentityKey aciIdentityKey,
@@ -318,12 +318,12 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
       final DeviceSpec primaryDeviceSpec,
       @Nullable final String userAgent) throws InterruptedException {
 
-    final UUID pni = principalNameIdentifiers.getPrincipalNameIdentifier(number).join();
+    final UUID pni = principalNameIdentifiers.getPrincipalNameIdentifier(principal).join();
 
     return createTimer.record(() -> {
       try {
         return accountLockManager.withLock(Set.of(pni),
-            () -> create(number, pni, accountAttributes, accountBadges, aciIdentityKey, pniIdentityKey, primaryDeviceSpec, userAgent), accountLockExecutor);
+            () -> create(principal, pni, accountAttributes, accountBadges, aciIdentityKey, pniIdentityKey, primaryDeviceSpec, userAgent), accountLockExecutor);
       } catch (final Exception e) {
         if (e instanceof RuntimeException runtimeException) {
           throw runtimeException;
@@ -335,7 +335,7 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
     });
   }
 
-  private Account create(final String number,
+  private Account create(final String principal,
       final UUID pni,
       final AccountAttributes accountAttributes,
       final List<AccountBadge> accountBadges,
@@ -348,10 +348,10 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
     final Optional<UUID> maybeRecentlyDeletedAccountIdentifier =
         accounts.findRecentlyDeletedAccountIdentifier(pni);
 
-    // Reuse the ACI from any recently-deleted account with this number to cover cases where somebody is
+    // Reuse the ACI from any recently-deleted account with this principal to cover cases where somebody is
     // re-registering.
     account.setUuid(maybeRecentlyDeletedAccountIdentifier.orElseGet(UUID::randomUUID));
-    account.setPrincipal(number, pni);
+    account.setPrincipal(principal, pni);
     account.setIdentityKey(aciIdentityKey);
     account.setPrincipalIdentityKey(pniIdentityKey);
     account.addDevice(primaryDeviceSpec.toDevice(Device.PRIMARY_ID, clock, aciIdentityKey));
@@ -751,7 +751,7 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
     // 3. No account with the target PNI exists, but one has recently been deleted. In that case, add a "deleted
     //    account" record that maps the ACI of the recently-deleted account to the now-abandoned original PNI
     //    of the account changing its principal (which facilitates ACI consistency in cases that a party is switching
-    //    back and forth between numbers).
+    //    back and forth between principals).
     // 4. No account with the target PNI exists at all, in which case no additional action is needed.
     final Optional<UUID> recentlyDeletedAci = accounts.findRecentlyDeletedAccountIdentifier(targetPrincipalNameIdentifier);
     final Optional<Account> maybeExistingAccount = getByPrincipal(targetPrincipal);
@@ -1145,18 +1145,18 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
   }
 
   public Optional<Account> getByPrincipal(final String principal) {
-    return getByNumberTimer.record(() -> accounts.getByPrincipal(principal));
+    return getByPrincipalTimer.record(() -> accounts.getByPrincipal(principal));
   }
 
   public CompletableFuture<Optional<Account>> getByPrincipalAsync(final String principal) {
     Timer.Sample sample = Timer.start();
     return accounts.getByPrincipalAsync(principal)
-        .whenComplete((ignoredResult, ignoredThrowable) -> sample.stop(getByNumberTimer));
+        .whenComplete((ignoredResult, ignoredThrowable) -> sample.stop(getByPrincipalTimer));
   }
 
   public Optional<Account> getByPrincipalNameIdentifier(final UUID pni) {
     return checkRedisThenAccounts(
-        getByNumberTimer,
+        getByPrincipalTimer,
         () -> redisGetBySecondaryKey(getAccountMapKey(pni.toString()), redisPniGetTimer),
         () -> accounts.getByPrincipalNameIdentifier(pni)
     );
@@ -1164,7 +1164,7 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
 
   public CompletableFuture<Optional<Account>> getByprincipalNameIdentifierAsync(final UUID pni) {
     return checkRedisThenAccountsAsync(
-        getByNumberTimer,
+        getByPrincipalTimer,
         () -> redisGetBySecondaryKeyAsync(getAccountMapKey(pni.toString()), redisPniGetTimer),
         () -> accounts.getByPrincipalNameIdentifierAsync(pni)
     );

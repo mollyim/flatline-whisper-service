@@ -488,10 +488,7 @@ public class VerificationController {
   // FLT(uoemai): Dummy handler that always succeeds and allows requesting a verification code.
   private VerificationSession handleDummy(VerificationSession verificationSession) {
     // FLT(uoemai): The dummy handler never requires any additional information.
-    final List<VerificationSession.Information> requestedInformation = new ArrayList<>(
-        verificationSession.requestedInformation());
-    requestedInformation.remove(VerificationSession.Information.PUSH_CHALLENGE);
-    requestedInformation.remove(VerificationSession.Information.CAPTCHA);
+    final List<VerificationSession.Information> requestedInformation = new ArrayList<>();
 
     return new VerificationSession(verificationSession.pushChallenge(), requestedInformation,
         null, verificationSession.smsSenderOverride(), verificationSession.voiceSenderOverride(),

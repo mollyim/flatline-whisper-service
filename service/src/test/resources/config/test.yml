@@ -104,7 +104,7 @@ dynamoDbClient:
 dynamoDbTables:
   accounts:
     tableName: accounts_test
-    principalTableName: numbers_test
+    principalTableName: principals_test
     principalNameIdentifierTableName: pni_assignment_test
     usernamesTableName: usernames_test
     subjectsTableName: subjects_test

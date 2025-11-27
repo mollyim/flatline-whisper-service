@@ -62,8 +62,8 @@ public class Profiles {
   // Payment address; byte array
   private static final String ATTR_PAYMENT_ADDRESS = "P";
 
-  // Phone number sharing setting; byte array
-  private static final String ATTR_PHONE_NUMBER_SHARING = "S";
+  // Principal sharing setting; byte array
+  private static final String ATTR_PRINCIPAL_SHARING = "S";
 
   // Commitment; byte array
   private static final String ATTR_COMMITMENT = "C";
@@ -75,7 +75,7 @@ public class Profiles {
       "#about", ATTR_ABOUT,
       "#aboutEmoji", ATTR_EMOJI,
       "#paymentAddress", ATTR_PAYMENT_ADDRESS,
-      "#principalSharing", ATTR_PHONE_NUMBER_SHARING);
+      "#principalSharing", ATTR_PRINCIPAL_SHARING);
 
   private static final Timer SET_PROFILES_TIMER = Metrics.timer(name(Profiles.class, "set"));
   private static final Timer GET_PROFILE_TIMER = Metrics.timer(name(Profiles.class, "get"));
@@ -248,7 +248,7 @@ public class Profiles {
         getBytes(item, ATTR_EMOJI),
         getBytes(item, ATTR_ABOUT),
         getBytes(item, ATTR_PAYMENT_ADDRESS),
-        getBytes(item, ATTR_PHONE_NUMBER_SHARING),
+        getBytes(item, ATTR_PRINCIPAL_SHARING),
         AttributeValues.getByteArray(item, ATTR_COMMITMENT, null));
   }
 

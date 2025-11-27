@@ -490,7 +490,7 @@ public class AccountCreationDeletionIntegrationTest {
 
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
   private void assertExpectedStoredAccount(final Account account,
-      final String number,
+      final String principal,
       final String password,
       final String signalAgent,
       final DeliveryChannels deliveryChannels,
@@ -510,7 +510,7 @@ public class AccountCreationDeletionIntegrationTest {
 
     final Device primaryDevice = account.getPrimaryDevice();
 
-    assertEquals(number, account.getPrincipal());
+    assertEquals(principal, account.getPrincipal());
     assertEquals(signalAgent, primaryDevice.getUserAgent());
     assertEquals(deliveryChannels.fetchesMessages(), primaryDevice.getFetchesMessages());
     assertEquals(registrationId, primaryDevice.getRegistrationId(IdentityType.ACI));

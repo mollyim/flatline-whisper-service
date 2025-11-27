@@ -624,22 +624,22 @@ class AccountControllerV2Test {
       assertThat(discoverabilityCapture.getValue()).isTrue();
     }
 
-    @Test
-    void testSetNullPrincipalDiscoverability() {
-      Response response = resources.getJerseyTest()
-          .target("/v2/accounts/principal_discoverability")
-          .request()
-          .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
-          .put(Entity.json(
-              """
-                  {
-                    "discoverableByPrincipal": null
-                  }
-                  """));
+      @Test
+      void testSetNullPrincipalDiscoverability() {
+        Response response = resources.getJerseyTest()
+            .target("/v2/accounts/principal_discoverability")
+            .request()
+            .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
+            .put(Entity.json(
+                """
+                    {
+                      "discoverableByPrincipal": null
+                    }
+                    """));
 
-      assertThat(response.getStatus()).isEqualTo(422);
-      verify(AuthHelper.VALID_ACCOUNT, never()).setDiscoverableByPrincipal(anyBoolean());
-    }
+        assertThat(response.getStatus()).isEqualTo(422);
+        verify(AuthHelper.VALID_ACCOUNT, never()).setDiscoverableByPrincipal(anyBoolean());
+      }
 
     @ParameterizedTest
     @MethodSource
