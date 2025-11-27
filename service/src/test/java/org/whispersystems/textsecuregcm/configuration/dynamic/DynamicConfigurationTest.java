@@ -125,7 +125,7 @@ class DynamicConfigurationTest {
   }
 
   @Test
-  void testParseE164Experiments() throws JsonProcessingException {
+  void testParsePrincipalExperiments() throws JsonProcessingException {
     {
       final String emptyConfigYaml = REQUIRED_CONFIG.concat("test: true");
       final DynamicConfiguration emptyConfig =

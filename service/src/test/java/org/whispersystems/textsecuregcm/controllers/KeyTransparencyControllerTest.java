@@ -265,9 +265,9 @@ public class KeyTransparencyControllerTest {
         Arguments.of(ACI, ACI_IDENTITY_KEY, Optional.empty(), Optional.empty(), Optional.of(0L), 4L),
         // lastDistinguishedTreeHeadSize must be positive
         Arguments.of(ACI, ACI_IDENTITY_KEY, Optional.empty(), Optional.empty(), Optional.empty(), 0L),
-        // E164 can't be provided without an unidentified access key
+        // principal can't be provided without an unidentified access key
         Arguments.of(ACI, ACI_IDENTITY_KEY, Optional.of(PRINCIPAL), Optional.empty(), Optional.empty(), 4L),
-        // ...and an unidentified access key can't be provided without an E164
+        // ...and an unidentified access key can't be provided without a principal
         Arguments.of(ACI, ACI_IDENTITY_KEY, Optional.empty(), Optional.of(UNIDENTIFIED_ACCESS_KEY), Optional.empty(), 4L)
         );
   }

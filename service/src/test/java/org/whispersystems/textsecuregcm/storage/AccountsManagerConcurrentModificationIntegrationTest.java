@@ -156,7 +156,7 @@ class AccountsManagerConcurrentModificationIntegrationTest {
       final ECKeyPair pniKeyPair = ECKeyPair.generate();
 
       final Account account = accountsManager.update(
-          accountsManager.create("+14155551212",
+          accountsManager.create("user.account@example.com",
               new AccountAttributes(),
               new ArrayList<>(),
               new IdentityKey(aciKeyPair.getPublicKey()),

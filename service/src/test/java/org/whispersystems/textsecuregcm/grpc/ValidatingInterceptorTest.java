@@ -377,7 +377,7 @@ public class ValidatingInterceptorTest {
   @Nonnull
   private static ValidationsRequest.Builder builderWithValidDefaults() {
     return ValidationsRequest.newBuilder()
-        .setPrincipal("+15551234567")
+        .setPrincipal("user.account@example.com")
         .setFixedSizeString("12345")
         .setFixedSizeBytes(ByteString.copyFrom(new byte[5]))
         .setWithMinBytes(ByteString.copyFrom(new byte[5]))

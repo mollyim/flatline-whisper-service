@@ -148,31 +148,31 @@ class WhisperServerServiceTest {
 
     final DynamoDbClient dynamoDbClient = getDynamoDbClient();
 
-    final DynamoDbExtension.TableSchema numbers = DynamoDbExtensionSchema.Tables.PRINCIPALS;
-    final AttributeValue numberAV = AttributeValues.s("+12125550001");
+    final DynamoDbExtension.TableSchema principals = DynamoDbExtensionSchema.Tables.PRINCIPALS;
+    final AttributeValue principalAV = AttributeValues.s("user.account@example.com");
 
     final GetItemResponse notFoundResponse = dynamoDbClient.getItem(GetItemRequest.builder()
-        .tableName(numbers.tableName())
-        .key(Map.of(numbers.hashKeyName(), numberAV))
+        .tableName(principals.tableName())
+        .key(Map.of(principals.hashKeyName(), principalAV))
         .build());
 
     assertFalse(notFoundResponse.hasItem());
 
     dynamoDbClient.putItem(PutItemRequest.builder()
-        .tableName(numbers.tableName())
-        .item(Map.of(numbers.hashKeyName(), numberAV))
+        .tableName(principals.tableName())
+        .item(Map.of(principals.hashKeyName(), principalAV))
         .build());
 
     final GetItemResponse foundResponse = dynamoDbClient.getItem(GetItemRequest.builder()
-        .tableName(numbers.tableName())
-        .key(Map.of(numbers.hashKeyName(), numberAV))
+        .tableName(principals.tableName())
+        .key(Map.of(principals.hashKeyName(), principalAV))
         .build());
 
     assertTrue(foundResponse.hasItem());
 
     dynamoDbClient.deleteItem(DeleteItemRequest.builder()
-        .tableName(numbers.tableName())
-        .key(Map.of(numbers.hashKeyName(), numberAV))
+        .tableName(principals.tableName())
+        .key(Map.of(principals.hashKeyName(), principalAV))
         .build());
   }
 

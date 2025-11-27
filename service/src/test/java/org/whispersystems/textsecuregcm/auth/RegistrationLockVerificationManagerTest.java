@@ -76,7 +76,7 @@ class RegistrationLockVerificationManagerTest {
 
     account = mock(Account.class);
     when(account.getUuid()).thenReturn(UUID.randomUUID());
-    when(account.getPrincipal()).thenReturn("+18005551212");
+    when(account.getPrincipal()).thenReturn("user.account@example.com");
     when(account.getDevices()).thenReturn(List.of(device));
 
     existingRegistrationLock = mock(StoredRegistrationLock.class);

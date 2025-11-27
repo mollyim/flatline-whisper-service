@@ -78,20 +78,20 @@ class AccountTest {
 
     {
       final Account transferablePrimaryAccount =
-              AccountsHelper.generateTestAccount("+14152222222", UUID.randomUUID(), UUID.randomUUID(), List.of(transferCapablePrimaryDevice), "1234".getBytes());
+              AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), List.of(transferCapablePrimaryDevice), "1234".getBytes());
 
       assertTrue(transferablePrimaryAccount.hasCapability(DeviceCapability.TRANSFER));
     }
 
     {
       final Account nonTransferablePrimaryAccount =
-              AccountsHelper.generateTestAccount("+14152222222", UUID.randomUUID(), UUID.randomUUID(), List.of(nonTransferCapablePrimaryDevice), "1234".getBytes());
+              AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), List.of(nonTransferCapablePrimaryDevice), "1234".getBytes());
 
       assertFalse(nonTransferablePrimaryAccount.hasCapability(DeviceCapability.TRANSFER));
     }
 
     {
-      final Account transferableLinkedAccount = AccountsHelper.generateTestAccount("+14152222222", UUID.randomUUID(), UUID.randomUUID(), List.of(nonTransferCapablePrimaryDevice, transferCapableLinkedDevice), "1234".getBytes());
+      final Account transferableLinkedAccount = AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), List.of(nonTransferCapablePrimaryDevice, transferCapableLinkedDevice), "1234".getBytes());
 
       assertFalse(transferableLinkedAccount.hasCapability(DeviceCapability.TRANSFER));
     }

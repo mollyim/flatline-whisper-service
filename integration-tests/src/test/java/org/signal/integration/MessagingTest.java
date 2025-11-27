@@ -21,8 +21,8 @@ public class MessagingTest {
 
   @Test
   public void testSendMessageUnsealed() {
-    final TestUser userA = Operations.newRegisteredUser("+19995550102");
-    final TestUser userB = Operations.newRegisteredUser("+19995550103");
+    final TestUser userA = Operations.newRegisteredUser("user.account.a@example.com");
+    final TestUser userB = Operations.newRegisteredUser("user.account.b@example.com");
 
     try {
       final byte[] expectedContent = "Hello, World!".getBytes(StandardCharsets.UTF_8);

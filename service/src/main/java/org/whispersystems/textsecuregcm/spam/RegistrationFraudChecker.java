@@ -30,7 +30,7 @@ public interface RegistrationFraudChecker {
       final UpdateVerificationSessionRequest request);
 
   static RegistrationFraudChecker noop() {
-    return (ignoredContext, ignoredSession, ignoredE164, ignoredRequest) -> new VerificationCheck(
+    return (ignoredContext, ignoredSession, ignoredPrincipal, ignoredRequest) -> new VerificationCheck(
         Optional.empty(),
         Optional.empty());
   }

@@ -34,7 +34,7 @@ public class AccountTest {
 
   @Test
   public void testCreateAccount() {
-    final TestUser user = Operations.newRegisteredUser("+19995550101");
+    final TestUser user = Operations.newRegisteredUser("user.account1@example.com");
     try {
       final Pair<Integer, AccountIdentityResponse> execute = Operations.apiGet("/v1/accounts/whoami")
           .authorized(user)
@@ -47,7 +47,7 @@ public class AccountTest {
 
   @Test
   public void testCreateAccountAtomic() {
-    final TestUser user = Operations.newRegisteredUser("+19995550201");
+    final TestUser user = Operations.newRegisteredUser("user.account2@example.com");
     try {
       final Pair<Integer, AccountIdentityResponse> execute = Operations.apiGet("/v1/accounts/whoami")
           .authorized(user)
@@ -60,8 +60,8 @@ public class AccountTest {
 
   @Test
   public void changePrincipal() {
-    final TestUser user = Operations.newRegisteredUser("+19995550301");
-    final String targetPrincipal = "+19995550302";
+    final TestUser user = Operations.newRegisteredUser("user.account3.1@example.com");
+    final String targetPrincipal = "user.account3.2@example.com";
 
     final ECKeyPair pniIdentityKeyPair = ECKeyPair.generate();
 
@@ -87,7 +87,7 @@ public class AccountTest {
 
   @Test
   public void testUsernameOperations() throws Exception {
-    final TestUser user = Operations.newRegisteredUser("+19995550102");
+    final TestUser user = Operations.newRegisteredUser("user.account4@example.com");
     try {
       verifyFullUsernameLifecycle(user);
       // no do it again to check changing usernames

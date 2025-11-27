@@ -126,7 +126,7 @@ class AccountsManagerTest {
   private DisconnectionRequestManager disconnectionRequestManager;
   private ClientPublicKeysManager clientPublicKeysManager;
 
-  private Map<String, UUID> principalNameIdentifiersByE164;
+  private Map<String, UUID> principalNameIdentifiersByPrincipal;
 
   private RedisAsyncCommands<String, String> asyncCommands;
   private RedisAdvancedClusterCommands<String, String> clusterCommands;
@@ -197,11 +197,11 @@ class AccountsManagerTest {
     when(svr2Client.removeData(any(UUID.class))).thenReturn(CompletableFuture.completedFuture(null));
 
     final PrincipalNameIdentifiers principalNameIdentifiers = mock(PrincipalNameIdentifiers.class);
-    principalNameIdentifiersByE164 = new HashMap<>();
+    principalNameIdentifiersByPrincipal = new HashMap<>();
 
     when(principalNameIdentifiers.getPrincipalNameIdentifier(anyString())).thenAnswer((Answer<CompletableFuture<UUID>>) invocation -> {
       final String principal = invocation.getArgument(0, String.class);
-      return CompletableFuture.completedFuture(principalNameIdentifiersByE164.computeIfAbsent(principal, n -> UUID.randomUUID()));
+      return CompletableFuture.completedFuture(principalNameIdentifiersByPrincipal.computeIfAbsent(principal, n -> UUID.randomUUID()));
     });
 
     @SuppressWarnings("unchecked") final DynamicConfigurationManager<DynamicConfiguration> dynamicConfigurationManager =
@@ -795,12 +795,12 @@ class AccountsManagerTest {
   void testCreateFreshAccount() throws InterruptedException, AccountAlreadyExistsException {
     when(accounts.create(any(), any())).thenReturn(true);
 
-    final String e164 = "+18005550123";
+    final String principal = "user.account@example.com";
     final AccountAttributes attributes = new AccountAttributes(false, 1, 2, null, null, true, null);
 
-    final Account createdAccount = createAccount(e164, attributes);
+    final Account createdAccount = createAccount(principal, attributes);
 
-    verify(accounts).create(argThat(account -> e164.equals(account.getPrincipal())), any());
+    verify(accounts).create(argThat(account -> principal.equals(account.getPrincipal())), any());
     verify(keysManager).buildWriteItemsForNewDevice(
         eq(createdAccount.getUuid()),
         eq(createdAccount.getPrincipalNameIdentifier()),
@@ -824,7 +824,7 @@ class AccountsManagerTest {
       //              This last line would show two different but functionally identical principals.
       "another.valid.principal@example.com, another.valid.principal@example.com"
   })
-  void testReregisterAccount(final String e164, final String existingAccountE164)
+  void testReregisterAccount(final String principal, final String existingAccountPrincipal)
       throws InterruptedException, AccountAlreadyExistsException {
     final UUID existingUuid = UUID.randomUUID();
 
@@ -837,7 +837,7 @@ class AccountsManagerTest {
           final Account existingAccount = mock(Account.class);
           when(existingAccount.getUuid()).thenReturn(existingUuid);
           when(existingAccount.getIdentifier(IdentityType.ACI)).thenReturn(existingUuid);
-          when(existingAccount.getPrincipal()).thenReturn(existingAccountE164);
+          when(existingAccount.getPrincipal()).thenReturn(existingAccountPrincipal);
           when(existingAccount.getPrincipalNameIdentifier()).thenReturn(requestedAccount.getIdentifier(IdentityType.PNI));
           when(existingAccount.getIdentifier(IdentityType.PNI)).thenReturn(requestedAccount.getIdentifier(IdentityType.PNI));
           when(existingAccount.getPrimaryDevice()).thenReturn(mock(Device.class));
@@ -847,13 +847,13 @@ class AccountsManagerTest {
 
     when(accounts.reclaimAccount(any(), any(), any())).thenReturn(CompletableFuture.completedFuture(null));
 
-    final Account reregisteredAccount = createAccount(e164, attributes);
+    final Account reregisteredAccount = createAccount(principal, attributes);
 
-    assertTrue(principalNameIdentifiersByE164.containsKey(e164));
-    assertEquals(e164, reregisteredAccount.getPrincipal());
+    assertTrue(principalNameIdentifiersByPrincipal.containsKey(principal));
+    assertEquals(principal, reregisteredAccount.getPrincipal());
 
     verify(accounts)
-        .create(argThat(account -> e164.equals(account.getPrincipal()) && existingUuid.equals(account.getUuid())), any());
+        .create(argThat(account -> principal.equals(account.getPrincipal()) && existingUuid.equals(account.getUuid())), any());
 
     verify(keysManager).buildWriteItemsForNewDevice(
         eq(reregisteredAccount.getUuid()),
@@ -865,7 +865,7 @@ class AccountsManagerTest {
         notNull());
 
     verify(keysManager, times(2)).deleteSingleUsePreKeys(existingUuid);
-    verify(keysManager, times(2)).deleteSingleUsePreKeys(principalNameIdentifiersByE164.get(e164));
+    verify(keysManager, times(2)).deleteSingleUsePreKeys(principalNameIdentifiersByPrincipal.get(principal));
     verify(messagesManager, times(2)).clear(existingUuid);
     verify(profilesManager, times(2)).deleteAll(existingUuid, false);
     verify(disconnectionRequestManager).requestDisconnection(argThat(account ->
@@ -879,13 +879,13 @@ class AccountsManagerTest {
     when(accounts.findRecentlyDeletedAccountIdentifier(any())).thenReturn(Optional.of(recentlyDeletedUuid));
     when(accounts.create(any(), any())).thenReturn(true);
 
-    final String e164 = "+18005550123";
+    final String principal = "user.account@example.com";
     final AccountAttributes attributes = new AccountAttributes(false, 1, 2, null, null, true, null);
 
-    final Account account = createAccount(e164, attributes);
+    final Account account = createAccount(principal, attributes);
 
     verify(accounts).create(
-        argThat(a -> e164.equals(a.getPrincipal()) && recentlyDeletedUuid.equals(a.getUuid())),
+        argThat(a -> principal.equals(a.getPrincipal()) && recentlyDeletedUuid.equals(a.getUuid())),
         any());
 
     verify(keysManager).buildWriteItemsForNewDevice(eq(account.getIdentifier(IdentityType.ACI)),
@@ -905,7 +905,7 @@ class AccountsManagerTest {
   @ValueSource(booleans = {true, false})
   void testCreateWithDiscoverability(final boolean discoverable) throws InterruptedException {
     final AccountAttributes attributes = new AccountAttributes(false, 1, 2, null, null, discoverable, null);
-    final Account account = createAccount("+18005550123", attributes);
+    final Account account = createAccount("user.account@example.com", attributes);
 
     assertEquals(discoverable, account.isDiscoverableByPrincipal());
   }
@@ -916,7 +916,7 @@ class AccountsManagerTest {
     final AccountAttributes attributes = new AccountAttributes(false, 1, 2, null, null,
             true, hasStorage ? Set.of(DeviceCapability.STORAGE) : Set.of());
 
-    final Account account = createAccount("+18005550123", attributes);
+    final Account account = createAccount("user.account@example.com", attributes);
 
     assertEquals(hasStorage, account.hasCapability(DeviceCapability.STORAGE));
   }
@@ -1044,12 +1044,12 @@ class AccountsManagerTest {
 
     assertEquals(targetPrincipal, account.getPrincipal());
 
-    assertTrue(principalNameIdentifiersByE164.containsKey(targetPrincipal));
+    assertTrue(principalNameIdentifiersByPrincipal.containsKey(targetPrincipal));
 
     verify(keysManager).deleteSingleUsePreKeys(originalPni);
-    verify(keysManager).deleteSingleUsePreKeys(principalNameIdentifiersByE164.get(targetPrincipal));
-    verify(keysManager).buildWriteItemForEcSignedPreKey(principalNameIdentifiersByE164.get(targetPrincipal), Device.PRIMARY_ID, ecSignedPreKey);
-    verify(keysManager).buildWriteItemForLastResortKey(principalNameIdentifiersByE164.get(targetPrincipal), Device.PRIMARY_ID, kemLastResortPreKey);
+    verify(keysManager).deleteSingleUsePreKeys(principalNameIdentifiersByPrincipal.get(targetPrincipal));
+    verify(keysManager).buildWriteItemForEcSignedPreKey(principalNameIdentifiersByPrincipal.get(targetPrincipal), Device.PRIMARY_ID, ecSignedPreKey);
+    verify(keysManager).buildWriteItemForLastResortKey(principalNameIdentifiersByPrincipal.get(targetPrincipal), Device.PRIMARY_ID, kemLastResortPreKey);
   }
 
   @Test
@@ -1063,8 +1063,8 @@ class AccountsManagerTest {
     Account account = AccountsHelper.generateTestAccount(originalPrincipal, UUID.randomUUID(), principalNameIdentifier,
         List.of(DevicesHelper.createDevice(Device.PRIMARY_ID)), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
 
-    principalNameIdentifiersByE164.put(originalPrincipal, account.getPrincipalNameIdentifier());
-    principalNameIdentifiersByE164.put(newPrincipal, account.getPrincipalNameIdentifier());
+    principalNameIdentifiersByPrincipal.put(originalPrincipal, account.getPrincipalNameIdentifier());
+    principalNameIdentifiersByPrincipal.put(newPrincipal, account.getPrincipalNameIdentifier());
     account = accountsManager.changePrincipal(account,
         newPrincipal,
         new IdentityKey(pniIdentityKeyPair.getPublicKey()),
@@ -1103,8 +1103,8 @@ class AccountsManagerTest {
 
     assertEquals(targetPrincipal, account.getPrincipal());
 
-    assertTrue(principalNameIdentifiersByE164.containsKey(targetPrincipal));
-    final UUID newPni = principalNameIdentifiersByE164.get(targetPrincipal);
+    assertTrue(principalNameIdentifiersByPrincipal.containsKey(targetPrincipal));
+    final UUID newPni = principalNameIdentifiersByPrincipal.get(targetPrincipal);
 
     verify(keysManager).deleteSingleUsePreKeys(existingAccountUuid);
     verify(keysManager).deleteSingleUsePreKeys(originalPni);
@@ -1118,8 +1118,8 @@ class AccountsManagerTest {
 
   @Test
   void testChangePrincipalWithPqKeysExistingAccount() throws InterruptedException, MismatchedDevicesException {
-    final String originalPrincipal = "user.account@example.com";
-    final String targetPrincipal = "+14153333333";
+    final String originalPrincipal = "original.principal@example.com";
+    final String targetPrincipal = "target.principal@example.com";
     final UUID existingAccountUuid = UUID.randomUUID();
     final UUID uuid = UUID.randomUUID();
     final UUID originalPni = UUID.randomUUID();
@@ -1147,9 +1147,9 @@ class AccountsManagerTest {
 
     assertEquals(targetPrincipal, updatedAccount.getPrincipal());
 
-    assertTrue(principalNameIdentifiersByE164.containsKey(targetPrincipal));
+    assertTrue(principalNameIdentifiersByPrincipal.containsKey(targetPrincipal));
 
-    final UUID newPni = principalNameIdentifiersByE164.get(targetPrincipal);
+    final UUID newPni = principalNameIdentifiersByPrincipal.get(targetPrincipal);
     verify(keysManager).deleteSingleUsePreKeys(existingAccountUuid);
     verify(keysManager, atLeastOnce()).deleteSingleUsePreKeys(targetPni);
     verify(keysManager).deleteSingleUsePreKeys(newPni);
@@ -1164,8 +1164,8 @@ class AccountsManagerTest {
 
   @Test
   void testChangePrincipalWithMismatchedPqKeys() {
-    final String originalPrincipal = "user.account@example.com";
-    final String targetPrincipal = "+14153333333";
+    final String originalPrincipal = "original.principal@example.com";
+    final String targetPrincipal = "target.principal@example.com";
     final UUID uuid = UUID.randomUUID();
     final UUID originalPni = UUID.randomUUID();
     final byte deviceId2 = 2;
@@ -1190,8 +1190,8 @@ class AccountsManagerTest {
 
   @Test
   void testChangePrincipalViaUpdate() {
-    final String originalPrincipal = "user.account@example.com";
-    final String targetPrincipal = "+14153333333";
+    final String originalPrincipal = "original.principal@example.com";
+    final String targetPrincipal = "target.principal@example.com";
     final UUID uuid = UUID.randomUUID();
 
     final Account account = AccountsHelper.generateTestAccount(originalPrincipal, uuid, UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
@@ -1201,7 +1201,7 @@ class AccountsManagerTest {
 
   @Test
   void testReserveUsernameHash() {
-    final Account account = AccountsHelper.generateTestAccount("+18005551234", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
+    final Account account = AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
     when(accounts.getByAccountIdentifierAsync(account.getUuid())).thenReturn(CompletableFuture.completedFuture(Optional.of(account)));
 
     final List<byte[]> usernameHashes = List.of(TestRandomUtil.nextBytes(32), TestRandomUtil.nextBytes(32));
@@ -1215,7 +1215,7 @@ class AccountsManagerTest {
   @Test
   void testReserveOwnUsernameHash() {
     final byte[] oldUsernameHash = TestRandomUtil.nextBytes(32);
-    final Account account = AccountsHelper.generateTestAccount("+18005551234", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
+    final Account account = AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
     account.setUsernameHash(oldUsernameHash);
     when(accounts.getByAccountIdentifierAsync(account.getUuid())).thenReturn(CompletableFuture.completedFuture(Optional.of(account)));
 
@@ -1228,7 +1228,7 @@ class AccountsManagerTest {
 
   @Test
   void testReserveUsernameOptimisticLockingFailure() {
-    final Account account = AccountsHelper.generateTestAccount("+18005551234", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
+    final Account account = AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
     when(accounts.getByAccountIdentifierAsync(account.getUuid())).thenReturn(CompletableFuture.completedFuture(Optional.of(account)));
 
     final List<byte[]> usernameHashes = List.of(TestRandomUtil.nextBytes(32), TestRandomUtil.nextBytes(32));
@@ -1243,7 +1243,7 @@ class AccountsManagerTest {
 
   @Test
   void testReserveUsernameHashNotAvailable() {
-    final Account account = AccountsHelper.generateTestAccount("+18005551234", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
+    final Account account = AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
     when(accounts.getByAccountIdentifierAsync(account.getUuid())).thenReturn(CompletableFuture.completedFuture(Optional.of(account)));
     when(accounts.reserveUsernameHash(any(), any(), any())).thenReturn(CompletableFuture.failedFuture(new UsernameHashNotAvailableException()));
     CompletableFutureTestUtil.assertFailsWithCause(UsernameHashNotAvailableException.class,
@@ -1252,7 +1252,7 @@ class AccountsManagerTest {
 
   @Test
   void testConfirmReservedUsernameHash() throws UsernameHashNotAvailableException, UsernameReservationNotFoundException {
-    final Account account = AccountsHelper.generateTestAccount("+18005551234", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
+    final Account account = AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
     setReservationHash(account, USERNAME_HASH_1);
 
     when(accounts.confirmUsernameHash(account, USERNAME_HASH_1, ENCRYPTED_USERNAME_1))
@@ -1264,7 +1264,7 @@ class AccountsManagerTest {
 
   @Test
   void testConfirmReservedUsernameHashOptimisticLockingFailure() throws UsernameHashNotAvailableException, UsernameReservationNotFoundException {
-    final Account account = AccountsHelper.generateTestAccount("+18005551234", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
+    final Account account = AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
     setReservationHash(account, USERNAME_HASH_1);
     when(accounts.getByAccountIdentifierAsync(account.getUuid())).thenReturn(CompletableFuture.completedFuture(Optional.of(account)));
 
@@ -1278,7 +1278,7 @@ class AccountsManagerTest {
 
   @Test
   void testConfirmReservedHashNameMismatch() {
-    final Account account = AccountsHelper.generateTestAccount("+18005551234", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
+    final Account account = AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
     setReservationHash(account, USERNAME_HASH_1);
     when(accounts.confirmUsernameHash(account, USERNAME_HASH_1, ENCRYPTED_USERNAME_1))
         .thenReturn(CompletableFuture.completedFuture(null));
@@ -1288,7 +1288,7 @@ class AccountsManagerTest {
 
   @Test
   void testConfirmReservedLapsed() {
-    final Account account = AccountsHelper.generateTestAccount("+18005551234", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
+    final Account account = AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
     // hash was reserved, but the reservation lapsed and another account took it
     setReservationHash(account, USERNAME_HASH_1);
     when(accounts.confirmUsernameHash(account, USERNAME_HASH_1, ENCRYPTED_USERNAME_1))
@@ -1300,7 +1300,7 @@ class AccountsManagerTest {
 
   @Test
   void testConfirmReservedRetry() throws UsernameHashNotAvailableException, UsernameReservationNotFoundException {
-    final Account account = AccountsHelper.generateTestAccount("+18005551234", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
+    final Account account = AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
     account.setUsernameHash(USERNAME_HASH_1);
 
     // reserved username already set, should be treated as a replay
@@ -1310,7 +1310,7 @@ class AccountsManagerTest {
 
   @Test
   void testConfirmReservedUsernameHashWithNoReservation() {
-    final Account account = AccountsHelper.generateTestAccount("+18005551234", UUID.randomUUID(), UUID.randomUUID(),
+    final Account account = AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(),
         new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
     CompletableFutureTestUtil.assertFailsWithCause(UsernameReservationNotFoundException.class,
         accountsManager.confirmReservedUsernameHash(account, USERNAME_HASH_1, ENCRYPTED_USERNAME_1));
@@ -1322,7 +1322,7 @@ class AccountsManagerTest {
     when(accounts.clearUsernameHash(any()))
         .thenReturn(CompletableFuture.completedFuture(null));
 
-    Account account = AccountsHelper.generateTestAccount("+18005551234", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
+    Account account = AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
     account.setUsernameHash(USERNAME_HASH_1);
     accountsManager.clearUsernameHash(account).join();
     verify(accounts).clearUsernameHash(eq(account));
@@ -1330,7 +1330,7 @@ class AccountsManagerTest {
 
   @Test
   void testSetUsernameViaUpdate() {
-    final Account account = AccountsHelper.generateTestAccount("+18005551234", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
+    final Account account = AccountsHelper.generateTestAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), new ArrayList<>(), new byte[UnidentifiedAccessUtil.UNIDENTIFIED_ACCESS_KEY_LENGTH]);
 
     assertThrows(AssertionError.class, () -> accountsManager.update(account, a -> a.setUsernameHash(USERNAME_HASH_1)));
   }
@@ -1400,11 +1400,11 @@ class AccountsManagerTest {
     return device;
   }
 
-  private Account createAccount(final String e164, final AccountAttributes accountAttributes) throws InterruptedException {
+  private Account createAccount(final String principal, final AccountAttributes accountAttributes) throws InterruptedException {
     final ECKeyPair aciKeyPair = ECKeyPair.generate();
     final ECKeyPair pniKeyPair = ECKeyPair.generate();
 
-    return accountsManager.create(e164,
+    return accountsManager.create(principal,
         accountAttributes,
         new ArrayList<>(),
         new IdentityKey(aciKeyPair.getPublicKey()),

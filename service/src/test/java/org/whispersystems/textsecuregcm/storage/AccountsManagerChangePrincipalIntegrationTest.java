@@ -47,7 +47,7 @@ import org.whispersystems.textsecuregcm.tests.util.AccountsHelper;
 import org.whispersystems.textsecuregcm.tests.util.KeysHelper;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 
-class AccountsManagerChangeNumberIntegrationTest {
+class AccountsManagerChangePrincipalIntegrationTest {
 
   @RegisterExtension
   static final DynamoDbExtension DYNAMO_DB_EXTENSION = new DynamoDbExtension(
@@ -178,9 +178,9 @@ class AccountsManagerChangeNumberIntegrationTest {
 
   @Test
   void testChangePrincipal() throws InterruptedException, MismatchedDevicesException {
-    final String originalNumber = "+18005551111";
-    final String secondNumber = "+18005552222";
-    final Account account = AccountsHelper.createAccount(accountsManager, originalNumber);
+    final String originalPrincipal = "user.account1@example.com";
+    final String secondPrincipal = "user.account2@example.com";
+    final Account account = AccountsHelper.createAccount(accountsManager, originalPrincipal);
 
     final UUID originalUuid = account.getUuid();
     final UUID originalPni = account.getPrincipalNameIdentifier();
@@ -188,17 +188,17 @@ class AccountsManagerChangeNumberIntegrationTest {
     final ECKeyPair pniIdentityKeyPair = ECKeyPair.generate();
 
     accountsManager.changePrincipal(account,
-        secondNumber,
+        secondPrincipal,
         new IdentityKey(pniIdentityKeyPair.getPublicKey()),
         Map.of(Device.PRIMARY_ID, KeysHelper.signedECPreKey(1, pniIdentityKeyPair)),
         Map.of(Device.PRIMARY_ID, KeysHelper.signedKEMPreKey(2, pniIdentityKeyPair)),
         Map.of(Device.PRIMARY_ID, 1));
 
-    assertTrue(accountsManager.getByPrincipal(originalNumber).isEmpty());
+    assertTrue(accountsManager.getByPrincipal(originalPrincipal).isEmpty());
 
-    final Account updatedAccount = accountsManager.getByPrincipal(secondNumber).orElseThrow();
+    final Account updatedAccount = accountsManager.getByPrincipal(secondPrincipal).orElseThrow();
     assertEquals(originalUuid, updatedAccount.getUuid());
-    assertEquals(secondNumber, updatedAccount.getPrincipal());
+    assertEquals(secondPrincipal, updatedAccount.getPrincipal());
     assertNotEquals(originalPni, updatedAccount.getPrincipalNameIdentifier());
 
     assertEquals(Optional.empty(), accountsManager.findRecentlyDeletedAccountIdentifier(originalPni));
@@ -207,8 +207,8 @@ class AccountsManagerChangeNumberIntegrationTest {
 
   @Test
   void testChangePrincipalSamePrincipal() throws InterruptedException, MismatchedDevicesException {
-    final String originalNumber = "+18005551111";
-    final Account account = AccountsHelper.createAccount(accountsManager, originalNumber);
+    final String originalPrincipal = "user.account1@example.com";
+    final Account account = AccountsHelper.createAccount(accountsManager, originalPrincipal);
 
     final UUID originalUuid = account.getUuid();
     final UUID originalPni = account.getPrincipalNameIdentifier();
@@ -216,15 +216,15 @@ class AccountsManagerChangeNumberIntegrationTest {
     final ECKeyPair pniIdentityKeyPair = ECKeyPair.generate();
 
     accountsManager.changePrincipal(account,
-        originalNumber,
+        originalPrincipal,
         new IdentityKey(pniIdentityKeyPair.getPublicKey()),
         Map.of(Device.PRIMARY_ID, KeysHelper.signedECPreKey(1, pniIdentityKeyPair)),
         Map.of(Device.PRIMARY_ID, KeysHelper.signedKEMPreKey(2, pniIdentityKeyPair)),
         Map.of(Device.PRIMARY_ID, 1));
 
-    final Account updatedAccount = accountsManager.getByPrincipal(originalNumber).orElseThrow();
+    final Account updatedAccount = accountsManager.getByPrincipal(originalPrincipal).orElseThrow();
     assertEquals(originalUuid, updatedAccount.getUuid());
-    assertEquals(originalNumber, updatedAccount.getPrincipal());
+    assertEquals(originalPrincipal, updatedAccount.getPrincipal());
     assertEquals(originalPni, updatedAccount.getPrincipalNameIdentifier());
 
     assertEquals(Optional.empty(), accountsManager.findRecentlyDeletedAccountIdentifier(originalPni));
@@ -233,14 +233,14 @@ class AccountsManagerChangeNumberIntegrationTest {
 
   @Test
   void testChangePrincipalWithPniExtensions() throws InterruptedException, MismatchedDevicesException {
-    final String originalNumber = "+18005551111";
-    final String secondNumber = "+18005552222";
+    final String originalPrincipal = "user.account1@example.com";
+    final String secondPrincipal = "user.account2@example.com";
     final int rotatedPniRegistrationId = 17;
     final ECKeyPair rotatedPniIdentityKeyPair = ECKeyPair.generate();
     final ECSignedPreKey rotatedSignedPreKey = KeysHelper.signedECPreKey(1L, rotatedPniIdentityKeyPair);
     final KEMSignedPreKey rotatedKemSignedPreKey = KeysHelper.signedKEMPreKey(2L, rotatedPniIdentityKeyPair);
     final AccountAttributes accountAttributes = new AccountAttributes(true, rotatedPniRegistrationId + 1, rotatedPniRegistrationId, "test".getBytes(StandardCharsets.UTF_8), null, true, Set.of());
-    final Account account = AccountsHelper.createAccount(accountsManager, originalNumber, accountAttributes);
+    final Account account = AccountsHelper.createAccount(accountsManager, originalPrincipal, accountAttributes);
 
     keysManager.storeEcSignedPreKeys(account.getIdentifier(IdentityType.ACI),
         Device.PRIMARY_ID, KeysHelper.signedECPreKey(1, rotatedPniIdentityKeyPair)).join();
@@ -253,17 +253,17 @@ class AccountsManagerChangeNumberIntegrationTest {
     final Map<Byte, KEMSignedPreKey> kemSignedPreKeys = Map.of(Device.PRIMARY_ID, rotatedKemSignedPreKey);
     final Map<Byte, Integer> registrationIds = Map.of(Device.PRIMARY_ID, rotatedPniRegistrationId);
 
-    final Account updatedAccount = accountsManager.changePrincipal(account, secondNumber, pniIdentityKey, preKeys, kemSignedPreKeys, registrationIds);
+    final Account updatedAccount = accountsManager.changePrincipal(account, secondPrincipal, pniIdentityKey, preKeys, kemSignedPreKeys, registrationIds);
     final UUID secondPni = updatedAccount.getPrincipalNameIdentifier();
 
-    assertTrue(accountsManager.getByPrincipal(originalNumber).isEmpty());
+    assertTrue(accountsManager.getByPrincipal(originalPrincipal).isEmpty());
 
-    assertTrue(accountsManager.getByPrincipal(secondNumber).isPresent());
-    assertEquals(originalUuid, accountsManager.getByPrincipal(secondNumber).map(Account::getUuid).orElseThrow());
+    assertTrue(accountsManager.getByPrincipal(secondPrincipal).isPresent());
+    assertEquals(originalUuid, accountsManager.getByPrincipal(secondPrincipal).map(Account::getUuid).orElseThrow());
     assertNotEquals(originalPni, secondPni);
-    assertEquals(secondPni, accountsManager.getByPrincipal(secondNumber).map(Account::getPrincipalNameIdentifier).orElseThrow());
+    assertEquals(secondPni, accountsManager.getByPrincipal(secondPrincipal).map(Account::getPrincipalNameIdentifier).orElseThrow());
 
-    assertEquals(secondNumber, accountsManager.getByAccountIdentifier(originalUuid).map(Account::getPrincipal).orElseThrow());
+    assertEquals(secondPrincipal, accountsManager.getByAccountIdentifier(originalUuid).map(Account::getPrincipal).orElseThrow());
 
     assertEquals(Optional.empty(), accountsManager.findRecentlyDeletedAccountIdentifier(originalPni));
     assertEquals(Optional.empty(), accountsManager.findRecentlyDeletedAccountIdentifier(secondPni));
@@ -277,10 +277,10 @@ class AccountsManagerChangeNumberIntegrationTest {
 
   @Test
   void testChangePrincipalReturnToOriginal() throws InterruptedException, MismatchedDevicesException {
-    final String originalNumber = "+18005551111";
-    final String secondNumber = "+18005552222";
+    final String originalPrincipal = "user.account1@example.com";
+    final String secondPrincipal = "user.account2@example.com";
 
-    Account account = AccountsHelper.createAccount(accountsManager, originalNumber);
+    Account account = AccountsHelper.createAccount(accountsManager, originalPrincipal);
 
     final UUID originalUuid = account.getUuid();
     final UUID originalPni = account.getPrincipalNameIdentifier();
@@ -289,7 +289,7 @@ class AccountsManagerChangeNumberIntegrationTest {
     final ECKeyPair secondIdentityKeyPair = ECKeyPair.generate();
 
     account = accountsManager.changePrincipal(account,
-        secondNumber,
+        secondPrincipal,
         new IdentityKey(secondIdentityKeyPair.getPublicKey()),
         Map.of(Device.PRIMARY_ID, KeysHelper.signedECPreKey(1, secondIdentityKeyPair)),
         Map.of(Device.PRIMARY_ID, KeysHelper.signedKEMPreKey(2, secondIdentityKeyPair)),
@@ -298,19 +298,19 @@ class AccountsManagerChangeNumberIntegrationTest {
     final UUID secondPni = account.getPrincipalNameIdentifier();
 
     accountsManager.changePrincipal(account,
-        originalNumber,
+        originalPrincipal,
         new IdentityKey(originalIdentityKeyPair.getPublicKey()),
         Map.of(Device.PRIMARY_ID, KeysHelper.signedECPreKey(3, originalIdentityKeyPair)),
         Map.of(Device.PRIMARY_ID, KeysHelper.signedKEMPreKey(4, originalIdentityKeyPair)),
         Map.of(Device.PRIMARY_ID, 2));
 
-    assertTrue(accountsManager.getByPrincipal(originalNumber).isPresent());
-    assertEquals(originalUuid, accountsManager.getByPrincipal(originalNumber).map(Account::getUuid).orElseThrow());
-    assertEquals(originalPni, accountsManager.getByPrincipal(originalNumber).map(Account::getPrincipalNameIdentifier).orElseThrow());
+    assertTrue(accountsManager.getByPrincipal(originalPrincipal).isPresent());
+    assertEquals(originalUuid, accountsManager.getByPrincipal(originalPrincipal).map(Account::getUuid).orElseThrow());
+    assertEquals(originalPni, accountsManager.getByPrincipal(originalPrincipal).map(Account::getPrincipalNameIdentifier).orElseThrow());
 
-    assertTrue(accountsManager.getByPrincipal(secondNumber).isEmpty());
+    assertTrue(accountsManager.getByPrincipal(secondPrincipal).isEmpty());
 
-    assertEquals(originalNumber, accountsManager.getByAccountIdentifier(originalUuid).map(Account::getPrincipal).orElseThrow());
+    assertEquals(originalPrincipal, accountsManager.getByAccountIdentifier(originalUuid).map(Account::getPrincipal).orElseThrow());
 
     assertEquals(Optional.empty(), accountsManager.findRecentlyDeletedAccountIdentifier(originalPni));
     assertEquals(Optional.empty(), accountsManager.findRecentlyDeletedAccountIdentifier(secondPni));
@@ -318,10 +318,10 @@ class AccountsManagerChangeNumberIntegrationTest {
 
   @Test
   void testChangePrincipalContested() throws InterruptedException, MismatchedDevicesException {
-    final String originalNumber = "+18005551111";
-    final String secondNumber = "+18005552222";
+    final String originalPrincipal = "user.account1@example.com";
+    final String secondPrincipal = "user.account2@example.com";
 
-    final Account account = AccountsHelper.createAccount(accountsManager, originalNumber);
+    final Account account = AccountsHelper.createAccount(accountsManager, originalPrincipal);
 
     final UUID originalUuid = account.getUuid();
     final UUID originalPni = account.getPrincipalNameIdentifier();
@@ -329,25 +329,25 @@ class AccountsManagerChangeNumberIntegrationTest {
     final ECKeyPair originalIdentityKeyPair = ECKeyPair.generate();
     final ECKeyPair secondIdentityKeyPair = ECKeyPair.generate();
 
-    final Account existingAccount = AccountsHelper.createAccount(accountsManager, secondNumber);
+    final Account existingAccount = AccountsHelper.createAccount(accountsManager, secondPrincipal);
 
     final UUID existingAccountUuid = existingAccount.getUuid();
 
     accountsManager.changePrincipal(account,
-        secondNumber,
+        secondPrincipal,
         new IdentityKey(secondIdentityKeyPair.getPublicKey()),
         Map.of(Device.PRIMARY_ID, KeysHelper.signedECPreKey(1, secondIdentityKeyPair)),
         Map.of(Device.PRIMARY_ID, KeysHelper.signedKEMPreKey(2, secondIdentityKeyPair)),
         Map.of(Device.PRIMARY_ID, 1));
 
-    final UUID secondPni = accountsManager.getByPrincipal(secondNumber).get().getPrincipalNameIdentifier();
+    final UUID secondPni = accountsManager.getByPrincipal(secondPrincipal).get().getPrincipalNameIdentifier();
 
-    assertTrue(accountsManager.getByPrincipal(originalNumber).isEmpty());
+    assertTrue(accountsManager.getByPrincipal(originalPrincipal).isEmpty());
 
-    assertTrue(accountsManager.getByPrincipal(secondNumber).isPresent());
-    assertEquals(Optional.of(originalUuid), accountsManager.getByPrincipal(secondNumber).map(Account::getUuid));
+    assertTrue(accountsManager.getByPrincipal(secondPrincipal).isPresent());
+    assertEquals(Optional.of(originalUuid), accountsManager.getByPrincipal(secondPrincipal).map(Account::getUuid));
 
-    assertEquals(secondNumber, accountsManager.getByAccountIdentifier(originalUuid).map(Account::getPrincipal).orElseThrow());
+    assertEquals(secondPrincipal, accountsManager.getByAccountIdentifier(originalUuid).map(Account::getPrincipal).orElseThrow());
 
     verify(disconnectionRequestManager).requestDisconnection(argThat(disconnectedAccount ->
         disconnectedAccount.getIdentifier(IdentityType.ACI).equals(existingAccountUuid) && disconnectedAccount != account));
@@ -356,42 +356,42 @@ class AccountsManagerChangeNumberIntegrationTest {
     assertEquals(Optional.empty(), accountsManager.findRecentlyDeletedAccountIdentifier(secondPni));
 
     accountsManager.changePrincipal(accountsManager.getByAccountIdentifier(originalUuid).orElseThrow(),
-        originalNumber,
+        originalPrincipal,
         new IdentityKey(originalIdentityKeyPair.getPublicKey()),
         Map.of(Device.PRIMARY_ID, KeysHelper.signedECPreKey(1, originalIdentityKeyPair)),
         Map.of(Device.PRIMARY_ID, KeysHelper.signedKEMPreKey(2, originalIdentityKeyPair)),
         Map.of(Device.PRIMARY_ID, 1));
 
-    final Account existingAccount2 = AccountsHelper.createAccount(accountsManager, secondNumber);
+    final Account existingAccount2 = AccountsHelper.createAccount(accountsManager, secondPrincipal);
 
     assertEquals(existingAccountUuid, existingAccount2.getUuid());
   }
 
   @Test
   void testChangePrincipalChaining() throws InterruptedException, MismatchedDevicesException {
-    final String originalNumber = "+18005551111";
-    final String secondNumber = "+18005552222";
+    final String originalPrincipal = "user.account1@example.com";
+    final String secondPrincipal = "user.account2@example.com";
 
-    final Account account = AccountsHelper.createAccount(accountsManager, originalNumber);
+    final Account account = AccountsHelper.createAccount(accountsManager, originalPrincipal);
 
     final UUID originalUuid = account.getUuid();
     final UUID originalPni = account.getPrincipalNameIdentifier();
 
-    final Account existingAccount = AccountsHelper.createAccount(accountsManager, secondNumber);
+    final Account existingAccount = AccountsHelper.createAccount(accountsManager, secondPrincipal);
 
     final UUID existingAccountUuid = existingAccount.getUuid();
     final ECKeyPair pniIdentityKeyPair = ECKeyPair.generate();
 
-    final Account changedNumberAccount = accountsManager.changePrincipal(account,
-        secondNumber,
+    final Account changedPrincipalAccount = accountsManager.changePrincipal(account,
+        secondPrincipal,
         new IdentityKey(pniIdentityKeyPair.getPublicKey()),
         Map.of(Device.PRIMARY_ID, KeysHelper.signedECPreKey(1, pniIdentityKeyPair)),
         Map.of(Device.PRIMARY_ID, KeysHelper.signedKEMPreKey(2, pniIdentityKeyPair)),
         Map.of(Device.PRIMARY_ID, 1));
 
-    final UUID secondPni = changedNumberAccount.getPrincipalNameIdentifier();
+    final UUID secondPni = changedPrincipalAccount.getPrincipalNameIdentifier();
 
-    final Account reRegisteredAccount = AccountsHelper.createAccount(accountsManager, originalNumber);
+    final Account reRegisteredAccount = AccountsHelper.createAccount(accountsManager, originalPrincipal);
 
     assertEquals(existingAccountUuid, reRegisteredAccount.getUuid());
     assertEquals(originalPni, reRegisteredAccount.getPrincipalNameIdentifier());
@@ -401,8 +401,8 @@ class AccountsManagerChangeNumberIntegrationTest {
 
     final ECKeyPair reRegisteredPniIdentityKeyPair = ECKeyPair.generate();
 
-    final Account changedNumberReRegisteredAccount = accountsManager.changePrincipal(reRegisteredAccount,
-        secondNumber,
+    final Account changedPrincipalReRegisteredAccount = accountsManager.changePrincipal(reRegisteredAccount,
+        secondPrincipal,
         new IdentityKey(reRegisteredPniIdentityKeyPair.getPublicKey()),
         Map.of(Device.PRIMARY_ID, KeysHelper.signedECPreKey(1, reRegisteredPniIdentityKeyPair)),
         Map.of(Device.PRIMARY_ID, KeysHelper.signedKEMPreKey(2, reRegisteredPniIdentityKeyPair)),
@@ -410,6 +410,6 @@ class AccountsManagerChangeNumberIntegrationTest {
 
     assertEquals(Optional.of(originalUuid), accountsManager.findRecentlyDeletedAccountIdentifier(originalPni));
     assertEquals(Optional.empty(), accountsManager.findRecentlyDeletedAccountIdentifier(secondPni));
-    assertEquals(secondPni, changedNumberReRegisteredAccount.getPrincipalNameIdentifier());
+    assertEquals(secondPni, changedPrincipalReRegisteredAccount.getPrincipalNameIdentifier());
   }
 }

@@ -30,7 +30,7 @@ class ReportMessageManagerTest {
 
   private ReportMessageManager reportMessageManager;
 
-  private String sourceNumber;
+  private String sourcePrincipal;
   private UUID sourceAci;
   private UUID sourcePni;
   private Account sourceAccount;
@@ -47,7 +47,7 @@ class ReportMessageManagerTest {
     reportMessageManager = new ReportMessageManager(reportMessageDynamoDb,
         RATE_LIMIT_CLUSTER_EXTENSION.getRedisCluster(), Duration.ofDays(1));
 
-    sourceNumber = "+15105551111";
+    sourcePrincipal = "user.account@example.com";
     sourceAci = UUID.randomUUID();
     sourcePni = UUID.randomUUID();
     messageGuid = UUID.randomUUID();
@@ -55,7 +55,7 @@ class ReportMessageManagerTest {
 
     sourceAccount = mock(Account.class);
     when(sourceAccount.getUuid()).thenReturn(sourceAci);
-    when(sourceAccount.getPrincipal()).thenReturn(sourceNumber);
+    when(sourceAccount.getPrincipal()).thenReturn(sourcePrincipal);
     when(sourceAccount.getPrincipalNameIdentifier()).thenReturn(sourcePni);
   }
 
@@ -81,17 +81,17 @@ class ReportMessageManagerTest {
     reportMessageManager.addListener(listener);
 
     when(reportMessageDynamoDb.remove(any())).thenReturn(false);
-    reportMessageManager.report(Optional.of(sourceNumber), Optional.of(sourceAci), Optional.of(sourcePni), messageGuid,
+    reportMessageManager.report(Optional.of(sourcePrincipal), Optional.of(sourceAci), Optional.of(sourcePni), messageGuid,
         reporterUuid, Optional.empty(), "user-agent");
 
     assertEquals(0, reportMessageManager.getRecentReportCount(sourceAccount));
 
     when(reportMessageDynamoDb.remove(any())).thenReturn(true);
-    reportMessageManager.report(Optional.of(sourceNumber), Optional.of(sourceAci), Optional.of(sourcePni), messageGuid,
+    reportMessageManager.report(Optional.of(sourcePrincipal), Optional.of(sourceAci), Optional.of(sourcePni), messageGuid,
         reporterUuid, Optional.empty(), "user-agent");
 
     assertEquals(1, reportMessageManager.getRecentReportCount(sourceAccount));
-    verify(listener).handleMessageReported(sourceNumber, messageGuid, reporterUuid, Optional.empty());
+    verify(listener).handleMessageReported(sourcePrincipal, messageGuid, reporterUuid, Optional.empty());
   }
 
   @Test
@@ -100,7 +100,7 @@ class ReportMessageManagerTest {
     assertEquals(0, reportMessageManager.getRecentReportCount(sourceAccount));
 
     for (int i = 0; i < 100; i++) {
-      reportMessageManager.report(Optional.of(sourceNumber), Optional.of(sourceAci), Optional.of(sourcePni),
+      reportMessageManager.report(Optional.of(sourcePrincipal), Optional.of(sourceAci), Optional.of(sourcePni),
           messageGuid, UUID.randomUUID(), Optional.empty(), "user-agent");
     }
 
@@ -113,7 +113,7 @@ class ReportMessageManagerTest {
     assertEquals(0, reportMessageManager.getRecentReportCount(sourceAccount));
 
     for (int i = 0; i < 100; i++) {
-      reportMessageManager.report(Optional.of(sourceNumber), Optional.of(sourceAci), Optional.of(sourcePni),
+      reportMessageManager.report(Optional.of(sourcePrincipal), Optional.of(sourceAci), Optional.of(sourcePni),
           messageGuid,
           reporterUuid, Optional.empty(), "user-agent");
     }

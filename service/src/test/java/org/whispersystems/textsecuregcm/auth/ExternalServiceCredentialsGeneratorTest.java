@@ -23,7 +23,7 @@ import org.whispersystems.textsecuregcm.util.MutableClock;
 class ExternalServiceCredentialsGeneratorTest {
   private static final String PREFIX = "prefix";
 
-  private static final String E164 = "+14152222222";
+  private static final String PRINCIPAL = "user.account@example.com";
 
   private static final long TIME_SECONDS = 12345;
 
@@ -40,7 +40,7 @@ class ExternalServiceCredentialsGeneratorTest {
       .withClock(clock)
       .build();
 
-  private static final ExternalServiceCredentials standardCredentials = standardGenerator.generateFor(E164);
+  private static final ExternalServiceCredentials standardCredentials = standardGenerator.generateFor(PRINCIPAL);
 
   private static final ExternalServiceCredentialsGenerator usernameIsTimestampGenerator = ExternalServiceCredentialsGenerator
       .builder(new byte[32])
@@ -74,16 +74,16 @@ class ExternalServiceCredentialsGeneratorTest {
         .builder(new byte[32])
         .withUserDerivationKey(new byte[32])
         .build();
-    final ExternalServiceCredentials credentials = generator.generateFor(E164);
-    assertNotEquals(credentials.username(), E164);
-    assertFalse(credentials.password().startsWith(E164));
+    final ExternalServiceCredentials credentials = generator.generateFor(PRINCIPAL);
+    assertNotEquals(credentials.username(), PRINCIPAL);
+    assertFalse(credentials.password().startsWith(PRINCIPAL));
     assertEquals(credentials.password().split(":").length, 3);
   }
 
   @Test
   void testGenerateNoDerivedUsername() {
-    assertEquals(standardCredentials.username(), E164);
-    assertTrue(standardCredentials.password().startsWith(E164));
+    assertEquals(standardCredentials.username(), PRINCIPAL);
+    assertTrue(standardCredentials.password().startsWith(PRINCIPAL));
     assertEquals(standardCredentials.password().split(":").length, 3);
   }
 
@@ -94,8 +94,8 @@ class ExternalServiceCredentialsGeneratorTest {
         .prependUsername(false)
         .withClock(clock)
         .build();
-    final ExternalServiceCredentials credentials = generator.generateFor(E164);
-    assertEquals(credentials.username(), E164);
+    final ExternalServiceCredentials credentials = generator.generateFor(PRINCIPAL);
+    assertEquals(credentials.username(), PRINCIPAL);
     assertTrue(credentials.password().startsWith(TIME_SECONDS_STRING));
     assertEquals(credentials.password().split(":").length, 2);
   }
@@ -123,7 +123,7 @@ class ExternalServiceCredentialsGeneratorTest {
   @Test
   public void testValidateInvalid() throws Exception {
     final ExternalServiceCredentials corruptedStandardUsername = new ExternalServiceCredentials(
-        standardCredentials.username(), standardCredentials.password().replace(E164, E164 + "0"));
+        standardCredentials.username(), standardCredentials.password().replace(PRINCIPAL, PRINCIPAL + "0"));
     final ExternalServiceCredentials corruptedStandardTimestamp = new ExternalServiceCredentials(
         standardCredentials.username(), standardCredentials.password().replace(TIME_SECONDS_STRING, TIME_SECONDS_STRING + "0"));
     final ExternalServiceCredentials corruptedStandardPassword = new ExternalServiceCredentials(
@@ -155,7 +155,7 @@ class ExternalServiceCredentialsGeneratorTest {
   @Test
   public void testGetIdentityFromSignature() {
     final String identity = standardGenerator.identityFromSignature(standardCredentials.password()).orElseThrow();
-    assertEquals(E164, identity);
+    assertEquals(PRINCIPAL, identity);
   }
 
   @Test
@@ -170,9 +170,9 @@ class ExternalServiceCredentialsGeneratorTest {
             .withUserDerivationKey(new byte[32])
             .withDerivedUsernameTruncateLength(14)
             .build();
-    final ExternalServiceCredentials creds = generator.generateFor(E164);
+    final ExternalServiceCredentials creds = generator.generateFor(PRINCIPAL);
     assertEquals(14*2 /* 2 chars per byte, because hex */, creds.username().length());
-    assertEquals("805b84df7eff1e8fe1baf0c6e838", creds.username());
+    assertEquals("cc0e40883d4ae52d054535949358", creds.username());
     generator.validateAndGetTimestamp(creds);
   }
 }

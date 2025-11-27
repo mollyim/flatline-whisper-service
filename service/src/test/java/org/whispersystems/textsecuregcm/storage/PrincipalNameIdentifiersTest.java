@@ -124,8 +124,8 @@ class PrincipalNameIdentifiersTest {
 
   @Test
   void conflictOnAlternatePrincipal() {
-    final List<String> principals = List.of("+18005551234", "+18005556789");
-    // Stale view of database where both numbers have no PNI
+    final List<String> principals = List.of("user.account@example.com", "different.user.account@example.com");
+    // Stale view of database where both principals have no PNI
     final Map<String, UUID> existingAssociations = Collections.emptyMap();
 
     // the alternate principal has a PNI added

@@ -173,7 +173,7 @@ class AccountsManagerUsernameIntegrationTest {
 
   @Test
   void testNoUsernames() throws InterruptedException {
-    final Account account = AccountsHelper.createAccount(accountsManager, "+18005551111");
+    final Account account = AccountsHelper.createAccount(accountsManager, "user.account@example.com");
 
     List<byte[]> usernameHashes = List.of(USERNAME_HASH_1, USERNAME_HASH_2);
     int i = 0;
@@ -201,7 +201,7 @@ class AccountsManagerUsernameIntegrationTest {
 
   @Test
   void testReserveUsernameGetFirstAvailableChoice() throws InterruptedException, UsernameHashNotAvailableException {
-    final Account account = AccountsHelper.createAccount(accountsManager, "+18005551111");
+    final Account account = AccountsHelper.createAccount(accountsManager, "user.account@example.com");
 
     ArrayList<byte[]> usernameHashes = new ArrayList<>(Arrays.asList(USERNAME_HASH_1, USERNAME_HASH_2));
     for (byte[] hash : usernameHashes) {
@@ -228,7 +228,7 @@ class AccountsManagerUsernameIntegrationTest {
 
   @Test
   public void testReserveConfirmClear() throws InterruptedException {
-    Account account = AccountsHelper.createAccount(accountsManager, "+18005551111");
+    Account account = AccountsHelper.createAccount(accountsManager, "user.account@example.com");
 
     // reserve
     AccountsManager.UsernameReservation reservation =
@@ -257,7 +257,7 @@ class AccountsManagerUsernameIntegrationTest {
 
   @Test
   public void testHold() throws InterruptedException {
-    Account account = AccountsHelper.createAccount(accountsManager, "+18005551111");
+    Account account = AccountsHelper.createAccount(accountsManager, "user.account1@example.com");
 
     AccountsManager.UsernameReservation reservation =
         accountsManager.reserveUsernameHash(account, List.of(USERNAME_HASH_1)).join();
@@ -275,7 +275,7 @@ class AccountsManagerUsernameIntegrationTest {
 
     assertThat(accountsManager.getByUsernameHash(reservation.reservedUsernameHash()).join()).isEmpty();
 
-    Account account2 = AccountsHelper.createAccount(accountsManager, "+18005552222");
+    Account account2 = AccountsHelper.createAccount(accountsManager, "user.account2@example.com");
     CompletableFutureTestUtil.assertFailsWithCause(UsernameHashNotAvailableException.class,
         accountsManager.reserveUsernameHash(account2, List.of(USERNAME_HASH_1)),
         "account2 should not be able to reserve a held hash");
@@ -283,7 +283,7 @@ class AccountsManagerUsernameIntegrationTest {
 
   @Test
   public void testReservationLapsed() throws InterruptedException {
-    final Account account = AccountsHelper.createAccount(accountsManager, "+18005551111");
+    final Account account = AccountsHelper.createAccount(accountsManager, "user.account1@example.com");
 
     AccountsManager.UsernameReservation reservation1 =
         accountsManager.reserveUsernameHash(account, List.of(USERNAME_HASH_1)).join();
@@ -299,7 +299,7 @@ class AccountsManagerUsernameIntegrationTest {
         .build());
 
     // a different account should be able to reserve it
-    Account account2 = AccountsHelper.createAccount(accountsManager, "+18005552222");
+    Account account2 = AccountsHelper.createAccount(accountsManager, "user.account2@example.com");
 
     final AccountsManager.UsernameReservation reservation2 =
         accountsManager.reserveUsernameHash(account2, List.of(USERNAME_HASH_1)).join();
@@ -314,7 +314,7 @@ class AccountsManagerUsernameIntegrationTest {
 
   @Test
   void testUsernameSetReserveAnotherClearSetReserved() throws InterruptedException {
-    Account account = AccountsHelper.createAccount(accountsManager, "+18005551111");
+    Account account = AccountsHelper.createAccount(accountsManager, "user.account@example.com");
 
     // Set username hash
     final AccountsManager.UsernameReservation reservation1 =
@@ -345,14 +345,14 @@ class AccountsManagerUsernameIntegrationTest {
 
   @Test
   public void testReclaim() throws InterruptedException {
-    Account account = AccountsHelper.createAccount(accountsManager, "+18005551111");
+    Account account = AccountsHelper.createAccount(accountsManager, "user.account@example.com");
     final AccountsManager.UsernameReservation reservation1 =
         accountsManager.reserveUsernameHash(account, List.of(USERNAME_HASH_1)).join();
     account = accountsManager.confirmReservedUsernameHash(reservation1.account(), USERNAME_HASH_1, ENCRYPTED_USERNAME_1)
         .join();
 
     // "reclaim" the account by re-registering
-    Account reclaimed = AccountsHelper.createAccount(accountsManager, "+18005551111");
+    Account reclaimed = AccountsHelper.createAccount(accountsManager, "user.account@example.com");
 
     // the username should still be reserved, but no longer on our account.
     assertThat(reclaimed.getUsernameHash()).isEmpty();
@@ -367,7 +367,7 @@ class AccountsManagerUsernameIntegrationTest {
 
   @Test
   public void testUsernameLinks() throws InterruptedException, AccountAlreadyExistsException {
-    final Account account = AccountsHelper.createAccount(accountsManager, "+18005551111");
+    final Account account = AccountsHelper.createAccount(accountsManager, "user.account@example.com");
 
     account.setUsernameHash(TestRandomUtil.nextBytes(16));
     accounts.create(account, Collections.emptyList());

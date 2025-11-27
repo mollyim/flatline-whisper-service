@@ -7,7 +7,6 @@ package org.whispersystems.textsecuregcm.grpc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
@@ -34,10 +33,7 @@ class ExternalServiceCredentialsAnonymousGrpcServiceTest extends
 
   private static final UUID USER_UUID = UUID.randomUUID();
 
-  private static final String USER_PRINCIPAL = PhoneNumberUtil.getInstance().format(
-      PhoneNumberUtil.getInstance().getExampleNumber("US"),
-      PhoneNumberUtil.PhoneNumberFormat.E164
-  );
+  private static final String USER_PRINCIPAL = "user.account@example.com";
 
   private static final MutableClock CLOCK = MockUtils.mutableClock(0);
 

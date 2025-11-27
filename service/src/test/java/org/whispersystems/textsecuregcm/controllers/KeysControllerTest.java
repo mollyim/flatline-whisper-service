@@ -92,9 +92,9 @@ import org.whispersystems.textsecuregcm.util.TestClock;
 @ExtendWith(DropwizardExtensionsSupport.class)
 class KeysControllerTest {
 
-  private static final String EXISTS_NUMBER = "+14152222222";
-  private static final UUID   EXISTS_UUID   = UUID.randomUUID();
-  private static final UUID   EXISTS_PNI    = UUID.randomUUID();
+  private static final String EXISTS_PRINCIPAL = "user.account@example.com";
+  private static final UUID   EXISTS_UUID      = UUID.randomUUID();
+  private static final UUID   EXISTS_PNI       = UUID.randomUUID();
   private static final AciServiceIdentifier EXISTS_ACI = new AciServiceIdentifier(EXISTS_UUID);
   private static final PniServiceIdentifier EXISTS_PNI_SERVICE_ID = new PniServiceIdentifier(EXISTS_PNI);
 
@@ -217,7 +217,7 @@ class KeysControllerTest {
     when(existsAccount.getDevices()).thenReturn(List.of(sampleDevice));
     when(existsAccount.getIdentityKey(IdentityType.ACI)).thenReturn(IDENTITY_KEY);
     when(existsAccount.getIdentityKey(IdentityType.PNI)).thenReturn(PNI_IDENTITY_KEY);
-    when(existsAccount.getPrincipal()).thenReturn(EXISTS_NUMBER);
+    when(existsAccount.getPrincipal()).thenReturn(EXISTS_PRINCIPAL);
     when(existsAccount.getUnidentifiedAccessKey()).thenReturn(Optional.of("1337".getBytes()));
 
     when(accounts.getByServiceIdentifier(any())).thenReturn(Optional.empty());
@@ -813,7 +813,7 @@ class KeysControllerTest {
   }
 
   @Test
-  void putKeysByprincipalNameIdentifierTestV2() {
+  void putKeysByPrincipalNameIdentifierTestV2() {
     final ECPreKey preKey = KeysHelper.ecPreKey(31337);
     final ECSignedPreKey signedPreKey = KeysHelper.signedECPreKey(31338, AuthHelper.VALID_PNI_IDENTITY_KEY_PAIR);
 
@@ -838,7 +838,7 @@ class KeysControllerTest {
   }
 
   @Test
-  void putKeysByprincipalNameIdentifierPqTestV2() {
+  void putKeysByPrincipalNameIdentifierPqTestV2() {
     final ECPreKey preKey = KeysHelper.ecPreKey(31337);
     final ECSignedPreKey signedPreKey = KeysHelper.signedECPreKey(31338, AuthHelper.VALID_PNI_IDENTITY_KEY_PAIR);
     final KEMSignedPreKey pqPreKey = KeysHelper.signedKEMPreKey(31339, AuthHelper.VALID_PNI_IDENTITY_KEY_PAIR);

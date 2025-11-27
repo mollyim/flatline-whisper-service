@@ -239,25 +239,25 @@ public class AccountsHelper {
     return argThat(other -> other.getUuid().equals(value.getUuid()));
   }
 
-  public static Account createAccount(final AccountsManager accountsManager, final String e164)
+  public static Account createAccount(final AccountsManager accountsManager, final String principal)
       throws InterruptedException {
 
-    return createAccount(accountsManager, e164, new AccountAttributes());
+    return createAccount(accountsManager, principal, new AccountAttributes());
   }
 
-  public static Account createAccount(final AccountsManager accountsManager, final String e164, final AccountAttributes accountAttributes)
+  public static Account createAccount(final AccountsManager accountsManager, final String principal, final AccountAttributes accountAttributes)
       throws InterruptedException {
 
-    return createAccount(accountsManager, e164, accountAttributes, ECKeyPair.generate(), ECKeyPair.generate());
+    return createAccount(accountsManager, principal, accountAttributes, ECKeyPair.generate(), ECKeyPair.generate());
   }
 
   public static Account createAccount(final AccountsManager accountsManager,
-      final String e164,
+      final String principal,
       final AccountAttributes accountAttributes,
       final ECKeyPair aciKeyPair,
       final ECKeyPair pniKeyPair) throws InterruptedException {
 
-    return accountsManager.create(e164,
+    return accountsManager.create(principal,
         accountAttributes,
         new ArrayList<>(),
         new IdentityKey(aciKeyPair.getPublicKey()),
