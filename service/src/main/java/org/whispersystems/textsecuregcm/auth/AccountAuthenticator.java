@@ -41,8 +41,10 @@ public class AccountAuthenticator implements Authenticator<BasicCredentials, Aut
   private static final Counter OLD_TOKEN_VERSION_COUNTER =
       Metrics.counter(name(AccountAuthenticator.class, "oldTokenVersionCounter"));
 
+  // FLT(uoemai): This separator used to be "." for phone numbers.
+  //              Since "." is allowed in the principal, it has been replaced with the null byte.
   @VisibleForTesting
-  static final char DEVICE_ID_SEPARATOR = '.';
+  static final char DEVICE_ID_SEPARATOR = '\0';
 
   private final AccountsManager accountsManager;
   private final Clock clock;

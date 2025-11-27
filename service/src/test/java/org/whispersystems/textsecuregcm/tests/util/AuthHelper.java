@@ -221,7 +221,9 @@ public class AuthHelper {
   }
 
   public static String getAuthHeader(UUID uuid, byte deviceId, String password) {
-    return HeaderUtils.basicAuthHeader(uuid.toString() + "." + deviceId, password);
+    // FLT(uoemai): This separator used to be "." for phone numbers.
+    //              Since "." is allowed in the principal, it has been replaced with the null byte.
+    return HeaderUtils.basicAuthHeader(uuid.toString() + "\0" + deviceId, password);
   }
 
   public static String getAuthHeader(UUID uuid, String password) {

@@ -50,7 +50,9 @@ public class BasicAuthorizationHeader {
         throw new InvalidAuthorizationHeaderException("Bad decoded value: " + credentials);
       }
 
-      final int credentialSeparatorIndex = credentials.indexOf(':');
+      // FLT(uoemai): This ised to find the first occurrence of ":" as split the string at that point.
+      //              Since ":" is allowed in the principal, the credential is assumed to be after the last instance.
+      final int credentialSeparatorIndex = credentials.lastIndexOf(':');
 
       if (credentialSeparatorIndex == -1) {
         throw new InvalidAuthorizationHeaderException("Badly-formatted credentials: " + credentials);

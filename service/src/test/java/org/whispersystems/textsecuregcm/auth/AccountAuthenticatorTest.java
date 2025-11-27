@@ -60,9 +60,10 @@ class AccountAuthenticatorTest {
     accountAuthenticator = new AccountAuthenticator(accountsManager, clock);
 
     // We use static UUIDs here because the UUID affects the "date last seen" offset
-    acct1 = AccountsHelper.generateTestAccount("+14088675309", UUID.fromString("c139cb3e-f70c-4460-b221-815e8bdf778f"), UUID.randomUUID(), List.of(generateTestDevice(yesterday)), null);
-    acct2 = AccountsHelper.generateTestAccount("+14088675310", UUID.fromString("30018a41-2764-4bc7-a935-775dfef84ad1"), UUID.randomUUID(), List.of(generateTestDevice(yesterday)), null);
-    oldAccount = AccountsHelper.generateTestAccount("+14088675311", UUID.fromString("adfce52b-9299-4c25-9c51-412fb420c6a6"), UUID.randomUUID(), List.of(generateTestDevice(oldTime)), null);
+    // FLT(uoemai): Ensure that principals with "." and ":" characters can be parsed for authentication.
+    acct1 = AccountsHelper.generateTestAccount("user.account1@example.com", UUID.fromString("c139cb3e-f70c-4460-b221-815e8bdf778f"), UUID.randomUUID(), List.of(generateTestDevice(yesterday)), null);
+    acct2 = AccountsHelper.generateTestAccount("user:account:2/example", UUID.fromString("30018a41-2764-4bc7-a935-775dfef84ad1"), UUID.randomUUID(), List.of(generateTestDevice(yesterday)), null);
+    oldAccount = AccountsHelper.generateTestAccount("old.account@example.com", UUID.fromString("adfce52b-9299-4c25-9c51-412fb420c6a6"), UUID.randomUUID(), List.of(generateTestDevice(oldTime)), null);
 
     AccountsHelper.setupMockUpdate(accountsManager);
   }
@@ -199,8 +200,10 @@ class AccountAuthenticatorTest {
     when(credentials.verify(password)).thenReturn(true);
     when(credentials.getVersion()).thenReturn(SaltedTokenHash.CURRENT_VERSION);
 
+    // FLT(uoemai): This separator used to be "." for phone numbers.
+    //              Since "." is allowed in the principal, it has been replaced with the null byte.
     final Optional<AuthenticatedDevice> maybeAuthenticatedAccount =
-        accountAuthenticator.authenticate(new BasicCredentials(uuid + "." + deviceId, password));
+        accountAuthenticator.authenticate(new BasicCredentials(uuid + "\0" + deviceId, password));
 
     assertThat(maybeAuthenticatedAccount).isPresent();
     assertThat(maybeAuthenticatedAccount.orElseThrow().accountIdentifier()).isEqualTo(uuid);
@@ -302,8 +305,10 @@ class AccountAuthenticatorTest {
     when(credentials.verify(password)).thenReturn(true);
     when(credentials.getVersion()).thenReturn(SaltedTokenHash.CURRENT_VERSION);
 
+    // FLT(uoemai): This separator used to be "." for phone numbers.
+    //              Since "." is allowed in the principal, it has been replaced with the null byte.
     final Optional<AuthenticatedDevice> maybeAuthenticatedAccount =
-        accountAuthenticator.authenticate(new BasicCredentials(uuid + "." + (deviceId + 1), password));
+        accountAuthenticator.authenticate(new BasicCredentials(uuid + "\0" + (deviceId + 1), password));
 
     assertThat(maybeAuthenticatedAccount).isEmpty();
     verify(account).getDevice((byte) (deviceId + 1));
@@ -352,9 +357,9 @@ class AccountAuthenticatorTest {
   private static Stream<String> testAuthenticateMalformedCredentials() {
     return Stream.of(
         "",
-        ".4",
         "This is definitely not a valid UUID",
-        UUID.randomUUID() + ".");
+        "\0" + UUID.randomUUID(),
+        UUID.randomUUID() + "\0");
   }
 
   @ParameterizedTest
@@ -371,15 +376,17 @@ class AccountAuthenticatorTest {
     return Stream.of(
         Arguments.of("", "", Device.PRIMARY_ID),
         Arguments.of("test", "test", Device.PRIMARY_ID),
-        Arguments.of("test.7", "test", (byte) 7));
+        // FLT(uoemai): Test that principals can safely contain "." and ":".
+        Arguments.of("test.period" + "\0" + "7", "test.period", (byte) 7),
+        Arguments.of("test:colon" + "\0" + "7", "test:colon", (byte) 7));
   }
 
   @ParameterizedTest
   @ValueSource(strings = {
-      ".",
-      ".....",
-      "test.7.8",
-      "test."
+      "\0",
+      "\0\0\0\0\0",
+      "test\0" + "7" + "\0" + "8",
+      "test\0"
   })
   void testGetIdentifierAndDeviceIdMalformed(final String malformedUsername) {
     assertThrows(IllegalArgumentException.class,
