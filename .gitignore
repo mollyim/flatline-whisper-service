@@ -31,3 +31,5 @@ deployer.log
 .classpath
 .settings
 .DS_Store
+*.swp
+*.swo
