@@ -51,8 +51,11 @@ import org.apache.http.HttpStatus;
 import org.glassfish.jersey.server.ServerProperties;
 import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -602,6 +605,7 @@ class AccountControllerV2Test {
   }
 
   @Nested
+  @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
   class PrincipalDiscoverability {
 
     @BeforeEach
@@ -610,22 +614,7 @@ class AccountControllerV2Test {
       when(accountsManager.getByAccountIdentifier(AuthHelper.VALID_UUID)).thenReturn(Optional.of(AuthHelper.VALID_ACCOUNT));
     }
 
-    @Test
-    void testSetPrincipalDiscoverability() {
-      Response response = resources.getJerseyTest()
-          .target("/v2/accounts/principal_discoverability")
-          .request()
-          .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
-          .put(Entity.json(new PrincipalDiscoverabilityRequest(true)));
-
-      assertThat(response.getStatus()).isEqualTo(204);
-
-      ArgumentCaptor<Boolean> discoverabilityCapture = ArgumentCaptor.forClass(Boolean.class);
-      verify(AuthHelper.VALID_ACCOUNT).setDiscoverableByPrincipal(discoverabilityCapture.capture());
-      assertThat(discoverabilityCapture.getValue()).isTrue();
-    }
-
-    @Test
+    @Test @Order(1)
     void testSetNullPrincipalDiscoverability() {
       Response response = resources.getJerseyTest()
           .target("/v2/accounts/principal_discoverability")
@@ -640,6 +629,21 @@ class AccountControllerV2Test {
 
       assertThat(response.getStatus()).isEqualTo(422);
       verify(AuthHelper.VALID_ACCOUNT, never()).setDiscoverableByPrincipal(anyBoolean());
+    }
+
+    @Test @Order(2)
+    void testSetPrincipalDiscoverability() {
+      Response response = resources.getJerseyTest()
+          .target("/v2/accounts/principal_discoverability")
+          .request()
+          .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
+          .put(Entity.json(new PrincipalDiscoverabilityRequest(true)));
+
+      assertThat(response.getStatus()).isEqualTo(204);
+
+      ArgumentCaptor<Boolean> discoverabilityCapture = ArgumentCaptor.forClass(Boolean.class);
+      verify(AuthHelper.VALID_ACCOUNT).setDiscoverableByPrincipal(discoverabilityCapture.capture());
+      assertThat(discoverabilityCapture.getValue()).isTrue();
     }
 
     @ParameterizedTest

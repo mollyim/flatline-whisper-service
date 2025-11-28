@@ -909,7 +909,7 @@ public class MessageController {
         sourcePni = accountsManager.findRecentlyDeletedprincipalNameIdentifier(sourceAci.get());
         sourcePrincipal = sourcePni.flatMap(pni ->
             // FLT(uoemai): Although this logic is kept for compatibility and future proofing,
-            //              only a single cannonical principal should be associated with a PNI.
+            //              only a single canonical principal should be associated with a PNI.
             Util.getCanonicalPrincipal(principalNameIdentifiers.getPrincipal(pni).join()));
       } else {
         sourcePrincipal = sourceAccount.map(Account::getPrincipal);
