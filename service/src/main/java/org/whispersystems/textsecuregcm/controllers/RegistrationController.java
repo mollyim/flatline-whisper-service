@@ -61,8 +61,6 @@ public class RegistrationController {
       .register(Metrics.globalRegistry);
 
   private static final String ACCOUNT_CREATED_COUNTER_NAME = name(RegistrationController.class, "accountCreated");
-  private static final String COUNTRY_CODE_TAG_NAME = "countryCode";
-  private static final String REGION_CODE_TAG_NAME = "regionCode";
   private static final String VERIFICATION_TYPE_TAG_NAME = "verification";
 
   private final AccountsManager accounts;
