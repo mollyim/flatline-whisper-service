@@ -1173,7 +1173,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         new VerificationController(registrationServiceClient, new VerificationSessionManager(verificationSessions),
             pushNotificationManager, registrationCaptchaManager, registrationRecoveryPasswordsManager,
             principalNameIdentifiers, rateLimiters, accountsManager, registrationFraudChecker,
-            dynamicConfigurationManager, clock)
+            dynamicConfigurationManager, config.getVerificationConfiguration(), clock)
     );
     // FLT(uoemai): All forms of payment are disabled in the prototype.
     // if (config.getSubscription() != null && config.getOneTimeDonations() != null) {

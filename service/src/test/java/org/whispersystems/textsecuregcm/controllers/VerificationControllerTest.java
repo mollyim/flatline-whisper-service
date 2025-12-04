@@ -59,9 +59,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.whispersystems.textsecuregcm.captcha.AssessmentResult;
 import org.whispersystems.textsecuregcm.captcha.RegistrationCaptchaManager;
+import org.whispersystems.textsecuregcm.configuration.VerificationConfiguration;
+import org.whispersystems.textsecuregcm.configuration.VerificationProviderConfiguration;
 import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicConfiguration;
 import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicRegistrationConfiguration;
 import org.whispersystems.textsecuregcm.entities.RegistrationServiceSession;
+import org.whispersystems.textsecuregcm.entities.VerificationProvidersResponse;
+import org.whispersystems.textsecuregcm.entities.VerificationProvidersResponseItem;
 import org.whispersystems.textsecuregcm.entities.VerificationSessionResponse;
 import org.whispersystems.textsecuregcm.limits.RateLimiter;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
@@ -99,6 +103,23 @@ class VerificationControllerTest {
       PhoneNumberUtil.getInstance().getExampleNumber("US"),
       PhoneNumberUtil.PhoneNumberFormat.E164);
 
+  private static final VerificationProviderConfiguration PROVIDER_1 = new VerificationProviderConfiguration(
+      "example-1",
+      "Example 1",
+      "https://auth1.example.com",
+      "https://auth1.example.com/api/oidc/authorization",
+      "https://auth1.example.com/api/oidc/pushed-authorization-request",
+      "https://auth1.example.com/.well-known/jwks.json",
+      "flatline", "openid profile", "sub");
+  private static final VerificationProviderConfiguration PROVIDER_2 = new VerificationProviderConfiguration(
+      "example-2",
+      "Example 2",
+      "https://auth2.example.com",
+      "https://auth2.example.com/api/oidc/authorization",
+      "https://auth2.example.com/api/oidc/pushed-authorization-request",
+      "file:///opt/flatline/oidc/example-2/jwks.json",
+      "flatline", "openid email profile", "email");
+
   private static final UUID PNI = UUID.randomUUID();
   private final RegistrationServiceClient registrationServiceClient = mock(RegistrationServiceClient.class);
   private final VerificationSessionManager verificationSessionManager = mock(VerificationSessionManager.class);
@@ -116,6 +137,7 @@ class VerificationControllerTest {
   private final DynamicConfigurationManager<DynamicConfiguration> dynamicConfigurationManager = mock(
       DynamicConfigurationManager.class);
   private final DynamicConfiguration dynamicConfiguration = mock(DynamicConfiguration.class);
+  private final VerificationConfiguration verificationConfiguration = mock(VerificationConfiguration.class);
 
   private final ResourceExtension resources = ResourceExtension.builder()
       .addProperty(ServerProperties.UNWRAP_COMPLETION_STAGE_IN_WRITER_ENABLE, Boolean.TRUE)
@@ -130,7 +152,7 @@ class VerificationControllerTest {
       .addResource(
           new VerificationController(registrationServiceClient, verificationSessionManager, pushNotificationManager,
               registrationCaptchaManager, registrationRecoveryPasswordsManager, principalNameIdentifiers, rateLimiters, accountsManager,
-              RegistrationFraudChecker.noop(), dynamicConfigurationManager, clock))
+              RegistrationFraudChecker.noop(), dynamicConfigurationManager, verificationConfiguration, clock))
       .build();
 
   @BeforeEach
@@ -145,11 +167,12 @@ class VerificationControllerTest {
         .thenReturn(new DynamicRegistrationConfiguration(false));
     when(dynamicConfigurationManager.getConfiguration())
         .thenReturn(dynamicConfiguration);
+    when(verificationConfiguration.getProviders())
+        .thenReturn(List.of(PROVIDER_1, PROVIDER_2));
     when(principalNameIdentifiers.getPrincipalNameIdentifier(PRINCIPAL))
         .thenReturn(CompletableFuture.completedFuture(PNI));
   }
 
-  @ParameterizedTest
   @MethodSource
   void createSessionUnprocessableRequestJson(final String principal, final String pushToken, final String pushTokenType) {
 
@@ -161,6 +184,36 @@ class VerificationControllerTest {
       assertEquals(400, response.getStatus());
     }
 
+  }
+
+  @Test
+  void getVerificationProviders() {
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/")
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.get()) {
+      assertEquals(HttpStatus.SC_OK, response.getStatus());
+
+      final VerificationProvidersResponse verificationProvidersResponse = response.readEntity(
+          VerificationProvidersResponse.class);
+      final List<VerificationProvidersResponseItem> providers = verificationProvidersResponse.getProviders();
+      assertEquals(2, providers.size());
+
+      final VerificationProvidersResponseItem provider1 = providers.get(0);
+      assertEquals(PROVIDER_1.getId(), provider1.getId());
+      assertEquals(PROVIDER_1.getName(), provider1.getName());
+      assertEquals(PROVIDER_1.getIssuer(), provider1.getIssuer());
+      assertEquals(PROVIDER_1.getAuthorizationEndpoint(), provider1.getAuthorizationEndpoint());
+      assertEquals(PROVIDER_1.getPrincipalClaim(), provider1.getPrincipalClaim());
+
+      final VerificationProvidersResponseItem provider2 = providers.get(1);
+      assertEquals(PROVIDER_2.getId(), provider2.getId());
+      assertEquals(PROVIDER_2.getName(), provider2.getName());
+      assertEquals(PROVIDER_2.getIssuer(), provider2.getIssuer());
+      assertEquals(PROVIDER_2.getAuthorizationEndpoint(), provider2.getAuthorizationEndpoint());
+      assertEquals(PROVIDER_2.getPrincipalClaim(), provider2.getPrincipalClaim());
+    }
   }
 
   static Stream<Arguments> createSessionUnprocessableRequestJson() {

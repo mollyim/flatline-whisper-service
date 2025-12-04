@@ -61,18 +61,23 @@ import java.util.Optional;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.textsecuregcm.captcha.AssessmentResult;
 import org.whispersystems.textsecuregcm.captcha.RegistrationCaptchaManager;
+import org.whispersystems.textsecuregcm.configuration.VerificationProviderConfiguration;
 import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicConfiguration;
+import org.whispersystems.textsecuregcm.configuration.VerificationConfiguration;
 import org.whispersystems.textsecuregcm.entities.CreateVerificationSessionRequest;
 import org.whispersystems.textsecuregcm.entities.RegistrationServiceSession;
 import org.whispersystems.textsecuregcm.entities.SubmitVerificationCodeRequest;
 import org.whispersystems.textsecuregcm.entities.UpdateVerificationSessionRequest;
 import org.whispersystems.textsecuregcm.entities.VerificationCodeRequest;
+import org.whispersystems.textsecuregcm.entities.VerificationProvidersResponse;
+import org.whispersystems.textsecuregcm.entities.VerificationProvidersResponseItem;
 import org.whispersystems.textsecuregcm.entities.VerificationSessionResponse;
 import org.whispersystems.textsecuregcm.filters.RemoteAddressFilter;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
@@ -132,6 +137,7 @@ public class VerificationController {
   private final AccountsManager accountsManager;
   private final RegistrationFraudChecker registrationFraudChecker;
   private final DynamicConfigurationManager<DynamicConfiguration> dynamicConfigurationManager;
+  private final VerificationConfiguration verificationConfiguration;
   private final Clock clock;
 
   public VerificationController(final RegistrationServiceClient registrationServiceClient,
@@ -144,6 +150,7 @@ public class VerificationController {
       final AccountsManager accountsManager,
       final RegistrationFraudChecker registrationFraudChecker,
       final DynamicConfigurationManager<DynamicConfiguration> dynamicConfigurationManager,
+      final VerificationConfiguration verificationConfiguration,
       final Clock clock) {
     this.registrationServiceClient = registrationServiceClient;
     this.verificationSessionManager = verificationSessionManager;
@@ -155,7 +162,26 @@ public class VerificationController {
     this.accountsManager = accountsManager;
     this.registrationFraudChecker = registrationFraudChecker;
     this.dynamicConfigurationManager = dynamicConfigurationManager;
+    this.verificationConfiguration = verificationConfiguration;
     this.clock = clock;
+  }
+
+  @GET
+  @Consumes(MediaType.APPLICATION_JSON)
+  @Produces(MediaType.APPLICATION_JSON)
+  @Operation(
+      summary = "Retrieve the list of verification providers",
+      description = """
+          Retrieves the list of verification providers that can be used to start a verification session.
+          This list includes the details that the client needs to communicate with each provider.
+          """)
+  @ApiResponse(responseCode = "200", description = "The list of providers was retrieved", useReturnTypeSchema = true)
+  public VerificationProvidersResponse getVerificationConfiguration() {
+    final List<VerificationProvidersResponseItem> responseItems = verificationConfiguration.getProviders().stream()
+        .map(provider -> new VerificationProvidersResponseItem(
+            provider.getId(), provider.getName(), provider.getIssuer(),
+            provider.getAuthorizationEndpoint(), provider.getPrincipalClaim())).toList();
+    return new VerificationProvidersResponse(responseItems);
   }
 
   @POST
