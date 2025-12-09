@@ -53,4 +53,14 @@ public class VerificationConfiguration {
     }
     return true;
   }
+
+  @JsonIgnore
+  public VerificationProviderConfiguration getProvider(String id) {
+    for (VerificationProviderConfiguration provider : providers) {
+      if (id.equals(provider.getId())) {
+        return provider;
+      }
+    }
+    return null;
+  }
 }

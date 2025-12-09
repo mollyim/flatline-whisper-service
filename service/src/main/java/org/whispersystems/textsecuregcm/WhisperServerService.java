@@ -97,7 +97,6 @@ import org.whispersystems.textsecuregcm.backup.SecureValueRecoveryBCredentialsGe
 import org.whispersystems.textsecuregcm.badges.ConfiguredProfileBadgeConverter;
 import org.whispersystems.textsecuregcm.captcha.CaptchaChecker;
 import org.whispersystems.textsecuregcm.captcha.CaptchaClient;
-import org.whispersystems.textsecuregcm.captcha.RegistrationCaptchaManager;
 import org.whispersystems.textsecuregcm.captcha.ShortCodeExpander;
 import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicConfiguration;
 import org.whispersystems.textsecuregcm.configuration.secrets.SecretStore;
@@ -1109,8 +1108,6 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     final ShortCodeExpander shortCodeRetriever = new ShortCodeExpander(shortCodeRetrieverHttpClient, config.getShortCodeRetrieverConfiguration().baseUrl());
     final CaptchaChecker captchaChecker = new CaptchaChecker(shortCodeRetriever, captchaClientSupplier);
 
-    final RegistrationCaptchaManager registrationCaptchaManager = new RegistrationCaptchaManager(captchaChecker);
-
     final RateLimitChallengeManager rateLimitChallengeManager = new RateLimitChallengeManager(pushChallengeManager,
         captchaChecker, rateLimiters, spamFilter.map(SpamFilter::getRateLimitChallengeListener).stream().toList());
 
@@ -1171,9 +1168,8 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
             config.getCdnConfiguration().credentials().secretAccessKey().value(), config.getCdnConfiguration().region(),
             config.getCdnConfiguration().bucket()),
         new VerificationController(registrationServiceClient, new VerificationSessionManager(verificationSessions),
-            pushNotificationManager, registrationCaptchaManager, registrationRecoveryPasswordsManager,
-            principalNameIdentifiers, rateLimiters, accountsManager, registrationFraudChecker,
-            dynamicConfigurationManager, config.getVerificationConfiguration(), clock)
+            registrationRecoveryPasswordsManager, principalNameIdentifiers, rateLimiters, accountsManager,
+            registrationFraudChecker, dynamicConfigurationManager, config.getVerificationConfiguration(), clock)
     );
     // FLT(uoemai): All forms of payment are disabled in the prototype.
     // if (config.getSubscription() != null && config.getOneTimeDonations() != null) {

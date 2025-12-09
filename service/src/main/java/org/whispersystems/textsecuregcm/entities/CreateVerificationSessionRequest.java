@@ -14,12 +14,25 @@ import org.whispersystems.textsecuregcm.util.Principal;
 
 public record CreateVerificationSessionRequest(
 
-    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "The principal to be verified")
-    @Principal
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Identifier of the provider used for the principal verification")
     @NotBlank
     @JsonProperty
-    String principal,
+    String providerId,
 
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Value provided by the client to be used in the PKCE challenge")
+    @NotBlank
+    @JsonProperty
+    String codeChallenge,
+
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Value provided by the client to verify authorization responses")
+    @NotBlank
+    @JsonProperty
+    String state,
+
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Location provided by the client to be redirected after authorization")
+    @NotBlank
+    @JsonProperty
+    String redirectUri,
 
     @Valid
     @JsonUnwrapped
