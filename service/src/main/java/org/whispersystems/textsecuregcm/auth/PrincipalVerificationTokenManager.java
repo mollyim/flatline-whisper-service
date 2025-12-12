@@ -10,6 +10,7 @@ import io.grpc.StatusRuntimeException;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.NotAuthorizedException;
+import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.ServerErrorException;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.core.Response;
@@ -21,12 +22,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.entities.PrincipalVerificationRequest;
 import org.whispersystems.textsecuregcm.entities.RegistrationServiceSession;
 import org.whispersystems.textsecuregcm.registration.RegistrationServiceClient;
+import org.whispersystems.textsecuregcm.registration.VerificationSession;
 import org.whispersystems.textsecuregcm.spam.RegistrationRecoveryChecker;
 import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
+import org.whispersystems.textsecuregcm.storage.VerificationSessionManager;
 
 public class PrincipalVerificationTokenManager {
 
@@ -36,23 +40,23 @@ public class PrincipalVerificationTokenManager {
 
   private final PrincipalNameIdentifiers principalNameIdentifiers;
 
-  private final RegistrationServiceClient registrationServiceClient;
+  private final VerificationSessionManager verificationSessionManager;
   private final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager;
   private final RegistrationRecoveryChecker registrationRecoveryChecker;
 
   public PrincipalVerificationTokenManager(final PrincipalNameIdentifiers principalNameIdentifiers,
-                                           final RegistrationServiceClient registrationServiceClient,
+                                           final VerificationSessionManager verificationSessionManager,
                                            final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager,
                                            final RegistrationRecoveryChecker registrationRecoveryChecker) {
     this.principalNameIdentifiers = principalNameIdentifiers;
-    this.registrationServiceClient = registrationServiceClient;
+    this.verificationSessionManager = verificationSessionManager;
     this.registrationRecoveryPasswordsManager = registrationRecoveryPasswordsManager;
     this.registrationRecoveryChecker = registrationRecoveryChecker;
   }
 
   /**
    * Checks if a {@link PrincipalVerificationRequest} has a token that verifies the caller has confirmed access to the
-   * principal
+   * principal and returns how the principal has been verified
    *
    * @param requestContext the container request context
    * @param principal the principal presented for verification
@@ -65,50 +69,37 @@ public class PrincipalVerificationTokenManager {
    * @throws ForbiddenException     if the recovery password is not valid
    * @throws InterruptedException   if verification did not complete before a timeout
    */
-  public PrincipalVerificationRequest.VerificationType verify(final ContainerRequestContext requestContext, final String principal, final PrincipalVerificationRequest request)
+  public PrincipalVerificationDetails verify(final ContainerRequestContext requestContext, final String principal, final PrincipalVerificationRequest request)
       throws InterruptedException {
 
     final PrincipalVerificationRequest.VerificationType verificationType = request.verificationType();
+    PrincipalVerificationDetails verificationDetails = null;
     switch (verificationType) {
-      case SESSION -> verifyBySessionId(principal, request.decodeSessionId());
-      case RECOVERY_PASSWORD -> verifyByRecoveryPassword(requestContext, principal, request.recoveryPassword());
+      case SESSION -> verificationDetails = verifyBySessionId(principal, request.sessionId());
+      case RECOVERY_PASSWORD -> verificationDetails = verifyByRecoveryPassword(requestContext, principal, request.recoveryPassword());
     }
 
-    return verificationType;
+    return verificationDetails;
   }
 
-  private void verifyBySessionId(final String principal, final byte[] sessionId) throws InterruptedException {
-    try {
-      final RegistrationServiceSession session = registrationServiceClient
-          .getSession(sessionId, REGISTRATION_RPC_TIMEOUT)
-          .get(VERIFICATION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-          .orElseThrow(() -> new NotAuthorizedException("session not verified"));
+  private PrincipalVerificationDetails verifyBySessionId(final String principal, final String sessionId) throws InterruptedException {
+    final VerificationSession session = verificationSessionManager.findForId(sessionId)
+        .orTimeout(5, TimeUnit.SECONDS)
+        .join().orElseThrow(NotFoundException::new);
 
-      if (!MessageDigest.isEqual(principal.getBytes(), session.principal().getBytes())) {
-        throw new BadRequestException("principal does not match session");
-      }
-      if (!session.verified()) {
-        throw new NotAuthorizedException("session not verified");
-      }
-    } catch (final ExecutionException e) {
-
-      if (e.getCause() instanceof StatusRuntimeException grpcRuntimeException) {
-        if (grpcRuntimeException.getStatus().getCode() == Status.Code.INVALID_ARGUMENT) {
-          throw new BadRequestException();
-        }
-      }
-
-      logger.error("Registration service failure", e);
-      throw new ServerErrorException(Response.Status.SERVICE_UNAVAILABLE);
-
-    } catch (final CancellationException | TimeoutException e) {
-
-      logger.error("Registration service failure", e);
-      throw new ServerErrorException(Response.Status.SERVICE_UNAVAILABLE);
+    if (!principal.equals(session.principal())) {
+      throw new BadRequestException("principal does not match session");
     }
+
+    if (!session.verified()) {
+      throw new NotAuthorizedException("session not verified");
+    }
+
+    return new PrincipalVerificationDetails(PrincipalVerificationDetails.VerificationType.SESSION,
+        session.providerId(), session.subject(), principal);
   }
 
-  private void verifyByRecoveryPassword(final ContainerRequestContext requestContext, final String principal, final byte[] recoveryPassword)
+  private PrincipalVerificationDetails verifyByRecoveryPassword(final ContainerRequestContext requestContext, final String principal, final byte[] recoveryPassword)
       throws InterruptedException {
     if (!registrationRecoveryChecker.checkRegistrationRecoveryAttempt(requestContext, principal)) {
       throw new ForbiddenException("recoveryPassword couldn't be verified");
@@ -123,6 +114,8 @@ public class PrincipalVerificationTokenManager {
     } catch (final ExecutionException | TimeoutException e) {
       throw new ServerErrorException(Response.Status.SERVICE_UNAVAILABLE);
     }
+
+    return new PrincipalVerificationDetails(PrincipalVerificationDetails.VerificationType.RECOVERY_PASSWORD, principal);
   }
 
 }

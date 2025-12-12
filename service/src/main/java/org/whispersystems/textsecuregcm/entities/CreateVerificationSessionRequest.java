@@ -13,7 +13,6 @@ import jakarta.validation.constraints.NotBlank;
 import org.whispersystems.textsecuregcm.util.Principal;
 
 public record CreateVerificationSessionRequest(
-
     @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Identifier of the provider used for the principal verification")
     @NotBlank
     @JsonProperty
@@ -37,6 +36,4 @@ public record CreateVerificationSessionRequest(
     @Valid
     @JsonUnwrapped
     UpdateVerificationSessionRequest updateVerificationSessionRequest) {
-
-
 }

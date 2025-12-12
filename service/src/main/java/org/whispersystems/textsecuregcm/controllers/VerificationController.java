@@ -6,9 +6,35 @@
 
 package org.whispersystems.textsecuregcm.controllers;
 
-import static org.whispersystems.textsecuregcm.metrics.MetricsUtil.name;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.jwk.JWKSet;
+import com.nimbusds.jose.proc.BadJOSEException;
+import com.nimbusds.jwt.JWT;
+import com.nimbusds.oauth2.sdk.AuthorizationCode;
+import com.nimbusds.oauth2.sdk.AuthorizationCodeGrant;
+import com.nimbusds.oauth2.sdk.AuthorizationRequest;
+import com.nimbusds.oauth2.sdk.ParseException;
+import com.nimbusds.oauth2.sdk.PushedAuthorizationRequest;
+import com.nimbusds.oauth2.sdk.PushedAuthorizationResponse;
+import com.nimbusds.oauth2.sdk.PushedAuthorizationSuccessResponse;
+import com.nimbusds.oauth2.sdk.ResponseType;
+import com.nimbusds.oauth2.sdk.Scope;
+import com.nimbusds.oauth2.sdk.TokenErrorResponse;
+import com.nimbusds.oauth2.sdk.TokenRequest;
+import com.nimbusds.oauth2.sdk.TokenResponse;
+import com.nimbusds.oauth2.sdk.http.HTTPRequest;
+import com.nimbusds.oauth2.sdk.http.HTTPResponse;
+import com.nimbusds.oauth2.sdk.id.Audience;
+import com.nimbusds.oauth2.sdk.id.ClientID;
+import com.nimbusds.oauth2.sdk.id.Issuer;
+import com.nimbusds.oauth2.sdk.id.State;
+import com.nimbusds.oauth2.sdk.pkce.CodeVerifier;
+import com.nimbusds.openid.connect.sdk.Nonce;
+import com.nimbusds.openid.connect.sdk.OIDCTokenResponse;
+import com.nimbusds.openid.connect.sdk.OIDCTokenResponseParser;
+import com.nimbusds.openid.connect.sdk.claims.IDTokenClaimsSet;
+import com.nimbusds.openid.connect.sdk.validators.IDTokenValidator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -31,41 +57,40 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.whispersystems.textsecuregcm.configuration.VerificationProviderConfiguration;
-import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicConfiguration;
 import org.whispersystems.textsecuregcm.configuration.VerificationConfiguration;
 import org.whispersystems.textsecuregcm.entities.CreateVerificationSessionRequest;
+import org.whispersystems.textsecuregcm.entities.Principal;
 import org.whispersystems.textsecuregcm.entities.UpdateVerificationSessionRequest;
+import org.whispersystems.textsecuregcm.entities.UpdateVerificationSessionResponse;
 import org.whispersystems.textsecuregcm.entities.VerificationProvidersResponse;
 import org.whispersystems.textsecuregcm.entities.VerificationProvidersResponseItem;
-import org.whispersystems.textsecuregcm.entities.VerificationSessionResponse;
+import org.whispersystems.textsecuregcm.entities.CreateVerificationSessionResponse;
 import org.whispersystems.textsecuregcm.limits.RateLimitedByIp;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
-import org.whispersystems.textsecuregcm.registration.RegistrationServiceClient;
 import org.whispersystems.textsecuregcm.registration.VerificationSession;
-import org.whispersystems.textsecuregcm.spam.RegistrationFraudChecker;
-import org.whispersystems.textsecuregcm.storage.AccountsManager;
-import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
 import org.whispersystems.textsecuregcm.storage.VerificationSessionManager;
-import org.whispersystems.textsecuregcm.util.SystemMapper;
+import org.whispersystems.textsecuregcm.util.InvalidPrincipalException;
+import org.whispersystems.textsecuregcm.util.Util;
 
+// FLT(uoemai): This controller has been completely rewritten for Flatline.
+//              All comments in this controller are from the Flatline project, even if missing the FLT prefix.
+//              This controller verifies that a client has ownership of a specific principal in at least
+//              one of the verification providers that have been configured by the Flatline operator.
 @Path("/v1/verification")
 @io.swagger.v3.oas.annotations.tags.Tag(name = "Verification")
 public class VerificationController {
@@ -73,14 +98,10 @@ public class VerificationController {
   private static final Logger logger = LoggerFactory.getLogger(VerificationController.class);
   private static final Duration DYNAMODB_TIMEOUT = Duration.ofSeconds(5);
 
-  private final RegistrationServiceClient registrationServiceClient;
   private final VerificationSessionManager verificationSessionManager;
   private final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager;
   private final PrincipalNameIdentifiers principalNameIdentifiers;
   private final RateLimiters rateLimiters;
-  private final AccountsManager accountsManager;
-  private final RegistrationFraudChecker registrationFraudChecker;
-  private final DynamicConfigurationManager<DynamicConfiguration> dynamicConfigurationManager;
   private final VerificationConfiguration verificationConfiguration;
   private final Clock clock;
 
@@ -89,24 +110,17 @@ public class VerificationController {
         int expires_in) {
   }
 
-  public VerificationController(final RegistrationServiceClient registrationServiceClient,
+  public VerificationController(
       final VerificationSessionManager verificationSessionManager,
       final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager,
       final PrincipalNameIdentifiers principalNameIdentifiers,
       final RateLimiters rateLimiters,
-      final AccountsManager accountsManager,
-      final RegistrationFraudChecker registrationFraudChecker,
-      final DynamicConfigurationManager<DynamicConfiguration> dynamicConfigurationManager,
       final VerificationConfiguration verificationConfiguration,
       final Clock clock) {
-    this.registrationServiceClient = registrationServiceClient;
     this.verificationSessionManager = verificationSessionManager;
     this.registrationRecoveryPasswordsManager = registrationRecoveryPasswordsManager;
     this.principalNameIdentifiers = principalNameIdentifiers;
     this.rateLimiters = rateLimiters;
-    this.accountsManager = accountsManager;
-    this.registrationFraudChecker = registrationFraudChecker;
-    this.dynamicConfigurationManager = dynamicConfigurationManager;
     this.verificationConfiguration = verificationConfiguration;
     this.clock = clock;
   }
@@ -131,7 +145,7 @@ public class VerificationController {
 
   @POST
   @Path("/session")
-  // FLT(uoemai): Prevent anonymous clients from causing Flatline to overload the identity provider.
+  // This rate limiting mitigates anonymous clients causing Flatline to overload the identity provider.
   @RateLimitedByIp(RateLimiters.For.VERIFICATION_AUTHORIZATION_PER_IP)
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
@@ -150,69 +164,67 @@ public class VerificationController {
       name = "Retry-After",
       description = "If present, an positive integer indicating the number of seconds before a subsequent attempt could succeed",
       schema = @Schema(implementation = Integer.class)))
-  public VerificationSessionResponse createSession(@NotNull @Valid final CreateVerificationSessionRequest request,
+  public CreateVerificationSessionResponse createSession(@NotNull @Valid final CreateVerificationSessionRequest request,
       @Context final ContainerRequestContext requestContext) {
 
     final VerificationProviderConfiguration provider = verificationConfiguration.getProvider(request.providerId());
     if (provider == null) {
+      logger.info("failed to find verification provider requested by the verification client");
       throw new ServerErrorException("the requested verification provider is invalid",
           Response.Status.BAD_REQUEST);
     }
 
     final String sessionId = UUID.randomUUID().toString();
-    final String clientId = UUID.randomUUID().toString();
-    final String nonce = UUID.randomUUID().toString();
+    final Nonce nonce = new Nonce();
 
-    Map<String,String> parParams = Map.of(
-        "client_id", clientId,
-        "redirect_uri", request.redirectUri(),
-        "state", request.state(),
-        "nonce", nonce,
-        "scope", provider.getScopes(),
-        "response_type", "code",
-        "code_challenge", "CODE_CHALLENGE",
-        "code_challenge_method", "S256"
-    );
-    String parRequestBody = parParams.entrySet().stream()
-        .map(e -> URLEncoder.encode(e.getKey(), StandardCharsets.UTF_8) + "="
-            + URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8))
-        .reduce((a,b) -> a + "&" + b).orElse("");
-    HttpRequest parRequest = HttpRequest.newBuilder()
-        .uri(URI.create(provider.getParEndpoint()))
-        .timeout(Duration.ofSeconds(10))
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .POST(HttpRequest.BodyPublishers.ofString(parRequestBody))
+    ClientID clientId = new ClientID(provider.getClientId());
+
+    final AuthorizationRequest parRequest = new AuthorizationRequest.Builder(
+        new ResponseType("code"), clientId)
+        .redirectionURI(URI.create(request.redirectUri()))
+        .scope(Scope.parse(provider.getScopes()))
+        .state(new State(request.state()))
         .build();
 
-    HttpResponse<String> parResponse;
-    try(HttpClient client = HttpClient.newHttpClient();) {
-      parResponse = client.send(parRequest, HttpResponse.BodyHandlers.ofString());
-    } catch (Exception e) {
-        throw new ServerErrorException("could not connect to the PAR endpoint from the verification provider",
-            Response.Status.INTERNAL_SERVER_ERROR);
-    }
-    if (parResponse.statusCode() != Response.Status.CREATED.getStatusCode()) {
-      throw new ServerErrorException("the verification provider failed to create a PAR URI",
-          Response.Status.INTERNAL_SERVER_ERROR);
-    }
-
-    final ParResponse parResponseData;
+    final HTTPRequest parHttpRequest = new PushedAuthorizationRequest(
+        URI.create(provider.getParEndpoint()), parRequest)
+        .toHTTPRequest();
+    HTTPResponse parHttpResponse = null;
     try {
-      parResponseData = SystemMapper.jsonMapper()
-          .readValue(parResponse.body(), ParResponse.class);
-    } catch (JsonProcessingException e) {
-      throw new ServerErrorException("could not parse the PAR response from the verification provider",
+      parHttpResponse = parHttpRequest.send();
+    } catch (IOException e) {
+      logger.warn("PAR request to provider \"{}\" failed", provider.getId(), e);
+      throw new ServerErrorException("pushed authorization request with the verification provider failed",
           Response.Status.INTERNAL_SERVER_ERROR);
     }
 
-    final long parExpiration = 1000L * parResponseData.expires_in;
-    VerificationSession verificationSession = new VerificationSession(provider.getId(), clientId,
-       request.state(), request.redirectUri(), request.codeChallenge(), nonce,
-       null, clock.millis(), clock.millis(), parExpiration);
+    PushedAuthorizationResponse parResponse = null;
+    try {
+      parResponse = PushedAuthorizationResponse.parse(parHttpResponse);
+    } catch (ParseException e) {
+      logger.warn("PAR response from provider \"{}\" failed to parse", provider.getId(), e);
+      throw new ServerErrorException("pushed authorization request with the verification provider failed",
+          Response.Status.INTERNAL_SERVER_ERROR);
+    }
+
+    if (!parResponse.indicatesSuccess()) {
+      logger.warn("PAR request to provider \"{}\" was unsuccessful with status: {}, code: {}",
+          provider.getId(),
+          parResponse.toErrorResponse().getErrorObject().getHTTPStatusCode(),
+          parResponse.toErrorResponse().getErrorObject().getCode());
+      throw new ServerErrorException("pushed authorization request with the verification provider failed",
+          Response.Status.INTERNAL_SERVER_ERROR);
+    }
+
+    final PushedAuthorizationSuccessResponse parData = parResponse.toSuccessResponse();
+    final long parLifetimeMillis = 1000L * parData.getLifetime();
+    final VerificationSession verificationSession = new VerificationSession(provider.getId(), clientId.toString(),
+       request.state(), request.redirectUri(), request.codeChallenge(), nonce.toString(),
+       null, null, false, clock.millis(), clock.millis(), parLifetimeMillis);
     storeVerificationSession(sessionId, verificationSession);
 
-    return new VerificationSessionResponse(sessionId, provider.getAuthorizationEndpoint(), clientId,
-        parResponseData.request_uri, parResponseData.expires_in, false);
+    return new CreateVerificationSessionResponse(sessionId, provider.getAuthorizationEndpoint(), clientId.toString(),
+        parData.getRequestURI().toString(), parData.getLifetime(), false);
   }
 
   @PATCH
@@ -231,12 +243,12 @@ public class VerificationController {
   @ApiResponse(responseCode = "403", description = "The information provided was not accepted (e.g token exchange failed)")
   @ApiResponse(responseCode = "422", description = "The request did not pass validation")
   @ApiResponse(responseCode = "429", description = "Too many attempts",
-      content = @Content(schema = @Schema(implementation = VerificationSessionResponse.class)),
+      content = @Content(schema = @Schema(implementation = CreateVerificationSessionResponse.class)),
       headers = @Header(
           name = "Retry-After",
           description = "If present, an positive integer indicating the number of seconds before a subsequent attempt could succeed",
           schema = @Schema(implementation = Integer.class)))
-  public VerificationSessionResponse updateSession(
+  public UpdateVerificationSessionResponse updateSession(
       @PathParam("sessionId") final String sessionId,
       @HeaderParam(HttpHeaders.USER_AGENT) final String userAgent,
       @Context final ContainerRequestContext requestContext,
@@ -244,28 +256,130 @@ public class VerificationController {
 
 
     VerificationSession verificationSession = retrieveVerificationSession(sessionId);
-    // FLT(uoemai): Prevent clients from causing Flatline to overload the identity provider.
+    // This rate limiting mitigates clients causing Flatline to overload the identity provider.
     rateLimiters.getVerificationTokenExchangeLimiter().validate(sessionId);
 
-    // Use token exchange parameters to obtain a token from the provider matching the provided ID.
-    // Verify that the token signature matches JWKs, is not expired, matches nonce
-    // Cache the found JWKS for the provider
-    // Verify that the token has the principal claim
-    // Validate the principal
-    // final Principal principal;
-    //    try {
-    //      // FLT(uoemai): Canonicalization no longer applies to phone numbers specifically, only to principals.
-    //      //              With principals, technically equivalent phone numbers are treated as different principals.
-    //      principal = Principal.parse(Util.canonicalizePrincipal(request.principal()));
-    //    } catch (final InvalidPrincipalException e) {
-    //      throw new ServerErrorException("could not parse already validated principal", Response.Status.INTERNAL_SERVER_ERROR);
-    //    }
-    // Otherwise return a 403
-    // Update the verification session with all the missing data:
-    // updateStoredVerificationSession(registrationServiceSession, verificationSession)
-    // Return a 200 response
+    final VerificationProviderConfiguration provider = verificationConfiguration.getProvider(verificationSession.providerId());
+    if (provider == null) {
+      logger.info("failed to find verification provider from the verification session");
+      throw new ServerErrorException("the requested verification provider is invalid",
+          Response.Status.BAD_REQUEST);
+    }
 
-    return null;
+    final AuthorizationCode code = new AuthorizationCode(updateVerificationSessionRequest.code());
+    CodeVerifier codeVerifier = new CodeVerifier(updateVerificationSessionRequest.codeVerifier());
+    final URI redirectURI;
+    try {
+      redirectURI = new URI(verificationSession.redirectUri());
+    } catch (URISyntaxException e) {
+      logger.info("failed to parse redirect URI provided by the verification client", e);
+      throw new ServerErrorException("the provided redirect URI is invalid",
+          Response.Status.INTERNAL_SERVER_ERROR);
+    }
+
+    TokenRequest tokenRequest = new TokenRequest(
+        URI.create(provider.getTokenEndpoint()),
+        new ClientID(verificationSession.clientId()),
+        new AuthorizationCodeGrant(code, redirectURI, codeVerifier),
+        Scope.parse(provider.getScopes()));
+
+    final TokenResponse tokenResponse;
+    try {
+      tokenResponse = OIDCTokenResponseParser.parse(tokenRequest.toHTTPRequest().send());
+    } catch (ParseException e) {
+      logger.warn("failed to parse token response from verification provider", e);
+      throw new ServerErrorException("token exchange with verification provider failed",
+          Response.Status.INTERNAL_SERVER_ERROR);
+    } catch (IOException e) {
+      logger.warn("failed to request token from the verification provider", e);
+      throw new ServerErrorException("token exchange with verification provider failed",
+          Response.Status.INTERNAL_SERVER_ERROR);
+    }
+
+    if (! tokenResponse.indicatesSuccess()) {
+      TokenErrorResponse errorResponse = tokenResponse.toErrorResponse();
+      logger.warn("verification provider returned an error to token request: {}", errorResponse);
+      throw new ServerErrorException("token exchange with the verification provider failed",
+          Response.Status.INTERNAL_SERVER_ERROR);
+    }
+    final OIDCTokenResponse successResponse = (OIDCTokenResponse)tokenResponse.toSuccessResponse();
+
+    // We retrieve the identity token from the OIDC response.
+    final JWT idToken = successResponse.getOIDCTokens().getIDToken();
+
+    // We verify the token against the expected issuer, client identifier and JWKS.
+    final Issuer iss = new Issuer(provider.getIssuer());
+    final ClientID clientId = new ClientID(verificationSession.clientId());
+    // At this point, we allow any algorithm used to sign token as long as it is not "none".
+    // Further down, we will also ensure that algorithm is allowed by the IdP in its JWKS.
+    final JWSAlgorithm alg = new JWSAlgorithm(idToken.getHeader().getAlgorithm().toString());
+    if (alg.equals(JWSAlgorithm.NONE)) {
+      logger.warn("verification provider issued token using no signature algorithm");
+      throw new ServerErrorException("failed to verify token returned by the verification provider",
+          Response.Status.INTERNAL_SERVER_ERROR);
+    }
+    final JWKSet jwks = retrieveJwksWithCache(provider.getJwksUri());
+    final IDTokenValidator validator = new IDTokenValidator(iss, clientId, alg, jwks);
+    final Nonce expectedNonce = new Nonce(verificationSession.nonce());
+
+    IDTokenClaimsSet claims;
+    try {
+      // This validates the following:
+      // - The token issuer matches the expected issuer.
+      // - The token client identifier matches the one configured.
+      // - The token nonce value matches the on in the verification session.
+      // - The token is valid at this point, given 1 minute of leeway.
+      // - The token has a valid signature with the selected key and algorithm.
+      claims = validator.validate(idToken, expectedNonce);
+    } catch (BadJOSEException e) {
+      logger.error("failed to verify the signature or claims from the token returned by the verification provider", e);
+      throw new ServerErrorException("failed to verify token returned by the verification provider",
+          Response.Status.UNAUTHORIZED);
+    } catch (JOSEException e) {
+      logger.error("failed to process the token returned by the verification provider", e);
+      throw new ServerErrorException("failed to verify token returned by the verification provider",
+          Response.Status.UNAUTHORIZED);
+    }
+
+    // We verify that the expected audience is included in the "aud" claim.
+    if(!claims.getAudience().contains(new Audience(provider.getAudience()))){
+      logger.warn("token returned by the verification provider does not match the configured audience");
+      throw new ServerErrorException("failed to verify token returned by the verification provider",
+          Response.Status.UNAUTHORIZED);
+    }
+
+    // We verify that the "sub" claim is present and store it.
+    final String subject = claims.getStringClaim("sub");
+    if (subject.isEmpty()) {
+      logger.warn("token returned by the verification provider has an empty subject claim");
+      throw new ServerErrorException("failed to verify token returned by the verification provider",
+          Response.Status.UNAUTHORIZED);
+    }
+
+    String principalClaim = (provider.getPrincipalClaim().isEmpty()) ? "sub" : provider.getPrincipalClaim();;
+    Principal principal;
+    try {
+      // We verify that the configured principal claim (defaulting to "sub") is present in the token.
+      // The value of the claim must also be a valid principal.
+      principal = Principal.parse(Util.canonicalizePrincipal(claims.getStringClaim(principalClaim)));
+    } catch (final InvalidPrincipalException e) {
+      logger.warn("failed to parse principal from the token returned by the verification provider");
+      throw new ServerErrorException("failed to verify token returned by the verification provider",
+          Response.Status.UNAUTHORIZED);
+    }
+
+    // Once the principal is validated, the recovery password is removed for the account with that principal.
+    // The account must be registered with the verification session that will be returned at this point.
+    registrationRecoveryPasswordsManager.remove(principalNameIdentifiers.getPrincipalNameIdentifier(principal.toString()).join());
+
+    final VerificationSession verifiedVerificationSession = new VerificationSession(
+        verificationSession.providerId(), verificationSession.clientId(),
+        verificationSession.state(), verificationSession.redirectUri(), verificationSession.codeChallenge(),
+        verificationSession.nonce(), principal.toString(), subject, true,
+        verificationSession.createdTimestamp(), clock.millis(), verificationSession.remoteExpirationSeconds());
+    storeVerificationSession(sessionId, verifiedVerificationSession);
+
+    return new UpdateVerificationSessionResponse(sessionId, principal.toString(), true);
   }
 
   private void updateStoredVerificationSession(final String sessionId,
@@ -287,12 +401,12 @@ public class VerificationController {
   @ApiResponse(responseCode = "400", description = "Invalid session ID")
   @ApiResponse(responseCode = "404", description = "Session with the specified ID could not be found")
   @ApiResponse(responseCode = "422", description = "Malformed session ID encoding")
-  public VerificationSessionResponse getSession(@PathParam("sessionId") final String sessionId) {
+  public CreateVerificationSessionResponse getSession(@PathParam("sessionId") final String sessionId) {
 
     final VerificationSession verificationSession = retrieveVerificationSession(sessionId);
 
-    // TODO: Consider if we really want to have this endpoint.
-    // TODO: If we do, return only the fields that can be public.
+    // FLT(uoemai): TODO: Consider if we really want to have this endpoint.
+    //                    If we do, return only the fields that can be public.
 
     return null;
   }
@@ -310,5 +424,40 @@ public class VerificationController {
     return verificationSessionManager.findForId(sessionId)
         .orTimeout(5, TimeUnit.SECONDS)
         .join().orElseThrow(NotFoundException::new);
+  }
+
+  /**
+   * Attempts to retrieve a JWKS object from the JWKS cache
+   * If the object is not found in the cache, it will be retrieved from the provided URI
+   * @throws NotFoundException if the object is retrieved from a URI that not point to a JWKS object
+   */
+  private JWKSet retrieveJwksWithCache(final String uri) {
+    // FLT(uoemai): TODO: Attempt to fetch JWKS from cache by URI.
+
+    URL url = null;
+    try {
+      url = new URL(uri);
+    } catch (MalformedURLException e) {
+      logger.warn("failed to parse JWKS URI for the verification provider", e);
+      throw new ServerErrorException("failed to verify token returned by the verification provider",
+          Response.Status.INTERNAL_SERVER_ERROR);
+    }
+
+    JWKSet jwks;
+    try {
+      jwks = JWKSet.load(url);
+    } catch (IOException e) {
+      logger.warn("failed to retrieve JWKS from the verification provider", e);
+      throw new ServerErrorException("failed to verify token returned by the verification provider",
+          Response.Status.INTERNAL_SERVER_ERROR);
+    } catch (java.text.ParseException e) {
+      logger.warn("failed to parse JWKS returned by the verification provider", e);
+      throw new ServerErrorException("failed to verify token returned by the verification provider",
+          Response.Status.INTERNAL_SERVER_ERROR);
+    }
+
+    // FLT(uoemai): TODO: Store JWKS in cache by URI.
+
+    return jwks;
   }
 }

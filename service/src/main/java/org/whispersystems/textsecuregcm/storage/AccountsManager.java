@@ -75,6 +75,7 @@ import org.whispersystems.textsecuregcm.entities.AccountAttributes;
 import org.whispersystems.textsecuregcm.entities.DeviceInfo;
 import org.whispersystems.textsecuregcm.entities.ECSignedPreKey;
 import org.whispersystems.textsecuregcm.entities.KEMSignedPreKey;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.entities.RestoreAccountRequest;
 import org.whispersystems.textsecuregcm.entities.TransferArchiveResult;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
@@ -311,6 +312,7 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
   }
 
   public Account create(final String principal,
+      final PrincipalVerificationDetails verificationDetails,
       final AccountAttributes accountAttributes,
       final List<AccountBadge> accountBadges,
       final IdentityKey aciIdentityKey,
@@ -323,7 +325,7 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
     return createTimer.record(() -> {
       try {
         return accountLockManager.withLock(Set.of(pni),
-            () -> create(principal, pni, accountAttributes, accountBadges, aciIdentityKey, pniIdentityKey, primaryDeviceSpec, userAgent), accountLockExecutor);
+            () -> create(principal, verificationDetails, pni, accountAttributes, accountBadges, aciIdentityKey, pniIdentityKey, primaryDeviceSpec, userAgent), accountLockExecutor);
       } catch (final Exception e) {
         if (e instanceof RuntimeException runtimeException) {
           throw runtimeException;
@@ -336,6 +338,7 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
   }
 
   private Account create(final String principal,
+      final PrincipalVerificationDetails verificationDetails,
       final UUID pni,
       final AccountAttributes accountAttributes,
       final List<AccountBadge> accountBadges,
@@ -376,7 +379,7 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
     String previousPushTokenType = null;
 
     try {
-      accounts.create(account, keysManager.buildWriteItemsForNewDevice(account.getIdentifier(IdentityType.ACI),
+      accounts.create(account, verificationDetails, keysManager.buildWriteItemsForNewDevice(account.getIdentifier(IdentityType.ACI),
           account.getIdentifier(IdentityType.PNI),
           Device.PRIMARY_ID,
           primaryDeviceSpec.aciSignedPreKey(),

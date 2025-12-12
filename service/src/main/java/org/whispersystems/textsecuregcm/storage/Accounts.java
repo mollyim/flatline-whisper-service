@@ -40,6 +40,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.signal.libsignal.zkgroup.backups.BackupCredentialType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
 import org.whispersystems.textsecuregcm.util.AsyncTimerUtil;
 import org.whispersystems.textsecuregcm.util.AttributeValues;
@@ -130,6 +131,11 @@ public class Accounts {
   static final String ATTR_CANONICALLY_DISCOVERABLE = "C";
   // username hash; byte[] or null
   static final String ATTR_USERNAME_HASH = "N";
+  // identifier of the verification provider used for the account
+  static final String ATTR_VERIFICATION_PROVIDER = "VP";
+  // subject returned by the verification provider used for the account
+  static final String ATTR_VERIFICATION_SUBJECT = "VS";
+
 
   // bytes, primary key
   static final String KEY_LINK_DEVICE_TOKEN_HASH = "H";
@@ -171,6 +177,7 @@ public class Accounts {
 
   private final String principalConstraintTableName;
   private final String principalNameIdentifierConstraintTableName;
+  private final String subjectConstraintTableName;
   private final String usernamesConstraintTableName;
   private final String deletedAccountsTableName;
   private final String usedLinkDeviceTokenTableName;
@@ -183,6 +190,7 @@ public class Accounts {
       final String accountsTableName,
       final String principalConstraintTableName,
       final String principalNameIdentifierConstraintTableName,
+      final String subjectConstraintTableName,
       final String usernamesConstraintTableName,
       final String deletedAccountsTableName,
       final String usedLinkDeviceTokenTableName) {
@@ -192,6 +200,7 @@ public class Accounts {
     this.dynamoDbAsyncClient = dynamoDbAsyncClient;
     this.principalConstraintTableName = principalConstraintTableName;
     this.principalNameIdentifierConstraintTableName = principalNameIdentifierConstraintTableName;
+    this.subjectConstraintTableName = subjectConstraintTableName;
     this.accountsTableName = accountsTableName;
     this.usernamesConstraintTableName = usernamesConstraintTableName;
     this.deletedAccountsTableName = deletedAccountsTableName;
@@ -211,7 +220,9 @@ public class Accounts {
     static final String ATTR_TTL = "TTL";
   }
 
-  boolean create(final Account account, final List<TransactWriteItem> additionalWriteItems)
+  boolean create(final Account account,
+      final PrincipalVerificationDetails verificationDetails,
+      final List<TransactWriteItem> additionalWriteItems)
       throws AccountAlreadyExistsException {
 
     final Timer.Sample sample = Timer.start();
@@ -227,6 +238,15 @@ public class Accounts {
       final TransactWriteItem principalNameIdentifierConstraintPut = buildConstraintTablePutIfAbsent(
           principalNameIdentifierConstraintTableName, uuidAttr, ATTR_PNI_UUID, pniUuidAttr);
 
+      // FLT(uoemai): The subjects table acts as a constraint to ensure the following:
+      //              - The provider used to verify each account is recorded.
+      //              - The original subject from the verification provider used to verify the account is recorded.
+      //              - The same subject in the same verification provider is only associated with a single account.
+      final TransactWriteItem subjectConstraintPut = buildConstraintTablePutIfAbsent(
+          subjectConstraintTableName, uuidAttr,
+          ATTR_VERIFICATION_PROVIDER, AttributeValues.fromString(verificationDetails.providerId()),
+          ATTR_VERIFICATION_SUBJECT, AttributeValues.fromString(verificationDetails.subject()));
+
       final TransactWriteItem accountPut = buildAccountPut(account, uuidAttr, principalAttr, pniUuidAttr);
 
       // Clear any "recently deleted account" record for this principal since, if it existed, we've used its old ACI for
@@ -234,7 +254,8 @@ public class Accounts {
       final TransactWriteItem deletedAccountDelete = buildRemoveDeletedAccount(account.getPrincipalNameIdentifier());
 
       final Collection<TransactWriteItem> writeItems = new ArrayList<>(
-          List.of(principalConstraintPut, principalNameIdentifierConstraintPut, accountPut, deletedAccountDelete));
+          List.of(principalConstraintPut, principalNameIdentifierConstraintPut, subjectConstraintPut,
+              accountPut, deletedAccountDelete));
 
       writeItems.addAll(additionalWriteItems);
 
@@ -1423,6 +1444,34 @@ public class Accounts {
                 "attribute_not_exists(#key) OR #uuid = :uuid")
             .expressionAttributeNames(Map.of(
                 "#key", keyName,
+                "#uuid", KEY_ACCOUNT_UUID))
+            .expressionAttributeValues(Map.of(
+                ":uuid", uuidAttr))
+            .returnValuesOnConditionCheckFailure(ReturnValuesOnConditionCheckFailure.ALL_OLD)
+            .build())
+        .build();
+  }
+
+  @Nonnull
+  private static TransactWriteItem buildConstraintTablePutIfAbsent(
+      final String tableName,
+      final AttributeValue uuidAttr,
+      final String partitionKeyName,
+      final AttributeValue partitionKeyValue,
+      final String sortKeyName,
+      final AttributeValue sortKeyValue) {
+    return TransactWriteItem.builder()
+        .put(Put.builder()
+            .tableName(tableName)
+            .item(Map.of(
+                partitionKeyName, partitionKeyValue,
+                sortKeyName, sortKeyValue,
+                KEY_ACCOUNT_UUID, uuidAttr))
+            .conditionExpression(
+                "(attribute_not_exists(#pk) AND attribute_not_exists(#sk)) OR #uuid = :uuid")
+            .expressionAttributeNames(Map.of(
+                "#pk", partitionKeyName,
+                "#sk", sortKeyName,
                 "#uuid", KEY_ACCOUNT_UUID))
             .expressionAttributeValues(Map.of(
                 ":uuid", uuidAttr))

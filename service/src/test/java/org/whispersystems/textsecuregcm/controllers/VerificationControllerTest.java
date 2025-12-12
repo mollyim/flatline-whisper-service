@@ -66,7 +66,7 @@ import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicRegistratio
 import org.whispersystems.textsecuregcm.entities.RegistrationServiceSession;
 import org.whispersystems.textsecuregcm.entities.VerificationProvidersResponse;
 import org.whispersystems.textsecuregcm.entities.VerificationProvidersResponseItem;
-import org.whispersystems.textsecuregcm.entities.VerificationSessionResponse;
+import org.whispersystems.textsecuregcm.entities.CreateVerificationSessionResponse;
 import org.whispersystems.textsecuregcm.limits.RateLimiter;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
 import org.whispersystems.textsecuregcm.mappers.ImpossiblePrincipalExceptionMapper;
@@ -108,17 +108,21 @@ class VerificationControllerTest {
       "Example 1",
       "https://auth1.example.com",
       "https://auth1.example.com/api/oidc/authorization",
+      "https://auth1.example.com/api/oidc/token",
       "https://auth1.example.com/api/oidc/pushed-authorization-request",
       "https://auth1.example.com/.well-known/jwks.json",
-      "flatline", "openid profile", "sub");
+      "0e0ccedd-8d6c-4530-b277-5042ea7ead5b",
+      "https://flatline.example.com", "openid profile", "sub");
   private static final VerificationProviderConfiguration PROVIDER_2 = new VerificationProviderConfiguration(
       "example-2",
       "Example 2",
       "https://auth2.example.com",
       "https://auth2.example.com/api/oidc/authorization",
+      "https://auth1.example.com/api/oidc/token",
       "https://auth2.example.com/api/oidc/pushed-authorization-request",
       "file:///opt/flatline/oidc/example-2/jwks.json",
-      "flatline", "openid email profile", "email");
+      "2082720b-2922-459a-b9d4-935f8dd651bd",
+      "https://flatline.example.com", "openid email profile", "email");
 
   private static final UUID PNI = UUID.randomUUID();
   private final RegistrationServiceClient registrationServiceClient = mock(RegistrationServiceClient.class);
@@ -132,8 +136,7 @@ class VerificationControllerTest {
   private final AccountsManager accountsManager = mock(AccountsManager.class);
   private final Clock clock = Clock.systemUTC();
 
-  private final RateLimiter captchaLimiter = mock(RateLimiter.class);
-  private final RateLimiter pushChallengeLimiter = mock(RateLimiter.class);
+  private final RateLimiter tokenExchangeLimiter = mock(RateLimiter.class);
   private final DynamicConfigurationManager<DynamicConfiguration> dynamicConfigurationManager = mock(
       DynamicConfigurationManager.class);
   private final DynamicConfiguration dynamicConfiguration = mock(DynamicConfiguration.class);
@@ -150,17 +153,15 @@ class VerificationControllerTest {
       .setMapper(SystemMapper.jsonMapper())
       .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
       .addResource(
-          new VerificationController(registrationServiceClient, verificationSessionManager, pushNotificationManager,
-              registrationCaptchaManager, registrationRecoveryPasswordsManager, principalNameIdentifiers, rateLimiters, accountsManager,
-              RegistrationFraudChecker.noop(), dynamicConfigurationManager, verificationConfiguration, clock))
+          new VerificationController(verificationSessionManager,
+              registrationRecoveryPasswordsManager, principalNameIdentifiers, rateLimiters,
+              verificationConfiguration, clock))
       .build();
 
   @BeforeEach
   void setUp() {
-    when(rateLimiters.getVerificationCaptchaLimiter())
-        .thenReturn(captchaLimiter);
-    when(rateLimiters.getVerificationPushChallengeLimiter())
-        .thenReturn(pushChallengeLimiter);
+    when(rateLimiters.getVerificationTokenExchangeLimiter())
+        .thenReturn(tokenExchangeLimiter);
     when(accountsManager.getByPrincipal(any()))
         .thenReturn(Optional.empty());
     when(dynamicConfiguration.getRegistrationConfiguration())
@@ -294,8 +295,8 @@ class VerificationControllerTest {
     try (Response response = request.post(Entity.json(createSessionJson(PRINCIPAL, pushToken, pushTokenType)))) {
       assertEquals(HttpStatus.SC_OK, response.getStatus());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
       assertEquals(expectedRequestedInformation, verificationSessionResponse.requestedInformation());
       // FLT(uoemai): In the Flatline prototype, the client is currently always allowed to request a code.
       //              This may change once verification is migrated away from phone numbers.
@@ -418,8 +419,8 @@ class VerificationControllerTest {
       // assertNotNull(updatedSession.pushChallenge());
       assertNull(updatedSession.pushChallenge());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       // FLT(uoemai): In the Flatline prototype, the client is currently always allowed to request a code.
       //              This may change once verification is migrated away from phone numbers.
@@ -462,8 +463,8 @@ class VerificationControllerTest {
       // assertEquals(HttpStatus.SC_TOO_MANY_REQUESTS, response.getStatus());
       assertEquals(HttpStatus.SC_OK, response.getStatus());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       // FLT(uoemai): In the Flatline prototype, the client is currently always allowed to request a code.
       //              This may change once verification is migrated away from phone numbers.
@@ -504,8 +505,8 @@ class VerificationControllerTest {
       // assertEquals(HttpStatus.SC_TOO_MANY_REQUESTS, response.getStatus());
       assertEquals(HttpStatus.SC_OK, response.getStatus());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       // FLT(uoemai): In the Flatline prototype, the client is currently always allowed to request a code.
       //              This may change once verification is migrated away from phone numbers.
@@ -544,8 +545,8 @@ class VerificationControllerTest {
       assertEquals(HttpStatus.SC_OK, response.getStatus());
 
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       // FLT(uoemai): In the Flatline prototype, the client is currently always allowed to request a code.
       //              This may change once verification is migrated away from phone numbers.
@@ -600,8 +601,8 @@ class VerificationControllerTest {
       //     updatedSession.requestedInformation());
       assertEquals(List.of(), updatedSession.requestedInformation());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       // FLT(uoemai): In the Flatline prototype, the client is currently always allowed to request a code.
       //              This may change once verification is migrated away from phone numbers.
@@ -654,8 +655,8 @@ class VerificationControllerTest {
       assertNull(updatedSession.submittedInformation());
       assertEquals(List.of(), updatedSession.requestedInformation());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       // FLT(uoemai): In the Flatline prototype, the client is currently always allowed to request a code.
       //              This may change once verification is migrated away from phone numbers.
@@ -692,8 +693,8 @@ class VerificationControllerTest {
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(null, "challenge", null, null)))) {
       assertEquals(HttpStatus.SC_OK, response.getStatus());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       assertTrue(verificationSessionResponse.allowedToRequestCode());
       assertTrue(verificationSessionResponse.verified());
@@ -741,8 +742,8 @@ class VerificationControllerTest {
       assertNull(updatedSession.submittedInformation());
       assertTrue(updatedSession.requestedInformation().isEmpty());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       assertTrue(verificationSessionResponse.allowedToRequestCode());
       assertTrue(verificationSessionResponse.requestedInformation().isEmpty());
@@ -790,8 +791,8 @@ class VerificationControllerTest {
       assertEquals(null, updatedSession.submittedInformation());
       assertTrue(updatedSession.requestedInformation().isEmpty());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       assertTrue(verificationSessionResponse.allowedToRequestCode());
       assertTrue(verificationSessionResponse.requestedInformation().isEmpty());
@@ -841,8 +842,8 @@ class VerificationControllerTest {
       assertNull(updatedSession.submittedInformation());
       assertTrue(updatedSession.requestedInformation().isEmpty());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       assertTrue(verificationSessionResponse.allowedToRequestCode());
       assertTrue(verificationSessionResponse.requestedInformation().isEmpty());
@@ -1036,8 +1037,8 @@ class VerificationControllerTest {
     try (Response response = request.post(Entity.json(requestVerificationCodeJson("sms", "android")))) {
       assertEquals(HttpStatus.SC_CONFLICT, response.getStatus());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       assertTrue(verificationSessionResponse.verified());
     }
@@ -1065,8 +1066,8 @@ class VerificationControllerTest {
     try (Response response = request.post(Entity.json(requestVerificationCodeJson("sms", "ios")))) {
       assertEquals(HttpStatus.SC_CONFLICT, response.getStatus());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       assertFalse(verificationSessionResponse.allowedToRequestCode());
       assertEquals(List.of(VerificationSession.Information.CAPTCHA),
@@ -1096,8 +1097,8 @@ class VerificationControllerTest {
     try (Response response = request.post(Entity.json(requestVerificationCodeJson("voice", "android")))) {
       assertEquals(HttpStatus.SC_TOO_MANY_REQUESTS, response.getStatus());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       assertFalse(verificationSessionResponse.allowedToRequestCode());
       assertTrue(verificationSessionResponse.requestedInformation().isEmpty());
@@ -1128,8 +1129,8 @@ class VerificationControllerTest {
     try (Response response = request.post(Entity.json(requestVerificationCodeJson("sms", "android")))) {
       assertEquals(HttpStatus.SC_TOO_MANY_REQUESTS, response.getStatus());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       assertTrue(verificationSessionResponse.allowedToRequestCode());
       assertTrue(verificationSessionResponse.requestedInformation().isEmpty());
@@ -1160,8 +1161,8 @@ class VerificationControllerTest {
     try (final Response response = request.post(Entity.json(requestVerificationCodeJson("sms", "android")))) {
       assertEquals(418, response.getStatus());
 
-      final VerificationSessionResponse verificationSessionResponse =
-          response.readEntity(VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse =
+          response.readEntity(CreateVerificationSessionResponse.class);
 
       assertTrue(verificationSessionResponse.allowedToRequestCode());
       assertTrue(verificationSessionResponse.requestedInformation().isEmpty());
@@ -1190,8 +1191,8 @@ class VerificationControllerTest {
     try (Response response = request.post(Entity.json(requestVerificationCodeJson("sms", "android")))) {
       assertEquals(HttpStatus.SC_OK, response.getStatus());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       assertTrue(verificationSessionResponse.allowedToRequestCode());
       assertTrue(verificationSessionResponse.requestedInformation().isEmpty());
@@ -1331,8 +1332,8 @@ class VerificationControllerTest {
 
       assertEquals(HttpStatus.SC_CONFLICT, response.getStatus());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
       assertTrue(verificationSessionResponse.verified());
 
       verify(registrationRecoveryPasswordsManager).remove(PNI);
@@ -1368,8 +1369,8 @@ class VerificationControllerTest {
     try (Response response = request.put(Entity.json(submitVerificationCodeJson("123456")))) {
       assertEquals(HttpStatus.SC_CONFLICT, response.getStatus());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       assertNotNull(verificationSessionResponse.nextSms());
       assertNull(verificationSessionResponse.nextVerificationAttempt());
@@ -1428,8 +1429,8 @@ class VerificationControllerTest {
     try (Response response = request.put(Entity.json(submitVerificationCodeJson("567890")))) {
       assertEquals(HttpStatus.SC_TOO_MANY_REQUESTS, response.getStatus());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       assertTrue(verificationSessionResponse.allowedToRequestCode());
       assertTrue(verificationSessionResponse.requestedInformation().isEmpty());
@@ -1462,8 +1463,8 @@ class VerificationControllerTest {
     try (Response response = request.put(Entity.json(submitVerificationCodeJson("123456")))) {
       assertEquals(HttpStatus.SC_OK, response.getStatus());
 
-      final VerificationSessionResponse verificationSessionResponse = response.readEntity(
-          VerificationSessionResponse.class);
+      final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
+          CreateVerificationSessionResponse.class);
 
       assertTrue(verificationSessionResponse.verified());
 

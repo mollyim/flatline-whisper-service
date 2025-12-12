@@ -38,6 +38,7 @@ import org.whispersystems.textsecuregcm.auth.PrincipalVerificationTokenManager;
 import org.whispersystems.textsecuregcm.auth.RegistrationLockVerificationManager;
 import org.whispersystems.textsecuregcm.entities.AccountCreationResponse;
 import org.whispersystems.textsecuregcm.entities.AccountIdentityResponse;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.entities.PrincipalVerificationRequest;
 import org.whispersystems.textsecuregcm.entities.RegistrationLockFailure;
 import org.whispersystems.textsecuregcm.entities.RegistrationRequest;
@@ -114,7 +115,7 @@ public class RegistrationController {
 
     rateLimiters.getRegistrationLimiter().validate(principal);
 
-    final PrincipalVerificationRequest.VerificationType verificationType = principalVerificationTokenManager.verify(
+    final PrincipalVerificationDetails verificationDetails = principalVerificationTokenManager.verify(
         requestContext, principal, registrationRequest);
 
     final Optional<Account> existingAccount = accounts.getByPrincipal(principal);
@@ -134,10 +135,11 @@ public class RegistrationController {
     if (existingAccount.isPresent()) {
       registrationLockVerificationManager.verifyRegistrationLock(existingAccount.get(),
           registrationRequest.accountAttributes().getRegistrationLock(),
-          userAgent, RegistrationLockVerificationManager.Flow.REGISTRATION, verificationType);
+          userAgent, RegistrationLockVerificationManager.Flow.REGISTRATION, verificationDetails.verificationType());
     }
 
     final Account account = accounts.create(principal,
+        verificationDetails,
         registrationRequest.accountAttributes(),
         existingAccount.map(Account::getBadges).orElseGet(ArrayList::new),
         registrationRequest.aciIdentityKey(),
@@ -159,7 +161,7 @@ public class RegistrationController {
         userAgent);
 
     Metrics.counter(ACCOUNT_CREATED_COUNTER_NAME, Tags.of(UserAgentTagUtil.getPlatformTag(userAgent),
-            Tag.of(VERIFICATION_TYPE_TAG_NAME, verificationType.name())))
+            Tag.of(VERIFICATION_TYPE_TAG_NAME, verificationDetails.verificationType().name())))
         .increment();
 
     final AccountIdentityResponse identityResponse = new AccountIdentityResponseBuilder(account)

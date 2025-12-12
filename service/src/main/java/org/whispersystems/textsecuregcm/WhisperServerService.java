@@ -433,7 +433,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         config.getDynamoDbTables().getAccounts().getPrincipalTableName(),
         config.getDynamoDbTables().getAccounts().getPrincipalNameIdentifierTableName(),
         config.getDynamoDbTables().getAccounts().getUsernamesTableName(),
-        // FLT(uoemai): TODO: Consider if subjects table is required here.
+        config.getDynamoDbTables().getAccounts().getSubjectsTableName(),
         config.getDynamoDbTables().getDeletedAccounts().getTableName(),
         config.getDynamoDbTables().getAccounts().getUsedLinkDeviceTokensTableName());
     ClientReleases clientReleases = new ClientReleases(dynamoDbAsyncClient,
@@ -1117,9 +1117,10 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     });
 
     final PersistentTimer persistentTimer = new PersistentTimer(rateLimitersCluster, clock);
+    final VerificationSessionManager verificationSessionManager = new VerificationSessionManager(verificationSessions);
 
     final PrincipalVerificationTokenManager principalVerificationTokenManager = new PrincipalVerificationTokenManager(
-        principalNameIdentifiers, registrationServiceClient, registrationRecoveryPasswordsManager, registrationRecoveryChecker);
+        principalNameIdentifiers, verificationSessionManager, registrationRecoveryPasswordsManager, registrationRecoveryChecker);
     final List<Object> commonControllers = Lists.newArrayList(
         new AccountController(accountsManager, rateLimiters, registrationRecoveryPasswordsManager,
             usernameHashZkProofVerifier),
@@ -1167,9 +1168,9 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         new StickerController(rateLimiters, config.getCdnConfiguration().credentials().accessKeyId().value(),
             config.getCdnConfiguration().credentials().secretAccessKey().value(), config.getCdnConfiguration().region(),
             config.getCdnConfiguration().bucket()),
-        new VerificationController(registrationServiceClient, new VerificationSessionManager(verificationSessions),
-            registrationRecoveryPasswordsManager, principalNameIdentifiers, rateLimiters, accountsManager,
-            registrationFraudChecker, dynamicConfigurationManager, config.getVerificationConfiguration(), clock)
+        new VerificationController(verificationSessionManager,
+            registrationRecoveryPasswordsManager, principalNameIdentifiers, rateLimiters,
+             config.getVerificationConfiguration(), clock)
     );
     // FLT(uoemai): All forms of payment are disabled in the prototype.
     // if (config.getSubscription() != null && config.getOneTimeDonations() != null) {

@@ -21,11 +21,13 @@ public class VerificationProviderConfiguration {
   private final String name;
   private final String issuer;
   private final String authorizationEndpoint;
+  private final String tokenEndpoint;
   private final String parEndpoint;
   private final String jwksUri;
   private final String audience;
   private final String scopes;
   private final String principalClaim;
+  private final String clientId;
 
   @JsonCreator
   public VerificationProviderConfiguration(
@@ -33,8 +35,10 @@ public class VerificationProviderConfiguration {
       @JsonProperty("name") final String name,
       @JsonProperty("issuer") final String issuer,
       @JsonProperty("authorizationEndpoint") final String authorizationEndpoint,
+      @JsonProperty("tokenEndpoint") final String tokenEndpoint,
       @JsonProperty("parEndpoint") final String parEndpoint,
       @JsonProperty("jwksUri") final String jwksUri,
+      @JsonProperty("clientId") final String clientId,
       @JsonProperty("audience") final String audience,
       @JsonProperty("scopes") final String scopes,
       @JsonProperty("principalClaim") final String principalClaim) {
@@ -42,8 +46,10 @@ public class VerificationProviderConfiguration {
     this.name = name;
     this.issuer = issuer;
     this.authorizationEndpoint = authorizationEndpoint;
+    this.tokenEndpoint = tokenEndpoint;
     this.parEndpoint = parEndpoint;
     this.jwksUri = jwksUri;
+    this.clientId = clientId;
     this.audience = audience;
     this.scopes = scopes;
     this.principalClaim = principalClaim;
@@ -70,6 +76,11 @@ public class VerificationProviderConfiguration {
   }
 
   @NotEmpty
+  public String getTokenEndpoint() {
+    return tokenEndpoint;
+  }
+
+  @NotEmpty
   public String getParEndpoint() {
     return parEndpoint;
   }
@@ -77,6 +88,11 @@ public class VerificationProviderConfiguration {
   @NotEmpty
   public String getJwksUri() {
     return jwksUri;
+  }
+
+  @NotEmpty
+  public String getClientId() {
+    return clientId;
   }
 
   @NotEmpty

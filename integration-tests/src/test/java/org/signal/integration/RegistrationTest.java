@@ -12,7 +12,7 @@ import org.whispersystems.textsecuregcm.entities.CreateVerificationSessionReques
 import org.whispersystems.textsecuregcm.entities.SubmitVerificationCodeRequest;
 import org.whispersystems.textsecuregcm.entities.UpdateVerificationSessionRequest;
 import org.whispersystems.textsecuregcm.entities.VerificationCodeRequest;
-import org.whispersystems.textsecuregcm.entities.VerificationSessionResponse;
+import org.whispersystems.textsecuregcm.entities.CreateVerificationSessionResponse;
 
 public class RegistrationTest {
 
@@ -25,11 +25,11 @@ public class RegistrationTest {
     final CreateVerificationSessionRequest input = new CreateVerificationSessionRequest(params.principal(),
         originalRequest);
 
-    final VerificationSessionResponse verificationSessionResponse = Operations
+    final CreateVerificationSessionResponse createVerificationSessionResponse = Operations
         .apiPost("/v1/verification/session", input)
-        .executeExpectSuccess(VerificationSessionResponse.class);
+        .executeExpectSuccess(CreateVerificationSessionResponse.class);
 
-    final String sessionId = verificationSessionResponse.id();
+    final String sessionId = createVerificationSessionResponse.id();
     Assertions.assertTrue(StringUtils.isNotBlank(sessionId));
 
     final String pushChallenge = Operations.peekVerificationSessionPushChallenge(sessionId);
@@ -37,9 +37,9 @@ public class RegistrationTest {
     // supply push challenge
     final UpdateVerificationSessionRequest updatedRequest = new UpdateVerificationSessionRequest(
         "test", UpdateVerificationSessionRequest.PushTokenType.FCM, pushChallenge, null, null, null);
-    final VerificationSessionResponse pushChallengeSupplied = Operations
+    final CreateVerificationSessionResponse pushChallengeSupplied = Operations
         .apiPatch("/v1/verification/session/%s".formatted(sessionId), updatedRequest)
-        .executeExpectSuccess(VerificationSessionResponse.class);
+        .executeExpectSuccess(CreateVerificationSessionResponse.class);
 
     Assertions.assertTrue(pushChallengeSupplied.allowedToRequestCode());
 
@@ -47,15 +47,15 @@ public class RegistrationTest {
     final VerificationCodeRequest verificationCodeRequest = new VerificationCodeRequest(
         VerificationCodeRequest.Transport.SMS, "android-ng");
 
-    final VerificationSessionResponse codeRequested = Operations
+    final CreateVerificationSessionResponse codeRequested = Operations
         .apiPost("/v1/verification/session/%s/code".formatted(sessionId), verificationCodeRequest)
-        .executeExpectSuccess(VerificationSessionResponse.class);
+        .executeExpectSuccess(CreateVerificationSessionResponse.class);
 
     // verify code
     final SubmitVerificationCodeRequest submitVerificationCodeRequest = new SubmitVerificationCodeRequest(
         params.verificationCode());
-    final VerificationSessionResponse codeVerified = Operations
+    final CreateVerificationSessionResponse codeVerified = Operations
         .apiPut("/v1/verification/session/%s/code".formatted(sessionId), submitVerificationCodeRequest)
-        .executeExpectSuccess(VerificationSessionResponse.class);
+        .executeExpectSuccess(CreateVerificationSessionResponse.class);
   }
 }
