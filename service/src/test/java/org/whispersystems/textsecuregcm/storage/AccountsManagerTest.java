@@ -381,7 +381,7 @@ class AccountsManagerTest {
 
     when(asyncClusterCommands.setex(any(), anyLong(), any())).thenReturn(MockRedisFuture.completedFuture("OK"));
 
-    Optional<Account> account = accountsManager.getByprincipalNameIdentifierAsync(pni).join();
+    Optional<Account> account = accountsManager.getByPrincipalNameIdentifierAsync(pni).join();
 
     assertTrue(account.isPresent());
     assertEquals(account.get().getPrincipal(), "user.account@example.com");
@@ -478,7 +478,7 @@ class AccountsManagerTest {
     when(accounts.getByPrincipalNameIdentifierAsync(pni))
         .thenReturn(CompletableFuture.completedFuture(Optional.of(account)));
 
-    Optional<Account> retrieved = accountsManager.getByprincipalNameIdentifierAsync(pni).join();
+    Optional<Account> retrieved = accountsManager.getByPrincipalNameIdentifierAsync(pni).join();
 
     assertTrue(retrieved.isPresent());
     assertSame(retrieved.get(), account);
@@ -597,7 +597,7 @@ class AccountsManagerTest {
     when(accounts.getByPrincipalNameIdentifierAsync(pni))
         .thenReturn(CompletableFuture.completedFuture(Optional.of(account)));
 
-    Optional<Account> retrieved = accountsManager.getByprincipalNameIdentifierAsync(pni).join();
+    Optional<Account> retrieved = accountsManager.getByPrincipalNameIdentifierAsync(pni).join();
 
     assertTrue(retrieved.isPresent());
     assertSame(retrieved.get(), account);

@@ -113,7 +113,7 @@ class KeysGrpcServiceTest extends SimpleBaseGrpcTest<KeysGrpcService, KeysGrpc.K
     when(accountsManager.getByPrincipalNameIdentifier(AUTHENTICATED_PNI)).thenReturn(Optional.of(authenticatedAccount));
 
     when(accountsManager.getByAccountIdentifierAsync(AUTHENTICATED_ACI)).thenReturn(CompletableFuture.completedFuture(Optional.of(authenticatedAccount)));
-    when(accountsManager.getByprincipalNameIdentifierAsync(AUTHENTICATED_PNI)).thenReturn(CompletableFuture.completedFuture(Optional.of(authenticatedAccount)));
+    when(accountsManager.getByPrincipalNameIdentifierAsync(AUTHENTICATED_PNI)).thenReturn(CompletableFuture.completedFuture(Optional.of(authenticatedAccount)));
 
     return new KeysGrpcService(accountsManager, keysManager, rateLimiters);
   }

@@ -110,6 +110,7 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
   private static final Timer getByUsernameHashTimer = Metrics.timer(name(AccountsManager.class, "getByUsernameHash"));
   private static final Timer getByUsernameLinkHandleTimer = Metrics.timer(name(AccountsManager.class, "getByUsernameLinkHandle"));
   private static final Timer getByUuidTimer = Metrics.timer(name(AccountsManager.class, "getByUuid"));
+  private static final Timer getBySubjectTimer = Metrics.timer(name(AccountsManager.class, "getBySubject"));
   private static final Timer deleteTimer = Metrics.timer(name(AccountsManager.class, "delete"));
 
   private static final Timer redisSetTimer = Metrics.timer(name(AccountsManager.class, "redisSet"));
@@ -1165,7 +1166,7 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
     );
   }
 
-  public CompletableFuture<Optional<Account>> getByprincipalNameIdentifierAsync(final UUID pni) {
+  public CompletableFuture<Optional<Account>> getByPrincipalNameIdentifierAsync(final UUID pni) {
     return checkRedisThenAccountsAsync(
         getByPrincipalTimer,
         () -> redisGetBySecondaryKeyAsync(getAccountMapKey(pni.toString()), redisPniGetTimer),
@@ -1195,7 +1196,7 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
   public CompletableFuture<Optional<Account>> getByServiceIdentifierAsync(final ServiceIdentifier serviceIdentifier) {
     return switch (serviceIdentifier.identityType()) {
       case ACI -> getByAccountIdentifierAsync(serviceIdentifier.uuid());
-      case PNI -> getByprincipalNameIdentifierAsync(serviceIdentifier.uuid());
+      case PNI -> getByPrincipalNameIdentifierAsync(serviceIdentifier.uuid());
     };
   }
 
@@ -1217,6 +1218,10 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
 
   public UUID getPrincipalNameIdentifier(String principal) {
     return principalNameIdentifiers.getPrincipalNameIdentifier(principal).join();
+  }
+
+  public Optional<Subject> getSubjectByAccountIdentifier(final UUID uuid) {
+    return accounts.getSubjectByAccountIdentifier(uuid);
   }
 
   public Optional<UUID> findRecentlyDeletedAccountIdentifier(final UUID principalNameIdentifier) {

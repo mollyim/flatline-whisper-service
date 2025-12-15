@@ -48,6 +48,7 @@ import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.DeviceCapability;
 import org.whispersystems.textsecuregcm.storage.DeviceSpec;
+import org.whispersystems.textsecuregcm.storage.Subject;
 import org.whispersystems.textsecuregcm.util.HeaderUtils;
 import org.whispersystems.textsecuregcm.util.Util;
 
@@ -136,6 +137,20 @@ public class RegistrationController {
       registrationLockVerificationManager.verifyRegistrationLock(existingAccount.get(),
           registrationRequest.accountAttributes().getRegistrationLock(),
           userAgent, RegistrationLockVerificationManager.Flow.REGISTRATION, verificationDetails.verificationType());
+      // FLT(uoemai): Re-registration is currently only allowed in Flatline if the provider used to verify the original
+      //              account is the same being used to verify it for re-registration. Additionally, the subject
+      //              returned by that provider must also remain constant for the same account.
+      Optional<Subject> subject = accounts.getSubjectByAccountIdentifier(existingAccount.get().getUuid());
+      if(subject.isPresent()){
+        if(!verificationDetails.providerId().equals(subject.get().getProviderId()) ||
+            !verificationDetails.subject().equals(subject.get().getSubject())) {
+          throw new WebApplicationException(Response.status(501,
+              "account migration across verification providers not implemented").build());
+        }
+      } else {
+        throw new WebApplicationException(Response.status(500,
+            "account found without verification subject").build());
+      }
     }
 
     final Account account = accounts.create(principal,

@@ -60,7 +60,7 @@ public class PrincipalVerificationTokenManager {
    *
    * @param requestContext the container request context
    * @param principal the principal presented for verification
-   * @param request the request with exactly one verification token (RegistrationService sessionId or registration
+   * @param request the request with exactly one verification token (verification session ID or registration
    *                recovery password)
    * @return if verification was successful, returns the verification type
    * @throws BadRequestException    if the principal does not match the sessionId’s principal, or the remote service

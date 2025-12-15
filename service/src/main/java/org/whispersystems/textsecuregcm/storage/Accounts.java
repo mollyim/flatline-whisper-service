@@ -36,10 +36,12 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import io.netty.util.internal.StringUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.signal.libsignal.zkgroup.backups.BackupCredentialType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.w3c.dom.Attr;
 import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
 import org.whispersystems.textsecuregcm.util.AsyncTimerUtil;
@@ -108,6 +110,7 @@ public class Accounts {
   private static final Timer GET_BY_USERNAME_LINK_HANDLE_TIMER = Metrics.timer(name(Accounts.class, "getByUsernameLinkHandle"));
   private static final Timer GET_BY_PNI_TIMER = Metrics.timer(name(Accounts.class, "getByPni"));
   private static final Timer GET_BY_UUID_TIMER = Metrics.timer(name(Accounts.class, "getByUuid"));
+  private static final Timer GET_SUBJECT_TIMER = Metrics.timer(name(Accounts.class, "getSubject"));
   private static final Timer DELETE_TIMER = Metrics.timer(name(Accounts.class, "delete"));
   private static final String USERNAME_HOLD_ADDED_COUNTER_NAME = name(Accounts.class, "usernameHoldAdded");
 
@@ -242,6 +245,7 @@ public class Accounts {
       //              - The provider used to verify each account is recorded.
       //              - The original subject from the verification provider used to verify the account is recorded.
       //              - The same subject in the same verification provider is only associated with a single account.
+      //              Entries from this table are currently not used anywhere else other than registration.
       final TransactWriteItem subjectConstraintPut = buildConstraintTablePutIfAbsent(
           subjectConstraintTableName, uuidAttr,
           ATTR_VERIFICATION_PROVIDER, AttributeValues.fromString(verificationDetails.providerId()),
@@ -452,6 +456,8 @@ public class Accounts {
           writeItems.add(buildConstraintTablePut(principalConstraintTableName, uuidAttr, ATTR_ACCOUNT_PRINCIPAL, principalAttr));
           writeItems.add(buildDelete(principalNameIdentifierConstraintTableName, ATTR_PNI_UUID, originalPni));
           writeItems.add(buildConstraintTablePut(principalNameIdentifierConstraintTableName, uuidAttr, ATTR_PNI_UUID, pniAttr));
+          // FLT(uoemai): Since a change of principal currently is only allowed with the same provider and subject,
+          //              no changes to the subject constraint table are required at this point.
           writeItems.add(buildRemoveDeletedAccount(principalNameIdentifier));
         }
 
@@ -1231,6 +1237,13 @@ public class Accounts {
         .map(UUID::fromString);
   }
 
+  @Nonnull
+  public Optional<Subject> getSubjectByAccountIdentifier(final UUID uuid) {
+    return requireNonNull(GET_SUBJECT_TIMER.record(() ->
+        itemByKey(subjectConstraintTableName, KEY_ACCOUNT_UUID, AttributeValues.fromUUID(uuid))
+            .map(Accounts::subjectFromItem)));
+  }
+
   public CompletableFuture<Void> delete(final UUID uuid, final List<TransactWriteItem> additionalWriteItems) {
     final Timer.Sample sample = Timer.start();
 
@@ -1240,8 +1253,17 @@ public class Accounts {
                   buildDelete(principalConstraintTableName, ATTR_ACCOUNT_PRINCIPAL, account.getPrincipal()),
                   buildDelete(accountsTableName, KEY_ACCOUNT_UUID, uuid),
                   buildDelete(principalNameIdentifierConstraintTableName, ATTR_PNI_UUID, account.getPrincipalNameIdentifier()),
+                  buildDelete(subjectConstraintTableName, KEY_ACCOUNT_UUID, account.getPrincipalNameIdentifier()),
                   buildPutDeletedAccount(uuid, account.getPrincipalNameIdentifier())
               ));
+
+              // FLT(uoemai): Any subject constraints should also be deleted as part of the transaction.
+              Optional<Subject> subject = getSubjectByAccountIdentifier(uuid);
+              subject.ifPresent(s ->
+                  transactWriteItems.add(buildDelete(subjectConstraintTableName,
+                      ATTR_VERIFICATION_PROVIDER, s.getProviderId(),
+                      ATTR_VERIFICATION_SUBJECT, s.getSubject()))
+              );
 
               account.getUsernameHash().ifPresent(usernameHash -> transactWriteItems.add(
                   buildDelete(usernamesConstraintTableName, UsernameTable.KEY_USERNAME_HASH, usernameHash)));
@@ -1306,6 +1328,17 @@ public class Accounts {
   }
 
   @Nonnull
+  private Optional<Account> getByIndirectLookup(
+      final Timer timer,
+      final String tableName,
+      final String partitionKeyName,
+      final AttributeValue partitionKeyValue,
+      final String sortKeyName,
+      final AttributeValue sortKeyValue) {
+    return getByIndirectLookup(timer, tableName, partitionKeyName, partitionKeyValue, sortKeyName, sortKeyValue, i -> true);
+  }
+
+  @Nonnull
   private CompletableFuture<Optional<Account>> getByIndirectLookupAsync(
       final Timer timer,
       final String tableName,
@@ -1324,6 +1357,24 @@ public class Accounts {
       final Predicate<? super Map<String, AttributeValue>> predicate) {
 
     return requireNonNull(timer.record(() -> itemByKey(tableName, keyName, keyValue)
+        .filter(predicate)
+        .map(item -> item.get(KEY_ACCOUNT_UUID))
+        .flatMap(uuid -> itemByKey(accountsTableName, KEY_ACCOUNT_UUID, uuid))
+        .map(Accounts::fromItem)));
+  }
+
+  @Nonnull
+  private Optional<Account> getByIndirectLookup(
+      final Timer timer,
+      final String tableName,
+      final String partitionKeyName,
+      final AttributeValue partitionKeyValue,
+      final String sortKeyName,
+      final AttributeValue sortKeyValue,
+      final Predicate<? super Map<String, AttributeValue>> predicate) {
+
+    return requireNonNull(timer.record(() ->
+        itemByKeys(tableName, partitionKeyName, partitionKeyValue, sortKeyName, sortKeyValue)
         .filter(predicate)
         .map(item -> item.get(KEY_ACCOUNT_UUID))
         .flatMap(uuid -> itemByKey(accountsTableName, KEY_ACCOUNT_UUID, uuid))
@@ -1366,6 +1417,18 @@ public class Accounts {
             .consistentRead(true)
             .build())
         .thenApply(response -> Optional.ofNullable(response.item()).filter(item -> !item.isEmpty()));
+  }
+
+  @Nonnull
+  private Optional<Map<String, AttributeValue>> itemByKeys(final String table,
+      final String partitionKeyName, final AttributeValue partitionKeyValue,
+      final String sortKeyName, final AttributeValue sortKeyValue) {
+    final GetItemResponse response = dynamoDbClient.getItem(GetItemRequest.builder()
+        .tableName(table)
+        .key(Map.of(partitionKeyName, partitionKeyValue, sortKeyName, sortKeyValue))
+        .consistentRead(true)
+        .build());
+    return Optional.ofNullable(response.item()).filter(m -> !m.isEmpty());
   }
 
   @Nonnull
@@ -1507,6 +1570,15 @@ public class Accounts {
   }
 
   @Nonnull
+  private static TransactWriteItem buildDelete(final String tableName,
+      final String partitionKeyName, final String partitionKeyValue,
+      final String sortKeyName, final String sortKeyValue) {
+    return buildDelete(tableName,
+        partitionKeyName, AttributeValues.fromString(partitionKeyValue),
+        sortKeyName, AttributeValues.fromString(sortKeyValue));
+  }
+
+  @Nonnull
   private static TransactWriteItem buildDelete(final String tableName, final String keyName, final byte[] keyValue) {
     return buildDelete(tableName, keyName, AttributeValues.fromByteArray(keyValue));
   }
@@ -1526,6 +1598,18 @@ public class Accounts {
         .build();
   }
 
+  @Nonnull
+  private static TransactWriteItem buildDelete(final String tableName,
+      final String partitionKeyName, final AttributeValue partitionKeyValue,
+      final String sortKeyName, final AttributeValue sortKeyValue) {
+    return TransactWriteItem.builder()
+        .delete(Delete.builder()
+            .tableName(tableName)
+            .key(Map.of(partitionKeyName, partitionKeyValue, sortKeyName, sortKeyValue))
+            .build())
+        .build();
+  }
+
   CompletableFuture<Void> regenerateConstraints(final Account account) {
     final List<CompletableFuture<?>> constraintFutures = new ArrayList<>();
 
@@ -1538,6 +1622,10 @@ public class Accounts {
         account.getIdentifier(IdentityType.ACI),
         ATTR_PNI_UUID,
         AttributeValues.fromUUID(account.getPrincipalNameIdentifier())));
+
+    // FLT(uoemai): The subject constraint table cannot be regenerated like the others.
+    //              Unlike the principal and PNI, verification data is not part of the Account class.
+    //              TODO: Look into tackling this recovery scenario in Flatline.
 
     account.getUsernameHash().ifPresent(usernameHash ->
         constraintFutures.add(writeUsernameConstraint(account.getIdentifier(IdentityType.ACI),
@@ -1564,6 +1652,24 @@ public class Accounts {
                 keyName, keyValue,
                 KEY_ACCOUNT_UUID, AttributeValues.fromUUID(accountIdentifier)))
         .build())
+        .thenRun(Util.NOOP);
+  }
+
+  private CompletableFuture<Void> writeConstraint(
+      final String tableName,
+      final UUID accountIdentifier,
+      final String partitionKeyName,
+      final AttributeValue partitionKeyValue,
+      final String sortKeyName,
+      final AttributeValue sortKeyValue) {
+
+    return dynamoDbAsyncClient.putItem(PutItemRequest.builder()
+            .tableName(tableName)
+            .item(Map.of(
+                partitionKeyName, partitionKeyValue,
+                sortKeyName, sortKeyValue,
+                KEY_ACCOUNT_UUID, AttributeValues.fromUUID(accountIdentifier)))
+            .build())
         .thenRun(Util.NOOP);
   }
 
@@ -1628,6 +1734,21 @@ public class Accounts {
     } catch (final IOException e) {
       throw new RuntimeException("Could not read stored account data", e);
     }
+  }
+
+  @VisibleForTesting
+  @Nonnull
+  static Subject subjectFromItem(final Map<String, AttributeValue> item) {
+    if (!item.containsKey(ATTR_VERIFICATION_PROVIDER)
+        || !item.containsKey(ATTR_VERIFICATION_SUBJECT)
+        || !item.containsKey(KEY_ACCOUNT_UUID)) {
+      throw new RuntimeException("item missing values");
+    }
+
+    final String providerId = item.get(ATTR_VERIFICATION_PROVIDER).b().toString();
+    final String subject = item.get(ATTR_VERIFICATION_SUBJECT).b().toString();
+
+    return new Subject(providerId, subject);
   }
 
   private static AttributeValue accountDataAttributeValue(final Account account) {
