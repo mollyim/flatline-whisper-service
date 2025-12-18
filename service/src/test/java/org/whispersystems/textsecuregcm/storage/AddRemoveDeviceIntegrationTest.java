@@ -117,6 +117,7 @@ public class AddRemoveDeviceIntegrationTest {
         DynamoDbExtensionSchema.Tables.ACCOUNTS.tableName(),
         DynamoDbExtensionSchema.Tables.PRINCIPALS.tableName(),
         DynamoDbExtensionSchema.Tables.PNI_ASSIGNMENTS.tableName(),
+        DynamoDbExtensionSchema.Tables.SUBJECTS.tableName(),
         DynamoDbExtensionSchema.Tables.USERNAMES.tableName(),
         DynamoDbExtensionSchema.Tables.DELETED_ACCOUNTS.tableName(),
         DynamoDbExtensionSchema.Tables.USED_LINK_DEVICE_TOKENS.tableName());

@@ -259,6 +259,12 @@ public class VerificationController {
     // This rate limiting mitigates clients causing Flatline to overload the identity provider.
     rateLimiters.getVerificationTokenExchangeLimiter().validate(sessionId);
 
+    if (verificationSession.verified()) {
+      logger.debug("refused to update a session that is already verified");
+      throw new ServerErrorException("the verification session is already verified",
+          Response.Status.CONFLICT);
+    }
+
     final VerificationProviderConfiguration provider = verificationConfiguration.getProvider(verificationSession.providerId());
     if (provider == null) {
       logger.info("failed to find verification provider from the verification session");

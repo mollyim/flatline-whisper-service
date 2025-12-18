@@ -15,7 +15,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 import io.dropwizard.testing.junit5.ResourceExtension;
 import jakarta.ws.rs.WebApplicationException;
@@ -66,6 +65,7 @@ import org.whispersystems.textsecuregcm.entities.DeviceActivationRequest;
 import org.whispersystems.textsecuregcm.entities.ECSignedPreKey;
 import org.whispersystems.textsecuregcm.entities.GcmRegistrationId;
 import org.whispersystems.textsecuregcm.entities.KEMSignedPreKey;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.entities.RegistrationRequest;
 import org.whispersystems.textsecuregcm.entities.RegistrationServiceSession;
 import org.whispersystems.textsecuregcm.limits.RateLimiter;
@@ -73,7 +73,7 @@ import org.whispersystems.textsecuregcm.limits.RateLimiters;
 import org.whispersystems.textsecuregcm.mappers.ImpossiblePrincipalExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.NonNormalizedPrincipalExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.RateLimitExceededExceptionMapper;
-import org.whispersystems.textsecuregcm.registration.RegistrationServiceClient;
+import org.whispersystems.textsecuregcm.registration.VerificationSession;
 import org.whispersystems.textsecuregcm.spam.RegistrationRecoveryChecker;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
@@ -82,6 +82,7 @@ import org.whispersystems.textsecuregcm.storage.DeviceCapability;
 import org.whispersystems.textsecuregcm.storage.DeviceSpec;
 import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
+import org.whispersystems.textsecuregcm.storage.VerificationSessionManager;
 import org.whispersystems.textsecuregcm.tests.util.AuthHelper;
 import org.whispersystems.textsecuregcm.tests.util.KeysHelper;
 import org.whispersystems.textsecuregcm.util.MockUtils;
@@ -92,14 +93,12 @@ class RegistrationControllerTest {
 
   private static final long SESSION_EXPIRATION_SECONDS = Duration.ofMinutes(10).toSeconds();
 
-  private static final String NUMBER = PhoneNumberUtil.getInstance().format(
-      PhoneNumberUtil.getInstance().getExampleNumber("US"),
-      PhoneNumberUtil.PhoneNumberFormat.E164);
+  private static final String PRINCIPAL = "user.account@example.com";
   private static final String PASSWORD = "password";
 
   private final AccountsManager accountsManager = mock(AccountsManager.class);
   private final PrincipalNameIdentifiers principalNameIdentifiers = mock(PrincipalNameIdentifiers.class);
-  private final RegistrationServiceClient registrationServiceClient = mock(RegistrationServiceClient.class);
+  private final VerificationSessionManager verificationSessionManager = mock(VerificationSessionManager.class);
   private final RegistrationLockVerificationManager registrationLockVerificationManager = mock(
       RegistrationLockVerificationManager.class);
   private final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager = mock(
@@ -118,7 +117,7 @@ class RegistrationControllerTest {
       .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
       .addResource(
           new RegistrationController(accountsManager,
-              new PrincipalVerificationTokenManager(principalNameIdentifiers, registrationServiceClient,
+              new PrincipalVerificationTokenManager(principalNameIdentifiers, verificationSessionManager,
                   registrationRecoveryPasswordsManager, registrationRecoveryChecker),
               registrationLockVerificationManager, rateLimiters))
       .build();
@@ -165,18 +164,20 @@ class RegistrationControllerTest {
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
         .request()
-        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(NUMBER, PASSWORD));
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
 
-    when(registrationServiceClient.getSession(any(), any()))
-        .thenReturn(
-            CompletableFuture.completedFuture(
-                Optional.of(new RegistrationServiceSession(new byte[16], NUMBER, true, null, null, null,
-                    SESSION_EXPIRATION_SECONDS))));
+    when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.of(AuthHelper.VALID_SUBJECT));
+    when(verificationSessionManager.findForId(any()))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession("provider-example","client-example",
+                "","","","",
+                PRINCIPAL,"subject-example", true,
+                System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
     final Account account = mock(Account.class);
     when(account.getPrimaryDevice()).thenReturn(mock(Device.class));
 
-    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any()))
+    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(account);
 
     final String json = requestJson("sessionId", new byte[0], true, registrationId.orElse(0), pniRegistrationId.orElse(0));
@@ -212,7 +213,7 @@ class RegistrationControllerTest {
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
         .request()
-        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(NUMBER, PASSWORD));
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
     try (Response response = request.post(Entity.json(invalidRequestJson()))) {
       assertEquals(422, response.getStatus());
     }
@@ -221,28 +222,14 @@ class RegistrationControllerTest {
   @Test
   void rateLimitedNumber() throws Exception {
     doThrow(RateLimitExceededException.class)
-        .when(registrationLimiter).validate(NUMBER);
+        .when(registrationLimiter).validate(PRINCIPAL);
 
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
         .request()
-        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(NUMBER, PASSWORD));
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
     try (Response response = request.post(Entity.json(requestJson("sessionId")))) {
       assertEquals(429, response.getStatus());
-    }
-  }
-
-  @Test
-  void registrationServiceTimeout() {
-    when(registrationServiceClient.getSession(any(), any()))
-        .thenReturn(CompletableFuture.failedFuture(new RuntimeException()));
-
-    final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/registration")
-        .request()
-        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(NUMBER, PASSWORD));
-    try (Response response = request.post(Entity.json(requestJson("sessionId")))) {
-      assertEquals(HttpStatus.SC_SERVICE_UNAVAILABLE, response.getStatus());
     }
   }
 
@@ -257,7 +244,7 @@ class RegistrationControllerTest {
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
         .request()
-        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(NUMBER, PASSWORD));
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
     try (Response response = request.post(Entity.json(requestJsonRecoveryPassword(new byte[32])))) {
       assertEquals(HttpStatus.SC_SERVICE_UNAVAILABLE, response.getStatus());
     }
@@ -265,15 +252,15 @@ class RegistrationControllerTest {
 
   @ParameterizedTest
   @MethodSource
-  void registrationServiceSessionCheck(@Nullable final RegistrationServiceSession session, final int expectedStatus,
+  void registrationServiceSessionCheck(@Nullable final VerificationSession session, final int expectedStatus,
       final String message) {
-    when(registrationServiceClient.getSession(any(), any()))
-        .thenReturn(CompletableFuture.completedFuture(Optional.ofNullable(session)));
+    when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.of(AuthHelper.VALID_SUBJECT));
+    when(verificationSessionManager.findForId(any())).thenReturn(CompletableFuture.completedFuture(Optional.of(session)));
 
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
         .request()
-        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(NUMBER, PASSWORD));
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
     try (Response response = request.post(Entity.json(requestJson("sessionId")))) {
       assertEquals(expectedStatus, response.getStatus(), message);
     }
@@ -283,13 +270,17 @@ class RegistrationControllerTest {
     return Stream.of(
         Arguments.of(null, 401, "session not found"),
         Arguments.of(
-            new RegistrationServiceSession(new byte[16], "+18005551234", false, null, null, null,
-                SESSION_EXPIRATION_SECONDS),
+            new VerificationSession("provider-example","client-example",
+                "","","","",
+                "incorrect.principal@example.com","subject-example", true,
+                System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS),
             400,
-            "session number mismatch"),
+            "session principal mismatch"),
         Arguments.of(
-            new RegistrationServiceSession(new byte[16], NUMBER, false, null, null, null, SESSION_EXPIRATION_SECONDS),
-            401,
+            new VerificationSession("provider-example","client-example",
+                "","","","",
+                PRINCIPAL,"subject-example", false,
+                System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS),            401,
             "session not verified")
     );
   }
@@ -305,13 +296,13 @@ class RegistrationControllerTest {
     final Account account = mock(Account.class);
     when(account.getPrimaryDevice()).thenReturn(mock(Device.class));
 
-    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any()))
+    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(account);
 
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
         .request()
-        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(NUMBER, PASSWORD));
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
     final byte[] recoveryPassword = new byte[32];
     try (Response response = request.post(Entity.json(requestJsonRecoveryPassword(recoveryPassword)))) {
       assertEquals(200, response.getStatus());
@@ -326,7 +317,7 @@ class RegistrationControllerTest {
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
         .request()
-        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(NUMBER, PASSWORD));
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
     try (Response response = request.post(Entity.json(requestJsonRecoveryPassword(new byte[32])))) {
       assertEquals(403, response.getStatus());
     }
@@ -343,13 +334,13 @@ class RegistrationControllerTest {
     final Account account = mock(Account.class);
     when(account.getPrimaryDevice()).thenReturn(mock(Device.class));
 
-    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any()))
+    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(account);
 
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
         .request()
-        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(NUMBER, PASSWORD));
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
     final byte[] recoveryPassword = new byte[32];
     try (Response response = request.post(Entity.json(requestJsonRecoveryPassword(recoveryPassword)))) {
       assertEquals(200, response.getStatus());
@@ -365,13 +356,13 @@ class RegistrationControllerTest {
     final Account account = mock(Account.class);
     when(account.getPrimaryDevice()).thenReturn(mock(Device.class));
 
-    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any()))
+    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(account);
 
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
         .request()
-        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(NUMBER, PASSWORD));
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
     final byte[] recoveryPassword = new byte[32];
     try (Response response = request.post(Entity.json(requestJsonRecoveryPassword(recoveryPassword)))) {
       assertEquals(403, response.getStatus());
@@ -384,11 +375,13 @@ class RegistrationControllerTest {
       final boolean deviceTransferSupported,
       @Nullable final RegistrationLockError error)
       throws Exception {
-    when(registrationServiceClient.getSession(any(), any()))
-        .thenReturn(
-            CompletableFuture.completedFuture(
-                Optional.of(new RegistrationServiceSession(new byte[16], NUMBER, true, null, null, null,
-                    SESSION_EXPIRATION_SECONDS))));
+    when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.of(AuthHelper.VALID_SUBJECT));
+    when(verificationSessionManager.findForId(any()))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession("provider-example","client-example",
+                "","","","",
+                PRINCIPAL,"subject-example", true,
+                System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
     final Account account = mock(Account.class);
     when(accountsManager.getByPrincipal(any())).thenReturn(Optional.of(account));
@@ -409,7 +402,7 @@ class RegistrationControllerTest {
       final Account createdAccount = mock(Account.class);
       when(createdAccount.getPrimaryDevice()).thenReturn(mock(Device.class));
 
-      when(accountsManager.create(any(), any(), any(), any(), any(), any(), any()))
+      when(accountsManager.create(any(), any(), any(), any(), any(), any(), any(), any()))
           .thenReturn(createdAccount);
 
       expectedStatus = 200;
@@ -418,7 +411,7 @@ class RegistrationControllerTest {
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
         .request()
-        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(NUMBER, PASSWORD));
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
     try (Response response = request.post(Entity.json(requestJson("sessionId")))) {
       assertEquals(expectedStatus, response.getStatus());
     }
@@ -444,11 +437,13 @@ class RegistrationControllerTest {
   })
   void deviceTransferAvailable(final boolean existingAccount, final boolean transferSupported,
       final boolean skipDeviceTransfer, final int expectedStatus) throws Exception {
-    when(registrationServiceClient.getSession(any(), any()))
-        .thenReturn(
-            CompletableFuture.completedFuture(
-                Optional.of(new RegistrationServiceSession(new byte[16], NUMBER, true, null, null, null,
-                    SESSION_EXPIRATION_SECONDS))));
+    when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.of(AuthHelper.VALID_SUBJECT));
+    when(verificationSessionManager.findForId(any()))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession("provider-example","client-example",
+                "","","","",
+                PRINCIPAL,"subject-example", true,
+                System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
     final Optional<Account> maybeAccount;
     if (existingAccount) {
@@ -463,13 +458,13 @@ class RegistrationControllerTest {
     final Account account = mock(Account.class);
     when(account.getPrimaryDevice()).thenReturn(mock(Device.class));
 
-    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any()))
+    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(account);
 
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
         .request()
-        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(NUMBER, PASSWORD));
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
     try (Response response = request.post(Entity.json(requestJson("sessionId", new byte[0], skipDeviceTransfer, 1, 2)))) {
       assertEquals(expectedStatus, response.getStatus());
     }
@@ -478,22 +473,24 @@ class RegistrationControllerTest {
   // this is functionally the same as deviceTransferAvailable(existingAccount=false)
   @Test
   void registrationSuccess() throws Exception {
-    when(registrationServiceClient.getSession(any(), any()))
-        .thenReturn(
-            CompletableFuture.completedFuture(
-                Optional.of(new RegistrationServiceSession(new byte[16], NUMBER, true, null, null, null,
-                    SESSION_EXPIRATION_SECONDS))));
+    when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.of(AuthHelper.VALID_SUBJECT));
+    when(verificationSessionManager.findForId(any()))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession("provider-example","client-example",
+                "","","","",
+                PRINCIPAL,"subject-example", true,
+                System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
     final Account account = mock(Account.class);
     when(account.getPrimaryDevice()).thenReturn(mock(Device.class));
 
-    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any()))
+    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(account);
 
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
         .request()
-        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(NUMBER, PASSWORD));
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
     try (Response response = request.post(Entity.json(requestJson("sessionId")))) {
       assertEquals(200, response.getStatus());
     }
@@ -502,16 +499,18 @@ class RegistrationControllerTest {
   @ParameterizedTest
   @MethodSource
   void atomicAccountCreationConflictingChannel(final RegistrationRequest conflictingChannelRequest) {
-    when(registrationServiceClient.getSession(any(), any()))
-        .thenReturn(
-            CompletableFuture.completedFuture(
-                Optional.of(new RegistrationServiceSession(new byte[16], NUMBER, true, null, null, null,
-                    SESSION_EXPIRATION_SECONDS))));
+    when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.of(AuthHelper.VALID_SUBJECT));
+    when(verificationSessionManager.findForId(any()))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession("provider-example","client-example",
+                "","","","",
+                PRINCIPAL,"subject-example", true,
+                System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
     try (final Response response = resources.getJerseyTest()
         .target("/v1/registration")
         .request()
-        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(NUMBER, PASSWORD))
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD))
         .post(Entity.json(conflictingChannelRequest))) {
 
       assertEquals(422, response.getStatus());
@@ -591,16 +590,18 @@ class RegistrationControllerTest {
   @ParameterizedTest
   @MethodSource
   void atomicAccountCreationPartialSignedPreKeys(final RegistrationRequest partialSignedPreKeyRequest) {
-    when(registrationServiceClient.getSession(any(), any()))
-        .thenReturn(
-            CompletableFuture.completedFuture(
-                Optional.of(new RegistrationServiceSession(new byte[16], NUMBER, true, null, null, null,
-                    SESSION_EXPIRATION_SECONDS))));
+    when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.of(AuthHelper.VALID_SUBJECT));
+    when(verificationSessionManager.findForId(any()))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession("provider-example","client-example",
+                "","","","",
+                PRINCIPAL,"subject-example", true,
+                System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
         .request()
-        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(NUMBER, PASSWORD));
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
 
     try (final Response response = request.post(Entity.json(partialSignedPreKeyRequest))) {
       assertEquals(422, response.getStatus());
@@ -724,11 +725,13 @@ class RegistrationControllerTest {
       final IdentityKey expectedPniIdentityKey,
       final DeviceSpec expectedDeviceSpec) throws InterruptedException {
 
-    when(registrationServiceClient.getSession(any(), any()))
-        .thenReturn(
-            CompletableFuture.completedFuture(
-                Optional.of(new RegistrationServiceSession(new byte[16], NUMBER, true, null, null, null,
-                    SESSION_EXPIRATION_SECONDS))));
+    when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.of(AuthHelper.VALID_SUBJECT));
+    when(verificationSessionManager.findForId(any()))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession("provider-example","client-example",
+                "","","","",
+                PRINCIPAL,"subject-example", true,
+                System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
     final UUID accountIdentifier = UUID.randomUUID();
     final UUID principalNameIdentifier = UUID.randomUUID();
@@ -740,13 +743,13 @@ class RegistrationControllerTest {
       when(a.getPrimaryDevice()).thenReturn(device);
     });
 
-    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any()))
+    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(account);
 
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
         .request()
-        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(NUMBER, PASSWORD));
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
 
     try (Response response = request.post(Entity.json(registrationRequest))) {
       assertEquals(200, response.getStatus());
@@ -754,8 +757,13 @@ class RegistrationControllerTest {
       assertEquals(accountIdentifier, identityResponse.uuid());
     }
 
+    PrincipalVerificationDetails expectedVerificationDetails = new PrincipalVerificationDetails(
+        PrincipalVerificationDetails.VerificationType.SESSION, "provider-example", "subject-example",
+        PRINCIPAL);
+
     verify(accountsManager).create(
-        eq(NUMBER),
+        eq(PRINCIPAL),
+        eq(expectedVerificationDetails),
         argThat(attributes -> accountAttributesEqual(attributes, registrationRequest.accountAttributes())),
         eq(Collections.emptyList()),
         eq(expectedAciIdentityKey),
@@ -767,10 +775,13 @@ class RegistrationControllerTest {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void reregistrationFlag(final boolean existingAccount) throws InterruptedException {
-    final RegistrationServiceSession registrationSession =
-        new RegistrationServiceSession(new byte[16], NUMBER, true, null, null, null, SESSION_EXPIRATION_SECONDS);
-    when(registrationServiceClient.getSession(any(), any()))
-        .thenReturn(CompletableFuture.completedFuture(Optional.of(registrationSession)));
+    when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.of(AuthHelper.VALID_SUBJECT));
+    when(verificationSessionManager.findForId(any()))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession("provider-example","client-example",
+                "","","","",
+                PRINCIPAL,"subject-example", true,
+                System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
     final Optional<Account> maybeAccount = Optional.ofNullable(existingAccount ? mock(Account.class) : null);
     when(accountsManager.getByPrincipal(any())).thenReturn(maybeAccount);
@@ -778,13 +789,13 @@ class RegistrationControllerTest {
     final Account account = mock(Account.class);
     when(account.getPrimaryDevice()).thenReturn(mock(Device.class));
 
-    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any()))
+    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(account);
 
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
         .request()
-        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(NUMBER, PASSWORD));
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
     try (Response response = request.post(Entity.json(requestJson("sessionId")))) {
       assertEquals(200, response.getStatus());
       final AccountCreationResponse creationResponse = response.readEntity(AccountCreationResponse.class);

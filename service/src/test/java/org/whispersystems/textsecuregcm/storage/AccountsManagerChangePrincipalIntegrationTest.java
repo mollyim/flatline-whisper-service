@@ -110,6 +110,7 @@ class AccountsManagerChangePrincipalIntegrationTest {
           Tables.ACCOUNTS.tableName(),
           Tables.PRINCIPALS.tableName(),
           Tables.PNI_ASSIGNMENTS.tableName(),
+          Tables.SUBJECTS.tableName(),
           Tables.USERNAMES.tableName(),
           Tables.DELETED_ACCOUNTS.tableName(),
           Tables.USED_LINK_DEVICE_TOKENS.tableName());

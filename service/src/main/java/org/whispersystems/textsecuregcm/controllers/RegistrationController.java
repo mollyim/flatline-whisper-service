@@ -39,7 +39,6 @@ import org.whispersystems.textsecuregcm.auth.RegistrationLockVerificationManager
 import org.whispersystems.textsecuregcm.entities.AccountCreationResponse;
 import org.whispersystems.textsecuregcm.entities.AccountIdentityResponse;
 import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
-import org.whispersystems.textsecuregcm.entities.PrincipalVerificationRequest;
 import org.whispersystems.textsecuregcm.entities.RegistrationLockFailure;
 import org.whispersystems.textsecuregcm.entities.RegistrationRequest;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
@@ -50,7 +49,6 @@ import org.whispersystems.textsecuregcm.storage.DeviceCapability;
 import org.whispersystems.textsecuregcm.storage.DeviceSpec;
 import org.whispersystems.textsecuregcm.storage.Subject;
 import org.whispersystems.textsecuregcm.util.HeaderUtils;
-import org.whispersystems.textsecuregcm.util.Util;
 
 @Path("/v1/registration")
 @io.swagger.v3.oas.annotations.tags.Tag(name = "Registration")
@@ -142,8 +140,8 @@ public class RegistrationController {
       //              returned by that provider must also remain constant for the same account.
       Optional<Subject> subject = accounts.getSubjectByAccountIdentifier(existingAccount.get().getUuid());
       if(subject.isPresent()){
-        if(!verificationDetails.providerId().equals(subject.get().getProviderId()) ||
-            !verificationDetails.subject().equals(subject.get().getSubject())) {
+        if(!verificationDetails.providerId().equals(subject.get().providerId()) ||
+            !verificationDetails.subject().equals(subject.get().subject())) {
           throw new WebApplicationException(Response.status(501,
               "account migration across verification providers not implemented").build());
         }

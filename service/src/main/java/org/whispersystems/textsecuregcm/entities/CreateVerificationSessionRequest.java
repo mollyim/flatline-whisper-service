@@ -10,6 +10,7 @@ import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import org.hibernate.validator.constraints.URL;
 import org.whispersystems.textsecuregcm.util.Principal;
 
 public record CreateVerificationSessionRequest(
@@ -31,9 +32,5 @@ public record CreateVerificationSessionRequest(
     @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Location provided by the client to be redirected after authorization")
     @NotBlank
     @JsonProperty
-    String redirectUri,
-
-    @Valid
-    @JsonUnwrapped
-    UpdateVerificationSessionRequest updateVerificationSessionRequest) {
+    String redirectUri) {
 }

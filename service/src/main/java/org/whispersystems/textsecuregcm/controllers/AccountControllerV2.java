@@ -47,7 +47,6 @@ import org.whispersystems.textsecuregcm.entities.MismatchedDevicesResponse;
 import org.whispersystems.textsecuregcm.entities.PrincipalDiscoverabilityRequest;
 import org.whispersystems.textsecuregcm.entities.PrincipalNameIdentityKeyDistributionRequest;
 import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
-import org.whispersystems.textsecuregcm.entities.PrincipalVerificationRequest;
 import org.whispersystems.textsecuregcm.entities.RegistrationLockFailure;
 import org.whispersystems.textsecuregcm.entities.StaleDevicesResponse;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
@@ -138,8 +137,8 @@ public class AccountControllerV2 {
         //              returned by that provider must also remain constant for the same account.
         Optional<Subject> subject = accountsManager.getSubjectByAccountIdentifier(existingAccount.get().getUuid());
         if(subject.isPresent()){
-          if(!verificationDetails.providerId().equals(subject.get().getProviderId()) ||
-              !verificationDetails.subject().equals(subject.get().getSubject())) {
+          if(!verificationDetails.providerId().equals(subject.get().providerId()) ||
+              !verificationDetails.subject().equals(subject.get().subject())) {
             throw new WebApplicationException(Response.status(501,
                 "account migration across verification providers not implemented").build());
           }

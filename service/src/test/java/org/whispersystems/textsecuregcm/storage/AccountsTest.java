@@ -60,6 +60,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.signal.libsignal.zkgroup.backups.BackupCredentialType;
 import org.whispersystems.textsecuregcm.auth.UnidentifiedAccessUtil;
 import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicConfiguration;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
 import org.whispersystems.textsecuregcm.storage.DynamoDbExtensionSchema.Tables;
 import org.whispersystems.textsecuregcm.tests.util.AccountsHelper;
@@ -140,6 +141,7 @@ class AccountsTest {
         Tables.ACCOUNTS.tableName(),
         Tables.PRINCIPALS.tableName(),
         Tables.PNI_ASSIGNMENTS.tableName(),
+        Tables.SUBJECTS.tableName(),
         Tables.USERNAMES.tableName(),
         Tables.DELETED_ACCOUNTS.tableName(),
         Tables.USED_LINK_DEVICE_TOKENS.tableName());
@@ -277,7 +279,9 @@ class AccountsTest {
     Account account2 = generateAccount("user.account@example.com", UUID.randomUUID(), account1.getPrincipalNameIdentifier(),
         List.of(device2));
 
-    assertThrows(AccountAlreadyExistsException.class, () -> accounts.create(account2, Collections.emptyList()),
+    assertThrows(AccountAlreadyExistsException.class, () -> accounts.create(account2,
+            new PrincipalVerificationDetails(PrincipalVerificationDetails.VerificationType.SESSION,
+                "provider", "subject", "user.account@example.com"), Collections.emptyList()),
         "New ACI with same PNI should fail");
   }
 
@@ -454,7 +458,10 @@ class AccountsTest {
   private void reclaimAccount(final Account reregisteredAccount) {
     final AccountAlreadyExistsException accountAlreadyExistsException =
         assertThrows(AccountAlreadyExistsException.class,
-            () -> accounts.create(reregisteredAccount, Collections.emptyList()));
+            () -> accounts.create(reregisteredAccount, new PrincipalVerificationDetails(
+                PrincipalVerificationDetails.VerificationType.SESSION,
+                "provider-example", "subject-example", reregisteredAccount.getPrincipal()),
+                Collections.emptyList()));
 
     reregisteredAccount.setUuid(accountAlreadyExistsException.getExistingAccount().getUuid());
     reregisteredAccount.setPrincipal(accountAlreadyExistsException.getExistingAccount().getPrincipal(),
@@ -617,6 +624,7 @@ class AccountsTest {
         Tables.ACCOUNTS.tableName(),
         Tables.PRINCIPALS.tableName(),
         Tables.PNI_ASSIGNMENTS.tableName(),
+        Tables.SUBJECTS.tableName(),
         Tables.USERNAMES.tableName(),
         Tables.DELETED_ACCOUNTS.tableName(),
         Tables.USED_LINK_DEVICE_TOKENS.tableName());
@@ -708,6 +716,7 @@ class AccountsTest {
         Tables.ACCOUNTS.tableName(),
         Tables.PRINCIPALS.tableName(),
         Tables.PNI_ASSIGNMENTS.tableName(),
+        Tables.SUBJECTS.tableName(),
         Tables.USERNAMES.tableName(),
         Tables.DELETED_ACCOUNTS.tableName(),
         Tables.USED_LINK_DEVICE_TOKENS.tableName());
@@ -1119,6 +1128,7 @@ class AccountsTest {
         Tables.ACCOUNTS.tableName(),
         Tables.PRINCIPALS.tableName(),
         Tables.PNI_ASSIGNMENTS.tableName(),
+        Tables.SUBJECTS.tableName(),
         Tables.USERNAMES.tableName(),
         Tables.DELETED_ACCOUNTS.tableName(),
         Tables.USED_LINK_DEVICE_TOKENS.tableName());
@@ -1165,6 +1175,7 @@ class AccountsTest {
         Tables.ACCOUNTS.tableName(),
         Tables.PRINCIPALS.tableName(),
         Tables.PNI_ASSIGNMENTS.tableName(),
+        Tables.SUBJECTS.tableName(),
         Tables.USERNAMES.tableName(),
         Tables.DELETED_ACCOUNTS.tableName(),
         Tables.USED_LINK_DEVICE_TOKENS.tableName());
@@ -1269,6 +1280,7 @@ class AccountsTest {
         Tables.ACCOUNTS.tableName(),
         Tables.PRINCIPALS.tableName(),
         Tables.PNI_ASSIGNMENTS.tableName(),
+        Tables.SUBJECTS.tableName(),
         Tables.USERNAMES.tableName(),
         Tables.DELETED_ACCOUNTS.tableName(),
         Tables.USED_LINK_DEVICE_TOKENS.tableName());
@@ -1757,7 +1769,10 @@ class AccountsTest {
       conflictingPrincipalAccount.setPrincipal(account.getPrincipal(), account.getIdentifier(IdentityType.PNI));
 
       assertThrows(AccountAlreadyExistsException.class,
-          () -> accounts.create(conflictingPrincipalAccount, Collections.emptyList()));
+          () -> accounts.create(conflictingPrincipalAccount, new PrincipalVerificationDetails(
+              PrincipalVerificationDetails.VerificationType.SESSION,
+                  "provider-example", "subject-example", conflictingPrincipalAccount.getPrincipal()),
+              Collections.emptyList()));
     }
 
     {
@@ -1928,7 +1943,8 @@ class AccountsTest {
 
   private boolean createAccount(final Account account) {
     try {
-      return accounts.create(account, Collections.emptyList());
+      return accounts.create(account, new PrincipalVerificationDetails(PrincipalVerificationDetails.VerificationType.SESSION,
+          "provider-example", "subject-example", account.getPrincipal()), Collections.emptyList());
     } catch (AccountAlreadyExistsException e) {
       throw new IllegalStateException(e);
     }

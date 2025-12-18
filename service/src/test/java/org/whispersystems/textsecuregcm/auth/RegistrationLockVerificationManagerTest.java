@@ -30,6 +30,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.whispersystems.textsecuregcm.controllers.RateLimitExceededException;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.entities.PrincipalVerificationRequest;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
 import org.whispersystems.textsecuregcm.limits.RateLimiter;
@@ -86,7 +87,7 @@ class RegistrationLockVerificationManagerTest {
   @ParameterizedTest
   @MethodSource
   void testErrors(RegistrationLockError error,
-      PrincipalVerificationRequest.VerificationType verificationType,
+      PrincipalVerificationDetails.VerificationType verificationType,
       @Nullable String clientRegistrationLock,
       boolean alreadyLocked) throws Exception {
 
@@ -100,7 +101,7 @@ class RegistrationLockVerificationManagerTest {
         yield new Pair<>(WebApplicationException.class, e -> {
           if (e instanceof WebApplicationException wae) {
             assertEquals(RegistrationLockVerificationManager.FAILURE_HTTP_STATUS, wae.getResponse().getStatus());
-            if (!verificationType.equals(PrincipalVerificationRequest.VerificationType.RECOVERY_PASSWORD) || clientRegistrationLock != null) {
+            if (!verificationType.equals(PrincipalVerificationDetails.VerificationType.RECOVERY_PASSWORD) || clientRegistrationLock != null) {
               verify(registrationRecoveryPasswordsManager).remove(account.getIdentifier(IdentityType.PNI));
             } else {
               verify(registrationRecoveryPasswordsManager, never()).remove(any());
@@ -147,11 +148,11 @@ class RegistrationLockVerificationManagerTest {
 
   static Stream<Arguments> testErrors() {
     return Stream.of(
-        Arguments.of(RegistrationLockError.MISMATCH, PrincipalVerificationRequest.VerificationType.SESSION, "reglock", true),
-        Arguments.of(RegistrationLockError.MISMATCH, PrincipalVerificationRequest.VerificationType.SESSION, "reglock", false),
-        Arguments.of(RegistrationLockError.MISMATCH, PrincipalVerificationRequest.VerificationType.RECOVERY_PASSWORD, "reglock", false),
-        Arguments.of(RegistrationLockError.MISMATCH, PrincipalVerificationRequest.VerificationType.RECOVERY_PASSWORD, null, false),
-        Arguments.of(RegistrationLockError.RATE_LIMITED, PrincipalVerificationRequest.VerificationType.SESSION, "reglock", false)
+        Arguments.of(RegistrationLockError.MISMATCH, PrincipalVerificationDetails.VerificationType.SESSION, "reglock", true),
+        Arguments.of(RegistrationLockError.MISMATCH, PrincipalVerificationDetails.VerificationType.SESSION, "reglock", false),
+        Arguments.of(RegistrationLockError.MISMATCH, PrincipalVerificationDetails.VerificationType.RECOVERY_PASSWORD, "reglock", false),
+        Arguments.of(RegistrationLockError.MISMATCH, PrincipalVerificationDetails.VerificationType.RECOVERY_PASSWORD, null, false),
+        Arguments.of(RegistrationLockError.RATE_LIMITED, PrincipalVerificationDetails.VerificationType.SESSION, "reglock", false)
     );
   }
 
@@ -166,7 +167,7 @@ class RegistrationLockVerificationManagerTest {
     assertDoesNotThrow(
         () -> registrationLockVerificationManager.verifyRegistrationLock(account, submittedRegistrationLock,
             "Signal-Android/4.68.3", RegistrationLockVerificationManager.Flow.REGISTRATION,
-            PrincipalVerificationRequest.VerificationType.SESSION));
+            PrincipalVerificationDetails.VerificationType.SESSION));
 
     verify(account, never()).lockAuthTokenHash();
     verify(registrationRecoveryPasswordsManager, never()).remove(any());

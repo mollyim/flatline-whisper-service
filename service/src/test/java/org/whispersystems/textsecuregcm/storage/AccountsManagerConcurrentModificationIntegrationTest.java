@@ -50,6 +50,7 @@ import org.whispersystems.textsecuregcm.auth.SaltedTokenHash;
 import org.whispersystems.textsecuregcm.auth.UnidentifiedAccessUtil;
 import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicConfiguration;
 import org.whispersystems.textsecuregcm.entities.AccountAttributes;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
 import org.whispersystems.textsecuregcm.redis.FaultTolerantRedisClient;
 import org.whispersystems.textsecuregcm.securestorage.SecureStorageClient;
@@ -69,6 +70,7 @@ class AccountsManagerConcurrentModificationIntegrationTest {
       Tables.ACCOUNTS,
       Tables.PRINCIPALS,
       Tables.PNI_ASSIGNMENTS,
+      Tables.SUBJECTS,
       Tables.DELETED_ACCOUNTS,
       Tables.EC_KEYS,
       Tables.PQ_KEYS,
@@ -98,6 +100,7 @@ class AccountsManagerConcurrentModificationIntegrationTest {
         Tables.ACCOUNTS.tableName(),
         Tables.PRINCIPALS.tableName(),
         Tables.PNI_ASSIGNMENTS.tableName(),
+        Tables.SUBJECTS.tableName(),
         Tables.USERNAMES.tableName(),
         Tables.DELETED_ACCOUNTS.tableName(),
         Tables.USED_LINK_DEVICE_TOKENS.tableName());
@@ -157,6 +160,9 @@ class AccountsManagerConcurrentModificationIntegrationTest {
 
       final Account account = accountsManager.update(
           accountsManager.create("user.account@example.com",
+              new PrincipalVerificationDetails(
+                  PrincipalVerificationDetails.VerificationType.SESSION,
+                  "provider", "subject", "user.account@example.com"),
               new AccountAttributes(),
               new ArrayList<>(),
               new IdentityKey(aciKeyPair.getPublicKey()),

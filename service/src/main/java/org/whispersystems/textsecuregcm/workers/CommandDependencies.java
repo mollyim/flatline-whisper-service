@@ -215,6 +215,7 @@ record CommandDependencies(
         configuration.getDynamoDbTables().getAccounts().getTableName(),
         configuration.getDynamoDbTables().getAccounts().getPrincipalTableName(),
         configuration.getDynamoDbTables().getAccounts().getPrincipalNameIdentifierTableName(),
+        configuration.getDynamoDbTables().getAccounts().getSubjectsTableName(),
         configuration.getDynamoDbTables().getAccounts().getUsernamesTableName(),
         configuration.getDynamoDbTables().getDeletedAccounts().getTableName(),
         configuration.getDynamoDbTables().getAccounts().getUsedLinkDeviceTokensTableName());

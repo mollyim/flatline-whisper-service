@@ -45,6 +45,7 @@ import org.whispersystems.textsecuregcm.entities.ApnRegistrationId;
 import org.whispersystems.textsecuregcm.entities.ECSignedPreKey;
 import org.whispersystems.textsecuregcm.entities.GcmRegistrationId;
 import org.whispersystems.textsecuregcm.entities.KEMSignedPreKey;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
 import org.whispersystems.textsecuregcm.redis.FaultTolerantRedisClient;
 import org.whispersystems.textsecuregcm.redis.RedisClusterExtension;
@@ -119,6 +120,7 @@ public class AccountCreationDeletionIntegrationTest {
         DynamoDbExtensionSchema.Tables.ACCOUNTS.tableName(),
         DynamoDbExtensionSchema.Tables.PRINCIPALS.tableName(),
         DynamoDbExtensionSchema.Tables.PNI_ASSIGNMENTS.tableName(),
+        DynamoDbExtensionSchema.Tables.SUBJECTS.tableName(),
         DynamoDbExtensionSchema.Tables.USERNAMES.tableName(),
         DynamoDbExtensionSchema.Tables.DELETED_ACCOUNTS.tableName(),
         DynamoDbExtensionSchema.Tables.USED_LINK_DEVICE_TOKENS.tableName());
@@ -191,6 +193,8 @@ public class AccountCreationDeletionIntegrationTest {
       final boolean discoverableByPrincipal) throws InterruptedException {
 
     final String principal = "user.account@example.com";
+    final String verificationProvider = "provider-example";
+    final String verificationSubject = "subject-example";
 
     final String password = RandomStringUtils.secure().nextAlphanumeric(16);
     final String signalAgent = RandomStringUtils.secure().nextAlphabetic(3);
@@ -232,6 +236,12 @@ public class AccountCreationDeletionIntegrationTest {
         : Optional.empty();
 
     final Account account = accountsManager.create(principal,
+        new PrincipalVerificationDetails(
+            PrincipalVerificationDetails.VerificationType.SESSION,
+            "provider-example",
+            "subject-example",
+            principal
+        ),
         accountAttributes,
         badges,
         new IdentityKey(aciKeyPair.getPublicKey()),
@@ -254,6 +264,8 @@ public class AccountCreationDeletionIntegrationTest {
 
     assertExpectedStoredAccount(account,
         principal,
+        verificationProvider,
+        verificationSubject,
         password,
         signalAgent,
         deliveryChannels,
@@ -297,6 +309,8 @@ public class AccountCreationDeletionIntegrationTest {
       final boolean discoverableByPrincipal) throws InterruptedException {
 
     final String principal = "user.account@example.com";
+    final String verificationProvider = "provider-example";
+    final String verificationSubject = "subject-example";
 
     final UUID existingAccountUuid;
     {
@@ -309,6 +323,12 @@ public class AccountCreationDeletionIntegrationTest {
       final KEMSignedPreKey pniPqLastResortPreKey = KeysHelper.signedKEMPreKey(4, pniKeyPair);
 
       final Account existingAccount = accountsManager.create(principal,
+          new PrincipalVerificationDetails(
+              PrincipalVerificationDetails.VerificationType.SESSION,
+              verificationProvider,
+              verificationSubject,
+              principal
+          ),
           new AccountAttributes(true, 1, 1, "name".getBytes(StandardCharsets.UTF_8), "registration-lock", false, Set.of()),
           Collections.emptyList(),
           new IdentityKey(aciKeyPair.getPublicKey()),
@@ -371,6 +391,12 @@ public class AccountCreationDeletionIntegrationTest {
         : Optional.empty();
 
     final Account reregisteredAccount = accountsManager.create(principal,
+        new PrincipalVerificationDetails(
+            PrincipalVerificationDetails.VerificationType.SESSION,
+            "provider-example",
+            "subject-example",
+            principal
+        ),
         accountAttributes,
         badges,
         new IdentityKey(aciKeyPair.getPublicKey()),
@@ -392,6 +418,8 @@ public class AccountCreationDeletionIntegrationTest {
 
     assertExpectedStoredAccount(reregisteredAccount,
         principal,
+        verificationProvider,
+        verificationSubject,
         password,
         signalAgent,
         deliveryChannels,
@@ -418,6 +446,8 @@ public class AccountCreationDeletionIntegrationTest {
   @Test
   void deleteAccount() throws InterruptedException {
     final String principal = "user.account@example.com";
+    final String verificationProvider = "provider-example";
+    final String verificationSubject = "subject-example";
 
     final String password = RandomStringUtils.secure().nextAlphanumeric(16);
     final String signalAgent = RandomStringUtils.secure().nextAlphabetic(3);
@@ -450,6 +480,12 @@ public class AccountCreationDeletionIntegrationTest {
     final KEMSignedPreKey pniPqLastResortPreKey = KeysHelper.signedKEMPreKey(4, pniKeyPair);
 
     final Account account = accountsManager.create(principal,
+        new PrincipalVerificationDetails(
+            PrincipalVerificationDetails.VerificationType.SESSION,
+            verificationProvider,
+            verificationSubject,
+            principal
+        ),
         accountAttributes,
         badges,
         new IdentityKey(aciKeyPair.getPublicKey()),
@@ -479,6 +515,7 @@ public class AccountCreationDeletionIntegrationTest {
     accountsManager.delete(account, AccountsManager.DeletionReason.ADMIN_DELETED).join();
 
     assertFalse(accountsManager.getByAccountIdentifier(aci).isPresent());
+    assertFalse(accountsManager.getSubjectByAccountIdentifier(aci).isPresent());
     assertFalse(keysManager.getEcSignedPreKey(account.getUuid(), Device.PRIMARY_ID).join().isPresent());
     assertFalse(keysManager.getEcSignedPreKey(account.getPrincipalNameIdentifier(), Device.PRIMARY_ID).join().isPresent());
     assertFalse(keysManager.getLastResort(account.getUuid(), Device.PRIMARY_ID).join().isPresent());
@@ -491,6 +528,8 @@ public class AccountCreationDeletionIntegrationTest {
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
   private void assertExpectedStoredAccount(final Account account,
       final String principal,
+      final String verificationProvider,
+      final String verificationSubject,
       final String password,
       final String signalAgent,
       final DeliveryChannels deliveryChannels,
@@ -511,6 +550,8 @@ public class AccountCreationDeletionIntegrationTest {
     final Device primaryDevice = account.getPrimaryDevice();
 
     assertEquals(principal, account.getPrincipal());
+    assertEquals(accountsManager.getSubjectByAccountIdentifier(
+        account.getUuid()), Optional.of(new Subject(verificationProvider, verificationSubject)));
     assertEquals(signalAgent, primaryDevice.getUserAgent());
     assertEquals(deliveryChannels.fetchesMessages(), primaryDevice.getFetchesMessages());
     assertEquals(registrationId, primaryDevice.getRegistrationId(IdentityType.ACI));

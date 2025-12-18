@@ -39,6 +39,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import org.mockito.Mockito;
 import org.whispersystems.textsecuregcm.auth.DisconnectionRequestManager;
 import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicConfiguration;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.redis.FaultTolerantRedisClient;
 import org.whispersystems.textsecuregcm.redis.RedisClusterExtension;
 import org.whispersystems.textsecuregcm.securestorage.SecureStorageClient;
@@ -120,6 +121,7 @@ class AccountsManagerUsernameIntegrationTest {
         Tables.ACCOUNTS.tableName(),
         Tables.PRINCIPALS.tableName(),
         Tables.PNI_ASSIGNMENTS.tableName(),
+        Tables.SUBJECTS.tableName(),
         Tables.USERNAMES.tableName(),
         Tables.DELETED_ACCOUNTS.tableName(),
         Tables.USED_LINK_DEVICE_TOKENS.tableName()));
@@ -370,7 +372,12 @@ class AccountsManagerUsernameIntegrationTest {
     final Account account = AccountsHelper.createAccount(accountsManager, "user.account@example.com");
 
     account.setUsernameHash(TestRandomUtil.nextBytes(16));
-    accounts.create(account, Collections.emptyList());
+    accounts.create(account, new PrincipalVerificationDetails(
+        PrincipalVerificationDetails.VerificationType.SESSION,
+        account.getPrincipal(),
+        "provider-example",
+        "subject-example"
+    ), Collections.emptyList());
 
     final UUID linkHandle = UUID.randomUUID();
     final byte[] encryptedUsername = TestRandomUtil.nextBytes(32);

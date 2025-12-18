@@ -82,6 +82,7 @@ import org.whispersystems.textsecuregcm.controllers.MismatchedDevicesException;
 import org.whispersystems.textsecuregcm.entities.AccountAttributes;
 import org.whispersystems.textsecuregcm.entities.ECSignedPreKey;
 import org.whispersystems.textsecuregcm.entities.KEMSignedPreKey;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.entities.RemoteAttachment;
 import org.whispersystems.textsecuregcm.entities.TransferArchiveResult;
 import org.whispersystems.textsecuregcm.identity.AciServiceIdentifier;
@@ -672,7 +673,7 @@ class AccountsManagerTest {
     when(clusterCommands.get(eq("Account3::" + uuid))).thenReturn(null);
     when(accounts.getByAccountIdentifier(uuid)).thenReturn(Optional.empty())
         .thenReturn(Optional.of(account));
-    when(accounts.create(any(), any())).thenThrow(ContestedOptimisticLockException.class);
+    when(accounts.create(any(), any(), any())).thenThrow(ContestedOptimisticLockException.class);
 
     accountsManager.update(account, a -> {
     });
@@ -793,14 +794,15 @@ class AccountsManagerTest {
 
   @Test
   void testCreateFreshAccount() throws InterruptedException, AccountAlreadyExistsException {
-    when(accounts.create(any(), any())).thenReturn(true);
+    when(accounts.create(any(), any(), any())).thenReturn(true);
 
     final String principal = "user.account@example.com";
     final AccountAttributes attributes = new AccountAttributes(false, 1, 2, null, null, true, null);
 
     final Account createdAccount = createAccount(principal, attributes);
 
-    verify(accounts).create(argThat(account -> principal.equals(account.getPrincipal())), any());
+    verify(accounts).create(argThat(account -> principal.equals(account.getPrincipal())),
+        argThat(verification -> principal.equals(verification.principal())), any());
     verify(keysManager).buildWriteItemsForNewDevice(
         eq(createdAccount.getUuid()),
         eq(createdAccount.getPrincipalNameIdentifier()),
@@ -830,7 +832,7 @@ class AccountsManagerTest {
 
     final AccountAttributes attributes = new AccountAttributes(false, 1, 2, null, null, true, null);
 
-    when(accounts.create(any(), any()))
+    when(accounts.create(any(), any(), any()))
         .thenAnswer(invocation -> {
           final Account requestedAccount = invocation.getArgument(0);
 
@@ -853,7 +855,8 @@ class AccountsManagerTest {
     assertEquals(principal, reregisteredAccount.getPrincipal());
 
     verify(accounts)
-        .create(argThat(account -> principal.equals(account.getPrincipal()) && existingUuid.equals(account.getUuid())), any());
+        .create(argThat(account -> principal.equals(account.getPrincipal()) && existingUuid.equals(account.getUuid())),
+            argThat(verification -> principal.equals(verification.principal())), any());
 
     verify(keysManager).buildWriteItemsForNewDevice(
         eq(reregisteredAccount.getUuid()),
@@ -877,7 +880,7 @@ class AccountsManagerTest {
     final UUID recentlyDeletedUuid = UUID.randomUUID();
 
     when(accounts.findRecentlyDeletedAccountIdentifier(any())).thenReturn(Optional.of(recentlyDeletedUuid));
-    when(accounts.create(any(), any())).thenReturn(true);
+    when(accounts.create(any(), any(), any())).thenReturn(true);
 
     final String principal = "user.account@example.com";
     final AccountAttributes attributes = new AccountAttributes(false, 1, 2, null, null, true, null);
@@ -886,6 +889,7 @@ class AccountsManagerTest {
 
     verify(accounts).create(
         argThat(a -> principal.equals(a.getPrincipal()) && recentlyDeletedUuid.equals(a.getUuid())),
+        argThat(v -> principal.equals(v.principal())),
         any());
 
     verify(keysManager).buildWriteItemsForNewDevice(eq(account.getIdentifier(IdentityType.ACI)),
@@ -1405,6 +1409,9 @@ class AccountsManagerTest {
     final ECKeyPair pniKeyPair = ECKeyPair.generate();
 
     return accountsManager.create(principal,
+        new PrincipalVerificationDetails(
+            PrincipalVerificationDetails.VerificationType.SESSION,
+            "provider", "subject", principal),
         accountAttributes,
         new ArrayList<>(),
         new IdentityKey(aciKeyPair.getPublicKey()),

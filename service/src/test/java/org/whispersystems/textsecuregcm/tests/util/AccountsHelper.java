@@ -28,6 +28,7 @@ import org.signal.libsignal.protocol.IdentityKey;
 import org.signal.libsignal.protocol.ecc.ECKeyPair;
 import org.whispersystems.textsecuregcm.auth.SaltedTokenHash;
 import org.whispersystems.textsecuregcm.entities.AccountAttributes;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
@@ -258,6 +259,12 @@ public class AccountsHelper {
       final ECKeyPair pniKeyPair) throws InterruptedException {
 
     return accountsManager.create(principal,
+        new PrincipalVerificationDetails(
+            PrincipalVerificationDetails.VerificationType.SESSION,
+            "provider-example",
+            "subject-example",
+            principal
+        ),
         accountAttributes,
         new ArrayList<>(),
         new IdentityKey(aciKeyPair.getPublicKey()),

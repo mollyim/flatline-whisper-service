@@ -85,6 +85,7 @@ import org.whispersystems.textsecuregcm.mappers.NonNormalizedPrincipalExceptionM
 import org.whispersystems.textsecuregcm.mappers.RateLimitExceededExceptionMapper;
 import org.whispersystems.textsecuregcm.push.MessageTooLargeException;
 import org.whispersystems.textsecuregcm.registration.RegistrationServiceClient;
+import org.whispersystems.textsecuregcm.registration.VerificationSession;
 import org.whispersystems.textsecuregcm.spam.RegistrationRecoveryChecker;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountBadge;
@@ -93,6 +94,7 @@ import org.whispersystems.textsecuregcm.storage.ChangePrincipalManager;
 import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
+import org.whispersystems.textsecuregcm.storage.VerificationSessionManager;
 import org.whispersystems.textsecuregcm.tests.util.AccountsHelper;
 import org.whispersystems.textsecuregcm.tests.util.AuthHelper;
 import org.whispersystems.textsecuregcm.tests.util.KeysHelper;
@@ -112,7 +114,8 @@ class AccountControllerV2Test {
   private final AccountsManager accountsManager = mock(AccountsManager.class);
   private final ChangePrincipalManager changePrincipalManager = mock(ChangePrincipalManager.class);
   private final PrincipalNameIdentifiers principalNameIdentifiers = mock(PrincipalNameIdentifiers.class);
-  private final RegistrationServiceClient registrationServiceClient = mock(RegistrationServiceClient.class);
+  private final VerificationSessionManager verificationSessionManager = mock(
+      VerificationSessionManager.class);
   private final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager = mock(
       RegistrationRecoveryPasswordsManager.class);
   private final RegistrationLockVerificationManager registrationLockVerificationManager = mock(
@@ -132,7 +135,7 @@ class AccountControllerV2Test {
       .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
       .addResource(
           new AccountControllerV2(accountsManager, changePrincipalManager,
-              new PrincipalVerificationTokenManager(principalNameIdentifiers, registrationServiceClient,
+              new PrincipalVerificationTokenManager(principalNameIdentifiers, verificationSessionManager,
                   registrationRecoveryPasswordsManager, registrationRecoveryChecker),
               registrationLockVerificationManager, rateLimiters))
       .build();
@@ -178,10 +181,13 @@ class AccountControllerV2Test {
     @Test
     void changePrincipalSuccess() throws Exception {
 
-      when(registrationServiceClient.getSession(any(), any()))
+      when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.of(AuthHelper.VALID_SUBJECT));
+      when(verificationSessionManager.findForId(any()))
           .thenReturn(CompletableFuture.completedFuture(
-              Optional.of(new RegistrationServiceSession(new byte[16], NEW_PRINCIPAL, true, null, null, null,
-                  SESSION_EXPIRATION_SECONDS))));
+          Optional.of(new VerificationSession("provider-example","client-example",
+              "","","","",
+              NEW_PRINCIPAL,"subject-example", true,
+              System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
       final AccountIdentityResponse accountIdentityResponse =
           resources.getJerseyTest()
@@ -295,10 +301,9 @@ class AccountControllerV2Test {
     @ParameterizedTest
     @MethodSource
     void invalidRegistrationId(final Integer pniRegistrationId, final int expectedStatusCode) {
-      when(registrationServiceClient.getSession(any(), any()))
-          .thenReturn(CompletableFuture.completedFuture(
-              Optional.of(new RegistrationServiceSession(new byte[16], NEW_PRINCIPAL, true, null, null, null,
-                  SESSION_EXPIRATION_SECONDS))));
+      when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.of(AuthHelper.VALID_SUBJECT));
+      when(verificationSessionManager.findForId(any()))
+          .thenReturn(CompletableFuture.completedFuture(Optional.empty()));
       final ChangePrincipalRequest changePrincipalRequest = new ChangePrincipalRequest(encodeSessionId("session"), null,
           NEW_PRINCIPAL, "123", IDENTITY_KEY,
           Collections.emptyList(),
@@ -342,62 +347,17 @@ class AccountControllerV2Test {
       }
     }
 
-    @Test
-    void registrationServiceTimeout() {
-      when(registrationServiceClient.getSession(any(), any()))
-          .thenReturn(CompletableFuture.failedFuture(new RuntimeException()));
-
-      final Invocation.Builder request = resources.getJerseyTest()
-          .target("/v2/accounts/principal")
-          .request()
-          .header(HttpHeaders.AUTHORIZATION,
-              AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD));
-      try (Response response = request.put(Entity.json(requestJson("sessionId", NEW_PRINCIPAL)))) {
-        assertEquals(HttpStatus.SC_SERVICE_UNAVAILABLE, response.getStatus());
-      }
-    }
-
-    @ParameterizedTest
-    @MethodSource
-    void registrationServiceSessionCheck(@Nullable final RegistrationServiceSession session, final int expectedStatus,
-        final String message) {
-      when(registrationServiceClient.getSession(any(), any()))
-          .thenReturn(CompletableFuture.completedFuture(Optional.ofNullable(session)));
-
-      final Invocation.Builder request = resources.getJerseyTest()
-          .target("/v2/accounts/principal")
-          .request()
-          .header(HttpHeaders.AUTHORIZATION,
-              AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD));
-      try (Response response = request.put(Entity.json(requestJson("sessionId", NEW_PRINCIPAL)))) {
-        assertEquals(expectedStatus, response.getStatus(), message);
-      }
-    }
-
-    static Stream<Arguments> registrationServiceSessionCheck() {
-      return Stream.of(
-          Arguments.of(null, 401, "session not found"),
-          Arguments.of(new RegistrationServiceSession(new byte[16], "another.user.account@example.com", false, null, null, null,
-                  SESSION_EXPIRATION_SECONDS), 400,
-              "session principal mismatch"),
-          Arguments.of(
-              new RegistrationServiceSession(new byte[16], NEW_PRINCIPAL, false, null, null, null,
-                  SESSION_EXPIRATION_SECONDS),
-              401,
-              "session not verified")
-      );
-    }
-
     @ParameterizedTest
     @EnumSource(RegistrationLockError.class)
     void registrationLock(final RegistrationLockError error) throws Exception {
-      when(registrationServiceClient.getSession(any(), any()))
-          .thenReturn(
-              CompletableFuture.completedFuture(
-                  Optional.of(new RegistrationServiceSession(new byte[16], NEW_PRINCIPAL, true, null, null, null,
-                      SESSION_EXPIRATION_SECONDS))));
-
       when(accountsManager.getByPrincipal(any())).thenReturn(Optional.of(mock(Account.class)));
+      when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.of(AuthHelper.VALID_SUBJECT));
+      when(verificationSessionManager.findForId(any()))
+          .thenReturn(CompletableFuture.completedFuture(
+              Optional.of(new VerificationSession("provider-example","client-example",
+                  "","","","",
+                  NEW_PRINCIPAL,"subject-example", true,
+                  System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
       final Exception e = switch (error) {
         case MISMATCH -> new WebApplicationException(error.getExpectedStatus());
@@ -499,10 +459,13 @@ class AccountControllerV2Test {
     @Test
     void deviceMessageTooLarge() throws Exception {
 
-      when(registrationServiceClient.getSession(any(), any()))
+      when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.of(AuthHelper.VALID_SUBJECT));
+      when(verificationSessionManager.findForId(any()))
           .thenReturn(CompletableFuture.completedFuture(
-              Optional.of(new RegistrationServiceSession(new byte[16], NEW_PRINCIPAL, true, null, null, null,
-                  SESSION_EXPIRATION_SECONDS))));
+              Optional.of(new VerificationSession("provider-example","client-example",
+                  "","","","",
+                  NEW_PRINCIPAL,"subject-example", true,
+                  System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
       reset(changePrincipalManager);
       when(changePrincipalManager.changePrincipal(any(), any(), any(), any(), any(), any(), any(), any()))

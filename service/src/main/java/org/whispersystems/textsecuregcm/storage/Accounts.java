@@ -36,12 +36,10 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import io.netty.util.internal.StringUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.signal.libsignal.zkgroup.backups.BackupCredentialType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.w3c.dom.Attr;
 import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
 import org.whispersystems.textsecuregcm.util.AsyncTimerUtil;
@@ -227,6 +225,12 @@ public class Accounts {
       final PrincipalVerificationDetails verificationDetails,
       final List<TransactWriteItem> additionalWriteItems)
       throws AccountAlreadyExistsException {
+
+    // FLT(uoemai): Flatline does not support recovery passwords (i.e. PIN) due to the lack of SVR component.
+    //              Currently, account registration is only supported with the verification session method.
+    if (verificationDetails.verificationType().equals(PrincipalVerificationDetails.VerificationType.RECOVERY_PASSWORD)) {
+      throw new IllegalArgumentException("account creation with unsupported recovery password verification");
+    }
 
     final Timer.Sample sample = Timer.start();
 
@@ -1261,8 +1265,8 @@ public class Accounts {
               Optional<Subject> subject = getSubjectByAccountIdentifier(uuid);
               subject.ifPresent(s ->
                   transactWriteItems.add(buildDelete(subjectConstraintTableName,
-                      ATTR_VERIFICATION_PROVIDER, s.getProviderId(),
-                      ATTR_VERIFICATION_SUBJECT, s.getSubject()))
+                      ATTR_VERIFICATION_PROVIDER, s.providerId(),
+                      ATTR_VERIFICATION_SUBJECT, s.subject()))
               );
 
               account.getUsernameHash().ifPresent(usernameHash -> transactWriteItems.add(

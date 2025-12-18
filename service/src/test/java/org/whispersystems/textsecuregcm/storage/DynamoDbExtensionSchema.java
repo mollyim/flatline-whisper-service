@@ -115,6 +115,26 @@ public final class DynamoDbExtensionSchema {
             .build()),
         List.of(), List.of()),
 
+    SUBJECTS("subjects_test",
+        Accounts.ATTR_VERIFICATION_PROVIDER,
+        Accounts.ATTR_VERIFICATION_SUBJECT,
+        List.of(
+            AttributeDefinition.builder().attributeName(Accounts.ATTR_VERIFICATION_PROVIDER).attributeType(ScalarAttributeType.S).build(),
+            AttributeDefinition.builder().attributeName(Accounts.ATTR_VERIFICATION_SUBJECT).attributeType(ScalarAttributeType.S).build(),
+            AttributeDefinition.builder().attributeName(Accounts.KEY_ACCOUNT_UUID)
+                .attributeType(ScalarAttributeType.B).build()),
+        List.of(),
+        List.of(LocalSecondaryIndex.builder()
+            .indexName(Accounts.KEY_ACCOUNT_UUID)
+            .keySchema(
+                KeySchemaElement.builder().attributeName(Accounts.ATTR_VERIFICATION_PROVIDER).keyType(KeyType.HASH).build(),
+                KeySchemaElement.builder()
+                    .attributeName(Accounts.ATTR_VERIFICATION_SUBJECT)
+                    .keyType(KeyType.RANGE)
+                    .build())
+            .projection(Projection.builder().projectionType(ProjectionType.KEYS_ONLY).build())
+            .build())),
+
     EC_KEYS("keys_test",
         SingleUsePreKeyStore.KEY_ACCOUNT_UUID,
         SingleUsePreKeyStore.KEY_DEVICE_ID_KEY_ID,
