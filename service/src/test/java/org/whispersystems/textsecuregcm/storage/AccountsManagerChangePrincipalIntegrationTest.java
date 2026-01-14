@@ -58,6 +58,7 @@ class AccountsManagerChangePrincipalIntegrationTest {
       Tables.PRINCIPALS,
       Tables.PNI,
       Tables.PNI_ASSIGNMENTS,
+      Tables.SUBJECTS,
       Tables.USERNAMES,
       Tables.EC_KEYS,
       Tables.PQ_KEYS,

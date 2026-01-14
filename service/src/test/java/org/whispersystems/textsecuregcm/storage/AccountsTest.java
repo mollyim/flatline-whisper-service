@@ -112,6 +112,7 @@ class AccountsTest {
       Tables.ACCOUNTS,
       Tables.PRINCIPALS,
       Tables.PNI_ASSIGNMENTS,
+      Tables.SUBJECTS,
       Tables.USERNAMES,
       Tables.DELETED_ACCOUNTS,
       Tables.USED_LINK_DEVICE_TOKENS,

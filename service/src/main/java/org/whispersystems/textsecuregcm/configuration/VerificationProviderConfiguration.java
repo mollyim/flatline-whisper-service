@@ -7,14 +7,10 @@ package org.whispersystems.textsecuregcm.configuration;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
-import java.util.List;
 import jakarta.ws.rs.DefaultValue;
-import org.glassfish.jersey.server.Uri;
-import org.whispersystems.textsecuregcm.entities.BadgeSvg;
-import org.whispersystems.textsecuregcm.util.ExactlySize;
-import org.whispersystems.textsecuregcm.util.ValidBase64URLString;
+import org.checkerframework.common.value.qual.MatchesRegex;
 
 public class VerificationProviderConfiguration {
   private final String id;
@@ -31,7 +27,9 @@ public class VerificationProviderConfiguration {
 
   @JsonCreator
   public VerificationProviderConfiguration(
-      @JsonProperty("id") final String id,
+      // FLT(uoemai): For storage in DynamoDB, the provider identifier must not contain colons.
+      //              For simplicity a minimal alphanumeric plus dash/underscore pattern is enforced.
+      @MatchesRegex("[a-zA-Z0-9_-]+") @JsonProperty("id") final String id,
       @JsonProperty("name") final String name,
       @JsonProperty("issuer") final String issuer,
       @JsonProperty("authorizationEndpoint") final String authorizationEndpoint,
@@ -55,6 +53,7 @@ public class VerificationProviderConfiguration {
     this.principalClaim = principalClaim;
   }
 
+  @Valid
   @NotEmpty
   public String getId() {
     return id;

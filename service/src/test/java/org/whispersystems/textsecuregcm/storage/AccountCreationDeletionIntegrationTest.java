@@ -65,6 +65,7 @@ public class AccountCreationDeletionIntegrationTest {
       DynamoDbExtensionSchema.Tables.PRINCIPALS,
       DynamoDbExtensionSchema.Tables.PNI,
       DynamoDbExtensionSchema.Tables.PNI_ASSIGNMENTS,
+      DynamoDbExtensionSchema.Tables.SUBJECTS,
       DynamoDbExtensionSchema.Tables.USERNAMES,
       DynamoDbExtensionSchema.Tables.EC_KEYS,
       DynamoDbExtensionSchema.Tables.PQ_KEYS,

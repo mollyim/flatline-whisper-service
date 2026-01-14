@@ -73,6 +73,7 @@ class AccountsManagerUsernameIntegrationTest {
       Tables.DELETED_ACCOUNTS,
       Tables.PNI,
       Tables.PNI_ASSIGNMENTS,
+      Tables.SUBJECTS,
       Tables.EC_KEYS,
       Tables.PQ_KEYS,
       Tables.PAGED_PQ_KEYS,

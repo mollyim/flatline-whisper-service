@@ -12,42 +12,28 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.google.common.net.HttpHeaders;
-import com.google.i18n.phonenumbers.NumberParseException;
-import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 import io.dropwizard.testing.junit5.ResourceExtension;
-import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
 import jakarta.ws.rs.client.Entity;
 import jakarta.ws.rs.client.Invocation;
 import jakarta.ws.rs.core.Response;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpStatus;
@@ -57,19 +43,15 @@ import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.ArgumentCaptor;
-import org.whispersystems.textsecuregcm.captcha.AssessmentResult;
-import org.whispersystems.textsecuregcm.captcha.RegistrationCaptchaManager;
 import org.whispersystems.textsecuregcm.configuration.VerificationConfiguration;
 import org.whispersystems.textsecuregcm.configuration.VerificationProviderConfiguration;
 import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicConfiguration;
 import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicRegistrationConfiguration;
-import org.whispersystems.textsecuregcm.entities.RegistrationServiceSession;
-import org.whispersystems.textsecuregcm.entities.UpdateVerificationSessionResponse;
 import org.whispersystems.textsecuregcm.entities.VerificationProvidersResponse;
 import org.whispersystems.textsecuregcm.entities.VerificationProvidersResponseItem;
 import org.whispersystems.textsecuregcm.entities.CreateVerificationSessionResponse;
@@ -80,14 +62,7 @@ import org.whispersystems.textsecuregcm.mappers.NonNormalizedPrincipalExceptionM
 import org.whispersystems.textsecuregcm.mappers.ObsoletePrincipalFormatExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.RateLimitExceededExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.RegistrationServiceSenderExceptionMapper;
-import org.whispersystems.textsecuregcm.push.PushNotificationManager;
-import org.whispersystems.textsecuregcm.registration.RegistrationFraudException;
-import org.whispersystems.textsecuregcm.registration.RegistrationServiceClient;
-import org.whispersystems.textsecuregcm.registration.RegistrationServiceException;
-import org.whispersystems.textsecuregcm.registration.RegistrationServiceSenderException;
-import org.whispersystems.textsecuregcm.registration.TransportNotAllowedException;
 import org.whispersystems.textsecuregcm.registration.VerificationSession;
-import org.whispersystems.textsecuregcm.spam.RegistrationFraudChecker;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
@@ -99,10 +74,6 @@ import org.whispersystems.textsecuregcm.util.TestRemoteAddressFilterProvider;
 
 @ExtendWith(DropwizardExtensionsSupport.class)
 class VerificationControllerTest {
-  private static final WireMockExtension wireMock = WireMockExtension.newInstance()
-      .options(wireMockConfig().dynamicPort().dynamicHttpsPort())
-      .build();
-
   private static final String EXAMPLE_AUTHORIZATION_PATH = "/api/oidc/authorization";
   private static final String EXAMPLE_TOKEN_PATH = "/api/oidc/token";
   private static final String EXAMPLE_PAR_PATH = "/api/oidc/pushed-authorization-request";
@@ -122,26 +93,36 @@ class VerificationControllerTest {
   private static final String PRINCIPAL = "user.account@example.com";
   private static final String SUBJECT = "25d8f276-120a-4b7c-8c80-f6e237d5e602";
 
-  private static final VerificationProviderConfiguration PROVIDER_1 = new VerificationProviderConfiguration(
-      "example-1",
-      "Example 1",
-      "https://auth1.example.com",
-      "http://localhost:" + wireMock.getPort() + EXAMPLE_AUTHORIZATION_PATH,
-      "http://localhost:" + wireMock.getPort() + EXAMPLE_TOKEN_PATH,
-      "http://localhost:" + wireMock.getPort() + EXAMPLE_PAR_PATH,
-      "http://localhost:" + wireMock.getPort() + EXAMPLE_JWKS_PATH,
-      "0e0ccedd-8d6c-4530-b277-5042ea7ead5b",
-      "https://flatline.example.com", "openid profile", "sub");
-  private static final VerificationProviderConfiguration PROVIDER_2 = new VerificationProviderConfiguration(
-      "example-2",
-      "Example 2",
-      "https://auth2.example.com",
-      "http://localhost:" + wireMock.getPort() + EXAMPLE_AUTHORIZATION_PATH,
-      "http://localhost:" + wireMock.getPort() + EXAMPLE_TOKEN_PATH,
-      "http://localhost:" + wireMock.getPort() + EXAMPLE_PAR_PATH,
-      "http://localhost:" + wireMock.getPort() + EXAMPLE_JWKS_PATH,
-      "2082720b-2922-459a-b9d4-935f8dd651bd",
-      "https://flatline.example.com", "openid email profile", "email");
+  @RegisterExtension
+  private static final WireMockExtension wireMock = WireMockExtension.newInstance()
+      .options(wireMockConfig().dynamicPort().dynamicHttpsPort())
+      .build();
+
+  private static VerificationProviderConfiguration PROVIDER_1;
+  private static VerificationProviderConfiguration PROVIDER_2;
+  @BeforeEach
+  void init() {
+    PROVIDER_1 = new VerificationProviderConfiguration(
+        "example-1",
+        "Example 1",
+        "https://auth1.example.com",
+        "http://localhost:" + wireMock.getPort() + EXAMPLE_AUTHORIZATION_PATH,
+        "http://localhost:" + wireMock.getPort() + EXAMPLE_TOKEN_PATH,
+        "http://localhost:" + wireMock.getPort() + EXAMPLE_PAR_PATH,
+        "http://localhost:" + wireMock.getPort() + EXAMPLE_JWKS_PATH,
+        "0e0ccedd-8d6c-4530-b277-5042ea7ead5b",
+        "https://flatline.example.com", "openid profile", "sub");
+    PROVIDER_2 = new VerificationProviderConfiguration(
+        "example-2",
+        "Example 2",
+        "https://auth2.example.com",
+        "http://localhost:" + wireMock.getPort() + EXAMPLE_AUTHORIZATION_PATH,
+        "http://localhost:" + wireMock.getPort() + EXAMPLE_TOKEN_PATH,
+        "http://localhost:" + wireMock.getPort() + EXAMPLE_PAR_PATH,
+        "http://localhost:" + wireMock.getPort() + EXAMPLE_JWKS_PATH,
+        "2082720b-2922-459a-b9d4-935f8dd651bd",
+        "https://flatline.example.com", "openid email profile", "email");
+  }
 
   private static final UUID PNI = UUID.randomUUID();
   private final VerificationSessionManager verificationSessionManager = mock(VerificationSessionManager.class);
@@ -337,7 +318,7 @@ class VerificationControllerTest {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void createSessionReregistration(final boolean isReregistration) throws NumberParseException {
+  void createSessionReregistration(final boolean isReregistration) {
 
     when(verificationSessionManager.insert(any(), any()))
         .thenReturn(CompletableFuture.completedFuture(null));

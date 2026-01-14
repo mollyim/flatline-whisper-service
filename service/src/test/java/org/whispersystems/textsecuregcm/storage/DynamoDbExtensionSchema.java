@@ -116,24 +116,28 @@ public final class DynamoDbExtensionSchema {
         List.of(), List.of()),
 
     SUBJECTS("subjects_test",
-        Accounts.ATTR_VERIFICATION_PROVIDER,
-        Accounts.ATTR_VERIFICATION_SUBJECT,
+        Accounts.KEY_ACCOUNT_UUID,
+        null,
         List.of(
-            AttributeDefinition.builder().attributeName(Accounts.ATTR_VERIFICATION_PROVIDER).attributeType(ScalarAttributeType.S).build(),
-            AttributeDefinition.builder().attributeName(Accounts.ATTR_VERIFICATION_SUBJECT).attributeType(ScalarAttributeType.S).build(),
-            AttributeDefinition.builder().attributeName(Accounts.KEY_ACCOUNT_UUID)
-                .attributeType(ScalarAttributeType.B).build()),
-        List.of(),
-        List.of(LocalSecondaryIndex.builder()
-            .indexName(Accounts.KEY_ACCOUNT_UUID)
-            .keySchema(
-                KeySchemaElement.builder().attributeName(Accounts.ATTR_VERIFICATION_PROVIDER).keyType(KeyType.HASH).build(),
-                KeySchemaElement.builder()
-                    .attributeName(Accounts.ATTR_VERIFICATION_SUBJECT)
-                    .keyType(KeyType.RANGE)
-                    .build())
-            .projection(Projection.builder().projectionType(ProjectionType.KEYS_ONLY).build())
-            .build())),
+            AttributeDefinition.builder()
+                .attributeName(Accounts.KEY_ACCOUNT_UUID)
+                .attributeType(ScalarAttributeType.B)
+                .build(),
+            AttributeDefinition.builder()
+                .attributeName(Accounts.ATTR_VERIFICATION_PROVIDER_SUBJECT)
+                .attributeType(ScalarAttributeType.S)
+                .build()
+        ),
+        List.of(
+            GlobalSecondaryIndex.builder()
+                .indexName(Accounts.VERIFICATION_PROVIDER_SUBJECT_TO_UUID_INDEX)
+                .keySchema(
+                    KeySchemaElement.builder().attributeName(Accounts.ATTR_VERIFICATION_PROVIDER_SUBJECT).keyType(KeyType.HASH).build()
+                )
+                .projection(Projection.builder().projectionType(ProjectionType.ALL).build())
+                .provisionedThroughput(ProvisionedThroughput.builder().readCapacityUnits(10L).writeCapacityUnits(10L).build())
+                .build()),
+        List.of()),
 
     EC_KEYS("keys_test",
         SingleUsePreKeyStore.KEY_ACCOUNT_UUID,

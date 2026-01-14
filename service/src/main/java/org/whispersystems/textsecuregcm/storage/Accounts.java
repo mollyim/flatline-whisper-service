@@ -132,10 +132,8 @@ public class Accounts {
   static final String ATTR_CANONICALLY_DISCOVERABLE = "C";
   // username hash; byte[] or null
   static final String ATTR_USERNAME_HASH = "N";
-  // identifier of the verification provider used for the account
-  static final String ATTR_VERIFICATION_PROVIDER = "VP";
-  // subject returned by the verification provider used for the account
-  static final String ATTR_VERIFICATION_SUBJECT = "VS";
+  // verification provider and subject used to verify the account
+  static final String ATTR_VERIFICATION_PROVIDER_SUBJECT = "VPS";
 
 
   // bytes, primary key
@@ -156,6 +154,8 @@ public class Accounts {
   static final String DELETED_ACCOUNTS_UUID_TO_PNI_INDEX_NAME = "u_to_p";
 
   static final String USERNAME_LINK_TO_UUID_INDEX = "ul_to_u";
+
+  static final String VERIFICATION_PROVIDER_SUBJECT_TO_UUID_INDEX = "vps_to_u";
 
   static final Duration DELETED_ACCOUNTS_TIME_TO_LIVE = Duration.ofDays(30);
 
@@ -249,11 +249,13 @@ public class Accounts {
       //              - The provider used to verify each account is recorded.
       //              - The original subject from the verification provider used to verify the account is recorded.
       //              - The same subject in the same verification provider is only associated with a single account.
-      //              Entries from this table are currently not used anywhere else other than registration.
+      //              This is done by using the ACI as PK and the provider and subject pair as PK for an associated GSI.
+      //              In order to enforce joint uniqueness, provider and subject are concatenated with a separator.
+      //              Uniqueness of the provider and subject pair is enforced by buildConstraintTablePutIfAbsent.
+      //              Entries from this table are currently only used during account creation and deletion.
       final TransactWriteItem subjectConstraintPut = buildConstraintTablePutIfAbsent(
-          subjectConstraintTableName, uuidAttr,
-          ATTR_VERIFICATION_PROVIDER, AttributeValues.fromString(verificationDetails.providerId()),
-          ATTR_VERIFICATION_SUBJECT, AttributeValues.fromString(verificationDetails.subject()));
+          subjectConstraintTableName, uuidAttr, ATTR_VERIFICATION_PROVIDER_SUBJECT,
+          AttributeValues.fromString(verificationDetails.providerId() + ":" + verificationDetails.subject()));
 
       final TransactWriteItem accountPut = buildAccountPut(account, uuidAttr, principalAttr, pniUuidAttr);
 
@@ -1257,17 +1259,10 @@ public class Accounts {
                   buildDelete(principalConstraintTableName, ATTR_ACCOUNT_PRINCIPAL, account.getPrincipal()),
                   buildDelete(accountsTableName, KEY_ACCOUNT_UUID, uuid),
                   buildDelete(principalNameIdentifierConstraintTableName, ATTR_PNI_UUID, account.getPrincipalNameIdentifier()),
-                  buildDelete(subjectConstraintTableName, KEY_ACCOUNT_UUID, account.getPrincipalNameIdentifier()),
+                  buildDelete(subjectConstraintTableName, KEY_ACCOUNT_UUID, account.getUuid()),
                   buildPutDeletedAccount(uuid, account.getPrincipalNameIdentifier())
               ));
 
-              // FLT(uoemai): Any subject constraints should also be deleted as part of the transaction.
-              Optional<Subject> subject = getSubjectByAccountIdentifier(uuid);
-              subject.ifPresent(s ->
-                  transactWriteItems.add(buildDelete(subjectConstraintTableName,
-                      ATTR_VERIFICATION_PROVIDER, s.providerId(),
-                      ATTR_VERIFICATION_SUBJECT, s.subject()))
-              );
 
               account.getUsernameHash().ifPresent(usernameHash -> transactWriteItems.add(
                   buildDelete(usernamesConstraintTableName, UsernameTable.KEY_USERNAME_HASH, usernameHash)));
@@ -1743,14 +1738,19 @@ public class Accounts {
   @VisibleForTesting
   @Nonnull
   static Subject subjectFromItem(final Map<String, AttributeValue> item) {
-    if (!item.containsKey(ATTR_VERIFICATION_PROVIDER)
-        || !item.containsKey(ATTR_VERIFICATION_SUBJECT)
-        || !item.containsKey(KEY_ACCOUNT_UUID)) {
+    if (!item.containsKey(KEY_ACCOUNT_UUID) ||
+        !item.containsKey(ATTR_VERIFICATION_PROVIDER_SUBJECT)) {
       throw new RuntimeException("item missing values");
     }
 
-    final String providerId = item.get(ATTR_VERIFICATION_PROVIDER).b().toString();
-    final String subject = item.get(ATTR_VERIFICATION_SUBJECT).b().toString();
+    final String providerSubject = item.get(ATTR_VERIFICATION_PROVIDER_SUBJECT).s();
+
+    // FLT(uoemai): Splitting with a limit of two will ensure that the subject string is allowed to contain colons.
+    //              The provider identifier is enforced to not contain colons when validating the configuration.
+    String[] parts = providerSubject.split(":", 2);
+    String providerId = parts[0];
+    String subject = Optional.ofNullable(parts.length > 1 ? parts[1] : null)
+        .orElseThrow(() -> new RuntimeException("item with invalid format"));
 
     return new Subject(providerId, subject);
   }
