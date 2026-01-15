@@ -67,7 +67,6 @@ import org.whispersystems.textsecuregcm.entities.GcmRegistrationId;
 import org.whispersystems.textsecuregcm.entities.KEMSignedPreKey;
 import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.entities.RegistrationRequest;
-import org.whispersystems.textsecuregcm.entities.RegistrationServiceSession;
 import org.whispersystems.textsecuregcm.limits.RateLimiter;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
 import org.whispersystems.textsecuregcm.mappers.ImpossiblePrincipalExceptionMapper;
@@ -82,6 +81,7 @@ import org.whispersystems.textsecuregcm.storage.DeviceCapability;
 import org.whispersystems.textsecuregcm.storage.DeviceSpec;
 import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
+import org.whispersystems.textsecuregcm.storage.Subject;
 import org.whispersystems.textsecuregcm.storage.VerificationSessionManager;
 import org.whispersystems.textsecuregcm.tests.util.AuthHelper;
 import org.whispersystems.textsecuregcm.tests.util.KeysHelper;
@@ -255,7 +255,7 @@ class RegistrationControllerTest {
   void registrationServiceSessionCheck(@Nullable final VerificationSession session, final int expectedStatus,
       final String message) {
     when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.of(AuthHelper.VALID_SUBJECT));
-    when(verificationSessionManager.findForId(any())).thenReturn(CompletableFuture.completedFuture(Optional.of(session)));
+    when(verificationSessionManager.findForId(any())).thenReturn(CompletableFuture.completedFuture(Optional.ofNullable(session)));
 
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
@@ -268,7 +268,7 @@ class RegistrationControllerTest {
 
   static Stream<Arguments> registrationServiceSessionCheck() {
     return Stream.of(
-        Arguments.of(null, 401, "session not found"),
+        Arguments.of(null, 404, "session not found"),
         Arguments.of(
             new VerificationSession("provider-example","client-example",
                 "","","","",
@@ -280,7 +280,8 @@ class RegistrationControllerTest {
             new VerificationSession("provider-example","client-example",
                 "","","","",
                 PRINCIPAL,"subject-example", false,
-                System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS),            401,
+                System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS),
+            401,
             "session not verified")
     );
   }
@@ -402,6 +403,9 @@ class RegistrationControllerTest {
       final Account createdAccount = mock(Account.class);
       when(createdAccount.getPrimaryDevice()).thenReturn(mock(Device.class));
 
+      // FLT(uoemai): The verification subject is the same used to register the account.
+      when(accountsManager.getSubjectByAccountIdentifier(any())).
+          thenReturn(Optional.of(new Subject("provider-example", "subject-example")));
       when(accountsManager.create(any(), any(), any(), any(), any(), any(), any(), any()))
           .thenReturn(createdAccount);
 
@@ -458,6 +462,9 @@ class RegistrationControllerTest {
     final Account account = mock(Account.class);
     when(account.getPrimaryDevice()).thenReturn(mock(Device.class));
 
+    // FLT(uoemai): The verification subject is the same used to register the account.
+    when(accountsManager.getSubjectByAccountIdentifier(any())).
+        thenReturn(Optional.of(new Subject("provider-example", "subject-example")));
     when(accountsManager.create(any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(account);
 
@@ -743,6 +750,9 @@ class RegistrationControllerTest {
       when(a.getPrimaryDevice()).thenReturn(device);
     });
 
+    // FLT(uoemai): The registration controller will check if an account with that principal already exists.
+    //              In order for the account to be created, none should exist with the same principal.
+    when(accountsManager.getByPrincipal(any())).thenReturn(Optional.empty());
     when(accountsManager.create(any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(account);
 
@@ -761,9 +771,10 @@ class RegistrationControllerTest {
         PrincipalVerificationDetails.VerificationType.SESSION, "provider-example", "subject-example",
         PRINCIPAL);
 
+    verify(accountsManager).getByPrincipal(eq(PRINCIPAL));
     verify(accountsManager).create(
         eq(PRINCIPAL),
-        eq(expectedVerificationDetails),
+        argThat(details -> verificationDetailsEqual(details, expectedVerificationDetails)),
         argThat(attributes -> accountAttributesEqual(attributes, registrationRequest.accountAttributes())),
         eq(Collections.emptyList()),
         eq(expectedAciIdentityKey),
@@ -774,7 +785,7 @@ class RegistrationControllerTest {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void reregistrationFlag(final boolean existingAccount) throws InterruptedException {
+  void reregistrationFlagSameProvider(final boolean existingAccount) throws InterruptedException {
     when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.of(AuthHelper.VALID_SUBJECT));
     when(verificationSessionManager.findForId(any()))
         .thenReturn(CompletableFuture.completedFuture(
@@ -791,6 +802,9 @@ class RegistrationControllerTest {
 
     when(accountsManager.create(any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(account);
+    // FLT(uoemai): The verification subject is the same used to register the account.
+    when(accountsManager.getSubjectByAccountIdentifier(any())).
+        thenReturn(Optional.of(new Subject("provider-example", "subject-example")));
 
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
@@ -800,6 +814,55 @@ class RegistrationControllerTest {
       assertEquals(200, response.getStatus());
       final AccountCreationResponse creationResponse = response.readEntity(AccountCreationResponse.class);
       assertEquals(existingAccount, creationResponse.reregistration());
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "false, false, false, 200",
+      "true, true, true, 200",
+      // FLT(uoemai): In the Flatline prototype, an account cannot reregister with a different verification provider.
+      //              The subject used to verify an account cannot currently change from registration to reregistration.
+      "true, true, false, 501",
+      "true, false, true, 501",
+      "true, false, false, 501",
+  })
+  void reregistrationFlag(final boolean existingAccount,
+      final boolean sameVerificationProvider, final boolean sameVerificationSubject, final int expectedStatus)
+      throws InterruptedException {
+    when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.of(AuthHelper.VALID_SUBJECT));
+    when(accountsManager.getSubjectByAccountIdentifier(any())).
+        thenReturn(Optional.of(new Subject("old-provider-example", "old-subject-example")));
+
+    final String verificationProviderId = sameVerificationProvider ? "old-provider-example" : "new-provider-example";
+    final String verificationSubject = sameVerificationSubject ? "old-subject-example" : "new-subject-example";
+
+    when(verificationSessionManager.findForId(any()))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession(verificationProviderId,"client-example",
+                "","","","",
+                PRINCIPAL,verificationSubject, true,
+                System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
+
+    final Optional<Account> maybeAccount = Optional.ofNullable(existingAccount ? mock(Account.class) : null);
+    when(accountsManager.getByPrincipal(any())).thenReturn(maybeAccount);
+
+    final Account account = mock(Account.class);
+    when(account.getPrimaryDevice()).thenReturn(mock(Device.class));
+
+    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(account);
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/registration")
+        .request()
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
+    try (Response response = request.post(Entity.json(requestJson("sessionId")))) {
+      assertEquals(expectedStatus, response.getStatus());
+      if (expectedStatus == 200) {
+        final AccountCreationResponse creationResponse = response.readEntity(AccountCreationResponse.class);
+        assertEquals(existingAccount, creationResponse.reregistration());
+      }
     }
   }
 
@@ -814,6 +877,13 @@ class RegistrationControllerTest {
         && Arrays.equals(a.getUnidentifiedAccessKey(), b.getUnidentifiedAccessKey())
         && Objects.equals(a.getCapabilities(), b.getCapabilities())
         && Objects.equals(a.recoveryPassword(), b.recoveryPassword());
+  }
+
+  private static boolean verificationDetailsEqual(final PrincipalVerificationDetails a, final PrincipalVerificationDetails b) {
+    return a.principal().equals(b.principal())
+        && a.verificationType() == b.verificationType()
+        && a.subject().equals(b.subject())
+        && a.providerId().equals(b.providerId());
   }
 
   private static List<Arguments> atomicAccountCreationSuccess() {
