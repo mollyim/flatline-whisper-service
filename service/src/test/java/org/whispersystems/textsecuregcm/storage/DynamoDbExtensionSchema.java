@@ -116,23 +116,23 @@ public final class DynamoDbExtensionSchema {
         List.of(), List.of()),
 
     SUBJECTS("subjects_test",
-        Accounts.KEY_ACCOUNT_UUID,
+        Accounts.ATTR_VERIFICATION_PROVIDER_SUBJECT,
         null,
         List.of(
             AttributeDefinition.builder()
-                .attributeName(Accounts.KEY_ACCOUNT_UUID)
-                .attributeType(ScalarAttributeType.B)
-                .build(),
-            AttributeDefinition.builder()
                 .attributeName(Accounts.ATTR_VERIFICATION_PROVIDER_SUBJECT)
                 .attributeType(ScalarAttributeType.S)
+                .build(),
+            AttributeDefinition.builder()
+                .attributeName(Accounts.KEY_ACCOUNT_UUID)
+                .attributeType(ScalarAttributeType.B)
                 .build()
         ),
         List.of(
             GlobalSecondaryIndex.builder()
-                .indexName(Accounts.VERIFICATION_PROVIDER_SUBJECT_TO_UUID_INDEX)
+                .indexName(Accounts.ACCOUNT_UUID_TO_VERIFICATION_PROVIDER_SUBJECT_INDEX)
                 .keySchema(
-                    KeySchemaElement.builder().attributeName(Accounts.ATTR_VERIFICATION_PROVIDER_SUBJECT).keyType(KeyType.HASH).build()
+                    KeySchemaElement.builder().attributeName(Accounts.KEY_ACCOUNT_UUID).keyType(KeyType.HASH).build()
                 )
                 .projection(Projection.builder().projectionType(ProjectionType.ALL).build())
                 .provisionedThroughput(ProvisionedThroughput.builder().readCapacityUnits(10L).writeCapacityUnits(10L).build())

@@ -302,8 +302,13 @@ class AccountControllerV2Test {
     @MethodSource
     void invalidRegistrationId(final Integer pniRegistrationId, final int expectedStatusCode) {
       when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.of(AuthHelper.VALID_SUBJECT));
+      // FLT(uoemai): The principal change request must be associated with a valid verification session.
+      //              That session must have validated the new principal being requested in the change.
       when(verificationSessionManager.findForId(any()))
-          .thenReturn(CompletableFuture.completedFuture(Optional.empty()));
+          .thenReturn(CompletableFuture.completedFuture(Optional.of(new VerificationSession("provider-example","client-example",
+                  "","","","",
+                  NEW_PRINCIPAL,"subject-example", true,
+                  System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
       final ChangePrincipalRequest changePrincipalRequest = new ChangePrincipalRequest(encodeSessionId("session"), null,
           NEW_PRINCIPAL, "123", IDENTITY_KEY,
           Collections.emptyList(),

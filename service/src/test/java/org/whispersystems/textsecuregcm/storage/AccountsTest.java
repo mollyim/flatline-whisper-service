@@ -195,6 +195,7 @@ class AccountsTest {
 
     assertPrincipalConstraintExists("user.account@example.com", account.getUuid());
     assertPrincipalNameIdentifierConstraintExists(account.getPrincipalNameIdentifier(), account.getUuid());
+    assertSubjectConstraintExists("provider-example:subject-example", account.getUuid());
 
     freshUser = createAccount(account);
     assertThat(freshUser).isTrue();
@@ -202,6 +203,7 @@ class AccountsTest {
 
     assertPrincipalConstraintExists("user.account@example.com", account.getUuid());
     assertPrincipalNameIdentifierConstraintExists(account.getPrincipalNameIdentifier(), account.getUuid());
+    assertSubjectConstraintExists("provider-example:subject-example", account.getUuid());
   }
 
   @Test
@@ -218,6 +220,7 @@ class AccountsTest {
 
     assertPrincipalConstraintExists("user.account@example.com", account.getUuid());
     assertPrincipalNameIdentifierConstraintExists(account.getPrincipalNameIdentifier(), account.getUuid());
+    assertSubjectConstraintExists("provider-example:subject-example", account.getUuid());
 
     accounts.delete(originalUuid, Collections.emptyList()).join();
     assertThat(accounts.findRecentlyDeletedAccountIdentifier(account.getPrincipalNameIdentifier())).hasValue(originalUuid);
@@ -228,11 +231,13 @@ class AccountsTest {
 
     assertPrincipalConstraintExists("user.account@example.com", account.getUuid());
     assertPrincipalNameIdentifierConstraintExists(account.getPrincipalNameIdentifier(), account.getUuid());
+    assertSubjectConstraintExists("provider-example:subject-example", account.getUuid());
 
     assertThat(accounts.findRecentlyDeletedAccountIdentifier(account.getPrincipalNameIdentifier())).isEmpty();
   }
 
   @Test
+  // FLT(uoemai): TODO: This should fail if the provider and subject are the same.
   void testStoreMulti() {
     final List<Device> devices = List.of(generateDevice(DEVICE_ID_1), generateDevice(DEVICE_ID_2));
     final Account account = generateAccount("user.account@example.com", UUID.randomUUID(), UUID.randomUUID(), devices);
@@ -243,6 +248,29 @@ class AccountsTest {
 
     assertPrincipalConstraintExists("user.account@example.com", account.getUuid());
     assertPrincipalNameIdentifierConstraintExists(account.getPrincipalNameIdentifier(), account.getUuid());
+    assertSubjectConstraintExists("provider-example:subject-example", account.getUuid());
+  }
+
+  @Test
+  void testStoreSameSubject() {
+    Device device1 = generateDevice(DEVICE_ID_1);
+    Device device2 = generateDevice(DEVICE_ID_2);
+    final Account account1 = generateAccount("user.account1@example.com", UUID.randomUUID(), UUID.randomUUID(), List.of(device1));
+    final Account account2 = generateAccount("user.account2@example.com", UUID.randomUUID(), UUID.randomUUID(), List.of(device2));
+
+    assertTrue(createAccount(account1));
+    assertThrows(IllegalArgumentException.class, () -> createAccount(account2),
+        "Reusing verification provider and subject for different account should fail");
+
+    verifyStoredState("user.account1@example.com", account1.getUuid(), account1.getPrincipalNameIdentifier(), null, account1, true);
+
+    assertPrincipalConstraintExists("user.account1@example.com", account1.getUuid());
+    assertPrincipalNameIdentifierConstraintExists(account1.getPrincipalNameIdentifier(), account1.getUuid());
+    assertSubjectConstraintExists("provider-example:subject-example", account1.getUuid());
+
+    assertPrincipalConstraintDoesNotExist("user.account2@example.com");
+    assertPrincipalNameIdentifierConstraintDoesNotExist(account2.getPrincipalNameIdentifier());
+    assertSubjectConstraintDoesNotExist("provider-example:subject-example");
   }
 
   @Test
@@ -257,6 +285,7 @@ class AccountsTest {
 
     assertPrincipalConstraintExists("user.account@example.com", account.getUuid());
     assertPrincipalNameIdentifierConstraintExists(account.getPrincipalNameIdentifier(), account.getUuid());
+    assertSubjectConstraintExists("provider-example:subject-example", account.getUuid());
 
     account.setPrincipal("different.user.account@example.com", UUID.randomUUID());
     assertThrows(IllegalArgumentException.class, () -> createAccount(account),
@@ -275,6 +304,7 @@ class AccountsTest {
 
     assertPrincipalConstraintExists("user.account@example.com", account1.getUuid());
     assertPrincipalNameIdentifierConstraintExists(account1.getPrincipalNameIdentifier(), account1.getUuid());
+    assertSubjectConstraintExists("provider-example:subject-example", account1.getUuid());
 
     Device device2 = generateDevice(DEVICE_ID_1);
     Account account2 = generateAccount("user.account@example.com", UUID.randomUUID(), account1.getPrincipalNameIdentifier(),
@@ -520,6 +550,7 @@ class AccountsTest {
 
     assertPrincipalConstraintExists(principal, existingUuid);
     assertPrincipalNameIdentifierConstraintExists(existingPni, existingUuid);
+    assertSubjectConstraintExists("provider-example:subject-example", existingUuid);
 
     assertDoesNotThrow(() -> accounts.update(existingAccount));
 
@@ -558,6 +589,7 @@ class AccountsTest {
 
     assertPrincipalConstraintExists("user.account@example.com", existingUuid);
     assertPrincipalNameIdentifierConstraintExists(existingPni, existingUuid);
+    assertSubjectConstraintExists("provider-example:subject-example", existingUuid);
 
     Account invalidAccount = generateAccount("another.user.account@example.com", existingUuid, UUID.randomUUID(), List.of(generateDevice(DEVICE_ID_1)));
 
@@ -573,6 +605,7 @@ class AccountsTest {
 
     assertPrincipalConstraintExists("user.account@example.com", account.getUuid());
     assertPrincipalNameIdentifierConstraintExists(account.getPrincipalNameIdentifier(), account.getUuid());
+    assertSubjectConstraintExists("provider-example:subject-example", account.getUuid());
 
     device.setName("foobar".getBytes(StandardCharsets.UTF_8));
 
@@ -580,6 +613,7 @@ class AccountsTest {
 
     assertPrincipalConstraintExists("user.account@example.com", account.getUuid());
     assertPrincipalNameIdentifierConstraintExists(account.getPrincipalNameIdentifier(), account.getUuid());
+    assertSubjectConstraintExists("provider-example:subject-example", account.getUuid());
 
     Optional<Account> retrieved = accounts.getByPrincipal("user.account@example.com");
 
@@ -786,8 +820,10 @@ class AccountsTest {
 
     assertPrincipalConstraintExists("deleted.account@example.com", deletedAccount.getUuid());
     assertPrincipalNameIdentifierConstraintExists(deletedAccount.getPrincipalNameIdentifier(), deletedAccount.getUuid());
+    assertSubjectConstraintExists("provider-example:subject-example", deletedAccount.getUuid());
     assertPrincipalConstraintExists("retained.account@example.com", retainedAccount.getUuid());
     assertPrincipalNameIdentifierConstraintExists(retainedAccount.getPrincipalNameIdentifier(), retainedAccount.getUuid());
+    assertSubjectConstraintExists("provider-example:subject-example", retainedAccount.getUuid());
 
     assertThat(accounts.getByAccountIdentifier(deletedAccount.getUuid())).isPresent();
     assertThat(accounts.getByAccountIdentifier(retainedAccount.getUuid())).isPresent();
@@ -799,6 +835,7 @@ class AccountsTest {
 
     assertPrincipalConstraintDoesNotExist(deletedAccount.getPrincipal());
     assertPrincipalNameIdentifierConstraintDoesNotExist(deletedAccount.getPrincipalNameIdentifier());
+    assertSubjectConstraintDoesNotExist("provider-example:subject-example");
 
     verifyStoredState(retainedAccount.getPrincipal(), retainedAccount.getUuid(), retainedAccount.getPrincipalNameIdentifier(),
         null, accounts.getByAccountIdentifier(retainedAccount.getUuid()).orElseThrow(), retainedAccount);
@@ -816,6 +853,7 @@ class AccountsTest {
 
       assertPrincipalConstraintExists(recreatedAccount.getPrincipal(), recreatedAccount.getUuid());
       assertPrincipalNameIdentifierConstraintExists(recreatedAccount.getPrincipalNameIdentifier(), recreatedAccount.getUuid());
+      assertSubjectConstraintExists("provider-example:subject-example", recreatedAccount.getUuid());
     }
   }
 
@@ -905,6 +943,7 @@ class AccountsTest {
 
     assertPrincipalConstraintExists(originalPrincipal, account.getUuid());
     assertPrincipalNameIdentifierConstraintExists(originalPni, account.getUuid());
+    assertSubjectConstraintExists("provider-example:subject-example", account.getUuid());
 
     {
       final Optional<Account> retrieved = accounts.getByPrincipal(originalPrincipal);
@@ -922,6 +961,7 @@ class AccountsTest {
     assertPrincipalNameIdentifierConstraintDoesNotExist(originalPni);
     assertPrincipalConstraintExists(targetPrincipal, account.getUuid());
     assertPrincipalNameIdentifierConstraintExists(targetPni, account.getUuid());
+    assertSubjectConstraintExists("provider-example:subject-example", account.getUuid());
 
     {
       final Optional<Account> retrieved = accounts.getByPrincipal(targetPrincipal);
@@ -964,8 +1004,10 @@ class AccountsTest {
 
     assertPrincipalConstraintExists(originalPrincipal, account.getUuid());
     assertPrincipalNameIdentifierConstraintExists(originalPni, account.getUuid());
+    assertSubjectConstraintExists("provider-example:subject-example", account.getUuid());
     assertPrincipalConstraintExists(targetPrincipal, existingAccount.getUuid());
     assertPrincipalNameIdentifierConstraintExists(targetPni, existingAccount.getUuid());
+    assertSubjectConstraintExists("provider-example:subject-example", existingAccount.getUuid());
   }
 
   @Test
@@ -1032,6 +1074,7 @@ class AccountsTest {
     assertPrincipalNameIdentifierConstraintDoesNotExist(originalPni);
     assertPrincipalConstraintExists(targetPrincipal, firstAccountInstance.getUuid());
     assertPrincipalNameIdentifierConstraintExists(targetPni, firstAccountInstance.getUuid());
+    assertSubjectConstraintExists("provider-example:subject-example", firstAccountInstance.getUuid());
   }
 
   @Test
@@ -2009,6 +2052,27 @@ class AccountsTest {
             .build());
 
     assertThat(pniConstraintResponse.hasItem()).isFalse();
+  }
+
+  private void assertSubjectConstraintExists(final String providerSubject, final UUID uuid) {
+    final GetItemResponse subjectConstraintResponse = DYNAMO_DB_EXTENSION.getDynamoDbClient().getItem(
+        GetItemRequest.builder()
+            .tableName(Tables.SUBJECTS.tableName())
+            .key(Map.of(Accounts.ATTR_VERIFICATION_PROVIDER_SUBJECT, AttributeValues.fromString(providerSubject)))
+            .build());
+
+    assertThat(subjectConstraintResponse.hasItem()).isTrue();
+    assertThat(AttributeValues.getUUID(subjectConstraintResponse.item(), Accounts.KEY_ACCOUNT_UUID, null)).isEqualTo(uuid);
+  }
+
+  private void assertSubjectConstraintDoesNotExist(final String providerSubject) {
+    final GetItemResponse subjectConstraintResponse = DYNAMO_DB_EXTENSION.getDynamoDbClient().getItem(
+        GetItemRequest.builder()
+            .tableName(Tables.SUBJECTS.tableName())
+            .key(Map.of(Accounts.ATTR_VERIFICATION_PROVIDER_SUBJECT, AttributeValues.fromString(providerSubject)))
+            .build());
+
+    assertThat(subjectConstraintResponse.hasItem()).isFalse();
   }
 
   private Map<String, AttributeValue> readAccount(final UUID uuid) {

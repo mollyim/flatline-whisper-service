@@ -155,7 +155,7 @@ public class Accounts {
 
   static final String USERNAME_LINK_TO_UUID_INDEX = "ul_to_u";
 
-  static final String VERIFICATION_PROVIDER_SUBJECT_TO_UUID_INDEX = "vps_to_u";
+  static final String ACCOUNT_UUID_TO_VERIFICATION_PROVIDER_SUBJECT_INDEX = "u_to_vps";
 
   static final Duration DELETED_ACCOUNTS_TIME_TO_LIVE = Duration.ofDays(30);
 
@@ -248,14 +248,14 @@ public class Accounts {
       // FLT(uoemai): The subjects table acts as a constraint to ensure the following:
       //              - The provider used to verify each account is recorded.
       //              - The original subject from the verification provider used to verify the account is recorded.
-      //              - The same subject in the same verification provider is only associated with a single account.
-      //              This is done by using the ACI as PK and the provider and subject pair as PK for an associated GSI.
-      //              In order to enforce joint uniqueness, provider and subject are concatenated with a separator.
-      //              Uniqueness of the provider and subject pair is enforced by buildConstraintTablePutIfAbsent.
+      //              - The same subject from the same verification provider is only associated with a single account.
+      //              This is done by using the joint verification provider identifier and subject as PK for the table.
+      //              The ACI of the account is the PK of a GSI used to look up the subject based on the ACI.
+      //              Uniqueness of both attributes is enforced by the buildConstraintTablePutIfAbsent function.
       //              Entries from this table are currently only used during account creation and deletion.
       final TransactWriteItem subjectConstraintPut = buildConstraintTablePutIfAbsent(
           subjectConstraintTableName, uuidAttr, ATTR_VERIFICATION_PROVIDER_SUBJECT,
-          AttributeValues.fromString(verificationDetails.providerId() + ":" + verificationDetails.subject()));
+          AttributeValues.fromString(new Subject(verificationDetails.providerId(), verificationDetails.subject()).toString()));
 
       final TransactWriteItem accountPut = buildAccountPut(account, uuidAttr, principalAttr, pniUuidAttr);
 
@@ -277,10 +277,16 @@ public class Accounts {
         dynamoDbClient.transactWriteItems(request);
       } catch (final TransactionCanceledException e) {
 
-        final CancellationReason accountCancellationReason = e.cancellationReasons().get(2);
+        final CancellationReason accountCancellationReason = e.cancellationReasons().get(3);
 
         if (conditionalCheckFailed(accountCancellationReason)) {
           throw new IllegalArgumentException("account identifier present with different principal");
+        }
+
+        final CancellationReason subjectConstraintCancellationReason = e.cancellationReasons().get(2);
+
+        if (conditionalCheckFailed(subjectConstraintCancellationReason)) {
+          throw new IllegalArgumentException("verification provider/subject present with different account identifier");
         }
 
         final CancellationReason principalConstraintCancellationReason = e.cancellationReasons().get(0);
@@ -1246,7 +1252,8 @@ public class Accounts {
   @Nonnull
   public Optional<Subject> getSubjectByAccountIdentifier(final UUID uuid) {
     return requireNonNull(GET_SUBJECT_TIMER.record(() ->
-        itemByKey(subjectConstraintTableName, KEY_ACCOUNT_UUID, AttributeValues.fromUUID(uuid))
+        itemByGsiKey(subjectConstraintTableName, ACCOUNT_UUID_TO_VERIFICATION_PROVIDER_SUBJECT_INDEX,
+            KEY_ACCOUNT_UUID, AttributeValues.fromUUID(uuid))
             .map(Accounts::subjectFromItem)));
   }
 
@@ -1259,13 +1266,17 @@ public class Accounts {
                   buildDelete(principalConstraintTableName, ATTR_ACCOUNT_PRINCIPAL, account.getPrincipal()),
                   buildDelete(accountsTableName, KEY_ACCOUNT_UUID, uuid),
                   buildDelete(principalNameIdentifierConstraintTableName, ATTR_PNI_UUID, account.getPrincipalNameIdentifier()),
-                  buildDelete(subjectConstraintTableName, KEY_ACCOUNT_UUID, account.getUuid()),
                   buildPutDeletedAccount(uuid, account.getPrincipalNameIdentifier())
               ));
 
 
               account.getUsernameHash().ifPresent(usernameHash -> transactWriteItems.add(
                   buildDelete(usernamesConstraintTableName, UsernameTable.KEY_USERNAME_HASH, usernameHash)));
+
+              // FLT(uoemai): If the account is assigned a verification subject, as expected, it should be deleted.
+              getSubjectByAccountIdentifier(account.getUuid()).ifPresent(subject ->
+                  transactWriteItems.add(buildDelete(subjectConstraintTableName, ATTR_VERIFICATION_PROVIDER_SUBJECT, subject.toString()))
+              );
 
               transactWriteItems.addAll(additionalWriteItems);
 
@@ -1428,6 +1439,34 @@ public class Accounts {
         .consistentRead(true)
         .build());
     return Optional.ofNullable(response.item()).filter(m -> !m.isEmpty());
+  }
+
+  @Nonnull
+  private Optional<Map<String, AttributeValue>> itemByGsiKey(final String table, final String indexName, final String keyName, final AttributeValue keyValue) {
+    final QueryResponse response = dynamoDbClient.query(QueryRequest.builder()
+        .tableName(table)
+        .indexName(indexName)
+        .keyConditionExpression("#gsiKey = :gsiValue")
+        .projectionExpression("#uuid")
+        .expressionAttributeNames(Map.of(
+            "#gsiKey", keyName,
+            "#uuid", KEY_ACCOUNT_UUID))
+        .expressionAttributeValues(Map.of(
+            ":gsiValue", keyValue))
+        .build());
+
+    if (response.count() == 0) {
+      return Optional.empty();
+    }
+
+    if (response.count() > 1) {
+      throw new IllegalStateException(
+          "More than one row located for GSI [%s], key-value pair [%s, %s]"
+              .formatted(indexName, keyName, keyValue));
+    }
+
+    final AttributeValue primaryKeyValue = response.items().get(0).get(KEY_ACCOUNT_UUID);
+    return itemByKey(table, KEY_ACCOUNT_UUID, primaryKeyValue);
   }
 
   @Nonnull
@@ -1738,21 +1777,13 @@ public class Accounts {
   @VisibleForTesting
   @Nonnull
   static Subject subjectFromItem(final Map<String, AttributeValue> item) {
-    if (!item.containsKey(KEY_ACCOUNT_UUID) ||
-        !item.containsKey(ATTR_VERIFICATION_PROVIDER_SUBJECT)) {
+    if (!item.containsKey(ATTR_VERIFICATION_PROVIDER_SUBJECT) ||
+        !item.containsKey(KEY_ACCOUNT_UUID)) {
       throw new RuntimeException("item missing values");
     }
 
     final String providerSubject = item.get(ATTR_VERIFICATION_PROVIDER_SUBJECT).s();
-
-    // FLT(uoemai): Splitting with a limit of two will ensure that the subject string is allowed to contain colons.
-    //              The provider identifier is enforced to not contain colons when validating the configuration.
-    String[] parts = providerSubject.split(":", 2);
-    String providerId = parts[0];
-    String subject = Optional.ofNullable(parts.length > 1 ? parts[1] : null)
-        .orElseThrow(() -> new RuntimeException("item with invalid format"));
-
-    return new Subject(providerId, subject);
+    return Subject.fromString(providerSubject);
   }
 
   private static AttributeValue accountDataAttributeValue(final Account account) {
