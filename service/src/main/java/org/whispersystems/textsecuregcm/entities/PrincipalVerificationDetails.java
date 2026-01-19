@@ -15,7 +15,8 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.ws.rs.ClientErrorException;
 import java.util.Base64;
 import org.apache.http.HttpStatus;
-
+import org.jetbrains.annotations.NotNull;
+import org.whispersystems.textsecuregcm.storage.Subject;
 
 
 public class PrincipalVerificationDetails {
@@ -62,5 +63,9 @@ public class PrincipalVerificationDetails {
   }
   public String principal() {
     return principal;
+  }
+
+  public Subject toSubject() {
+    return new Subject(providerId, subject);
   }
 }

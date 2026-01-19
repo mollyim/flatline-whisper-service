@@ -132,9 +132,9 @@ public class Accounts {
   static final String ATTR_CANONICALLY_DISCOVERABLE = "C";
   // username hash; byte[] or null
   static final String ATTR_USERNAME_HASH = "N";
-  // verification provider and subject used to verify the account
-  static final String ATTR_VERIFICATION_PROVIDER_SUBJECT = "VPS";
 
+  // verification provider and subject used to verify the account, primary key
+  static final String KEY_VERIFICATION_PROVIDER_SUBJECT = "VPS";
 
   // bytes, primary key
   static final String KEY_LINK_DEVICE_TOKEN_HASH = "H";
@@ -254,7 +254,7 @@ public class Accounts {
       //              Uniqueness of both attributes is enforced by the buildConstraintTablePutIfAbsent function.
       //              Entries from this table are currently only used during account creation and deletion.
       final TransactWriteItem subjectConstraintPut = buildConstraintTablePutIfAbsent(
-          subjectConstraintTableName, uuidAttr, ATTR_VERIFICATION_PROVIDER_SUBJECT,
+          subjectConstraintTableName, uuidAttr, KEY_VERIFICATION_PROVIDER_SUBJECT,
           AttributeValues.fromString(new Subject(verificationDetails.providerId(), verificationDetails.subject()).toString()));
 
       final TransactWriteItem accountPut = buildAccountPut(account, uuidAttr, principalAttr, pniUuidAttr);
@@ -1252,8 +1252,8 @@ public class Accounts {
   @Nonnull
   public Optional<Subject> getSubjectByAccountIdentifier(final UUID uuid) {
     return requireNonNull(GET_SUBJECT_TIMER.record(() ->
-        itemByGsiKey(subjectConstraintTableName, ACCOUNT_UUID_TO_VERIFICATION_PROVIDER_SUBJECT_INDEX,
-            KEY_ACCOUNT_UUID, AttributeValues.fromUUID(uuid))
+        itemByGsiKey(subjectConstraintTableName, KEY_VERIFICATION_PROVIDER_SUBJECT,
+            ACCOUNT_UUID_TO_VERIFICATION_PROVIDER_SUBJECT_INDEX, KEY_ACCOUNT_UUID, AttributeValues.fromUUID(uuid))
             .map(Accounts::subjectFromItem)));
   }
 
@@ -1275,7 +1275,7 @@ public class Accounts {
 
               // FLT(uoemai): If the account is assigned a verification subject, as expected, it should be deleted.
               getSubjectByAccountIdentifier(account.getUuid()).ifPresent(subject ->
-                  transactWriteItems.add(buildDelete(subjectConstraintTableName, ATTR_VERIFICATION_PROVIDER_SUBJECT, subject.toString()))
+                  transactWriteItems.add(buildDelete(subjectConstraintTableName, KEY_VERIFICATION_PROVIDER_SUBJECT, subject.toString()))
               );
 
               transactWriteItems.addAll(additionalWriteItems);
@@ -1442,15 +1442,15 @@ public class Accounts {
   }
 
   @Nonnull
-  private Optional<Map<String, AttributeValue>> itemByGsiKey(final String table, final String indexName, final String keyName, final AttributeValue keyValue) {
+  private Optional<Map<String, AttributeValue>> itemByGsiKey(final String table, final String primaryKey, final String indexName, final String keyName, final AttributeValue keyValue) {
     final QueryResponse response = dynamoDbClient.query(QueryRequest.builder()
         .tableName(table)
         .indexName(indexName)
         .keyConditionExpression("#gsiKey = :gsiValue")
-        .projectionExpression("#uuid")
+        .projectionExpression("#pk")
         .expressionAttributeNames(Map.of(
             "#gsiKey", keyName,
-            "#uuid", KEY_ACCOUNT_UUID))
+            "#pk", primaryKey))
         .expressionAttributeValues(Map.of(
             ":gsiValue", keyValue))
         .build());
@@ -1465,8 +1465,8 @@ public class Accounts {
               .formatted(indexName, keyName, keyValue));
     }
 
-    final AttributeValue primaryKeyValue = response.items().get(0).get(KEY_ACCOUNT_UUID);
-    return itemByKey(table, KEY_ACCOUNT_UUID, primaryKeyValue);
+    final AttributeValue primaryKeyValue = response.items().get(0).get(primaryKey);
+    return itemByKey(table, primaryKey, primaryKeyValue);
   }
 
   @Nonnull
@@ -1777,12 +1777,12 @@ public class Accounts {
   @VisibleForTesting
   @Nonnull
   static Subject subjectFromItem(final Map<String, AttributeValue> item) {
-    if (!item.containsKey(ATTR_VERIFICATION_PROVIDER_SUBJECT) ||
+    if (!item.containsKey(KEY_VERIFICATION_PROVIDER_SUBJECT) ||
         !item.containsKey(KEY_ACCOUNT_UUID)) {
       throw new RuntimeException("item missing values");
     }
 
-    final String providerSubject = item.get(ATTR_VERIFICATION_PROVIDER_SUBJECT).s();
+    final String providerSubject = item.get(KEY_VERIFICATION_PROVIDER_SUBJECT).s();
     return Subject.fromString(providerSubject);
   }
 

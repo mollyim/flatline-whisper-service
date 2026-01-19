@@ -116,11 +116,11 @@ public final class DynamoDbExtensionSchema {
         List.of(), List.of()),
 
     SUBJECTS("subjects_test",
-        Accounts.ATTR_VERIFICATION_PROVIDER_SUBJECT,
+        Accounts.KEY_VERIFICATION_PROVIDER_SUBJECT,
         null,
         List.of(
             AttributeDefinition.builder()
-                .attributeName(Accounts.ATTR_VERIFICATION_PROVIDER_SUBJECT)
+                .attributeName(Accounts.KEY_VERIFICATION_PROVIDER_SUBJECT)
                 .attributeType(ScalarAttributeType.S)
                 .build(),
             AttributeDefinition.builder()
