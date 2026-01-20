@@ -311,7 +311,7 @@ public class AccountCreationDeletionIntegrationTest {
 
     final String principal = "user.account@example.com";
     final String verificationProvider = "provider-example";
-    final String verificationSubject = "subject-example";
+    final String verificationSubject = "subject-example-" + UUID.randomUUID();
 
     final UUID existingAccountUuid;
     {
@@ -394,8 +394,9 @@ public class AccountCreationDeletionIntegrationTest {
     final Account reregisteredAccount = accountsManager.create(principal,
         new PrincipalVerificationDetails(
             PrincipalVerificationDetails.VerificationType.SESSION,
-            "provider-example",
-            "subject-example",
+            // FLT(uoemai): For the reregistration, the verification details remain the same.
+            verificationProvider,
+            verificationSubject,
             principal
         ),
         accountAttributes,
@@ -448,7 +449,7 @@ public class AccountCreationDeletionIntegrationTest {
   void deleteAccount() throws InterruptedException {
     final String principal = "user.account@example.com";
     final String verificationProvider = "provider-example";
-    final String verificationSubject = "subject-example";
+    final String verificationSubject = "subject-example-" + UUID.randomUUID();
 
     final String password = RandomStringUtils.secure().nextAlphanumeric(16);
     final String signalAgent = RandomStringUtils.secure().nextAlphabetic(3);

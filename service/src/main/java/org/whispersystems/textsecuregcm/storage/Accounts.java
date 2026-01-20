@@ -283,12 +283,6 @@ public class Accounts {
           throw new IllegalArgumentException("account identifier present with different principal");
         }
 
-        final CancellationReason subjectConstraintCancellationReason = e.cancellationReasons().get(2);
-
-        if (conditionalCheckFailed(subjectConstraintCancellationReason)) {
-          throw new IllegalArgumentException("verification provider/subject present with different account identifier");
-        }
-
         final CancellationReason principalConstraintCancellationReason = e.cancellationReasons().get(0);
         final CancellationReason principalNameIdentifierConstraintCancellationReason = e.cancellationReasons().get(1);
 
@@ -296,8 +290,8 @@ public class Accounts {
             || conditionalCheckFailed(principalNameIdentifierConstraintCancellationReason)) {
 
           // Both reasons should trip in tandem and either should give us the information we need. However, principal
-          // canonicalization can cause multiple principals to have the same PNI, so we make sure we're choosing a condition
-          // check that really failed.
+          // canonicalization could cause multiple principals to have the same PNI, so we make sure we're choosing a
+          // condition check that really failed.
           final CancellationReason reason = conditionalCheckFailed(principalConstraintCancellationReason)
               ? principalConstraintCancellationReason
               : principalNameIdentifierConstraintCancellationReason;
@@ -312,6 +306,13 @@ public class Accounts {
               .orElseThrow(ContestedOptimisticLockException::new);
 
           throw new AccountAlreadyExistsException(existingAccount);
+        }
+
+        // FLT(uoemai): At this point, this can no longer be a case of re-registration.
+        //              The new account is not allowed to share the provider/subject pair with an existing account.
+        final CancellationReason subjectConstraintCancellationReason = e.cancellationReasons().get(2);
+        if (conditionalCheckFailed(subjectConstraintCancellationReason)) {
+          throw new IllegalArgumentException("verification provider/subject present with different account identifier");
         }
 
         if (TRANSACTION_CONFLICT.equals(accountCancellationReason.code())) {

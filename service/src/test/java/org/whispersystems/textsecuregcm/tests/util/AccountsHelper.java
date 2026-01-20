@@ -262,7 +262,7 @@ public class AccountsHelper {
         new PrincipalVerificationDetails(
             PrincipalVerificationDetails.VerificationType.SESSION,
             "provider-example",
-            "subject-example",
+            "subject-example-" + UUID.randomUUID(),
             principal
         ),
         accountAttributes,
