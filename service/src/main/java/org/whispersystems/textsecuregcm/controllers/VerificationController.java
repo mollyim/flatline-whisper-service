@@ -42,6 +42,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.HeaderParam;
@@ -52,6 +53,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.ServerErrorException;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
@@ -170,8 +172,7 @@ public class VerificationController {
     final VerificationProviderConfiguration provider = verificationConfiguration.getProvider(request.providerId());
     if (provider == null) {
       logger.info("failed to find verification provider requested by the verification client");
-      throw new ServerErrorException("the requested verification provider is invalid",
-          Response.Status.BAD_REQUEST);
+      throw new BadRequestException("the requested verification provider is invalid");
     }
 
     final String sessionId = UUID.randomUUID().toString();
@@ -220,7 +221,8 @@ public class VerificationController {
     final long parLifetimeMillis = 1000L * parData.getLifetime();
     final VerificationSession verificationSession = new VerificationSession(provider.getId(), clientId.toString(),
        request.state(), request.redirectUri(), request.codeChallenge(), nonce.toString(),
-       null, null, false, clock.millis(), clock.millis(), parLifetimeMillis);
+        parData.getRequestURI().toString(), null, null, false,
+        clock.millis(), clock.millis(), parLifetimeMillis);
     storeVerificationSession(sessionId, verificationSession);
 
     return new CreateVerificationSessionResponse(sessionId, provider.getAuthorizationEndpoint(), clientId.toString(),
@@ -241,6 +243,7 @@ public class VerificationController {
           """)
   @ApiResponse(responseCode = "200", description = "Session was updated successfully with the information provided", useReturnTypeSchema = true)
   @ApiResponse(responseCode = "403", description = "The information provided was not accepted (e.g token exchange failed)")
+  @ApiResponse(responseCode = "404", description = "Session with the specified ID could not be found")
   @ApiResponse(responseCode = "422", description = "The request did not pass validation")
   @ApiResponse(responseCode = "429", description = "Too many attempts",
       content = @Content(schema = @Schema(implementation = CreateVerificationSessionResponse.class)),
@@ -261,15 +264,18 @@ public class VerificationController {
 
     if (verificationSession.verified()) {
       logger.debug("refused to update a session that is already verified");
-      throw new ServerErrorException("the verification session is already verified",
-          Response.Status.CONFLICT);
+      throw new WebApplicationException(
+          Response.status(Response.Status.CONFLICT)
+              .entity("the verification session is already verified")
+              .type("text/plain")
+              .build()
+      );
     }
 
     final VerificationProviderConfiguration provider = verificationConfiguration.getProvider(verificationSession.providerId());
     if (provider == null) {
       logger.info("failed to find verification provider from the verification session");
-      throw new ServerErrorException("the requested verification provider is invalid",
-          Response.Status.BAD_REQUEST);
+      throw new BadRequestException("the requested verification provider is invalid");
     }
 
     final AuthorizationCode code = new AuthorizationCode(updateVerificationSessionRequest.code());
@@ -381,7 +387,7 @@ public class VerificationController {
     final VerificationSession verifiedVerificationSession = new VerificationSession(
         verificationSession.providerId(), verificationSession.clientId(),
         verificationSession.state(), verificationSession.redirectUri(), verificationSession.codeChallenge(),
-        verificationSession.nonce(), principal.toString(), subject, true,
+        verificationSession.nonce(), verificationSession.requestUri(), principal.toString(), subject, true,
         verificationSession.createdTimestamp(), clock.millis(), verificationSession.remoteExpirationSeconds());
     storeVerificationSession(sessionId, verifiedVerificationSession);
 
@@ -410,11 +416,11 @@ public class VerificationController {
   public CreateVerificationSessionResponse getSession(@PathParam("sessionId") final String sessionId) {
 
     final VerificationSession verificationSession = retrieveVerificationSession(sessionId);
+    final VerificationProviderConfiguration provider = verificationConfiguration.getProvider(verificationSession.providerId());
 
-    // FLT(uoemai): TODO: Consider if we really want to have this endpoint.
-    //                    If we do, return only the fields that can be public.
-
-    return null;
+    return new CreateVerificationSessionResponse(sessionId, provider.getAuthorizationEndpoint(),
+        verificationSession.clientId(), verificationSession.requestUri(),
+        verificationSession.remoteExpirationSeconds(), verificationSession.verified());
   }
 
   private void storeVerificationSession(String sessionId, final VerificationSession verificationSession) {

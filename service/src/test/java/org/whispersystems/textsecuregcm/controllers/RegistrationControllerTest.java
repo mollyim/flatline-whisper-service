@@ -170,7 +170,7 @@ class RegistrationControllerTest {
     when(verificationSessionManager.findForId(any()))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession("provider-example","client-example",
-                "","","","",
+                "","","","","",
                 PRINCIPAL,"subject-example", true,
                 System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
@@ -271,14 +271,14 @@ class RegistrationControllerTest {
         Arguments.of(null, 404, "session not found"),
         Arguments.of(
             new VerificationSession("provider-example","client-example",
-                "","","","",
+                "","","","","",
                 "incorrect.principal@example.com","subject-example", true,
                 System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS),
             400,
             "session principal mismatch"),
         Arguments.of(
             new VerificationSession("provider-example","client-example",
-                "","","","",
+                "","","","","",
                 PRINCIPAL,"subject-example", false,
                 System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS),
             401,
@@ -380,7 +380,7 @@ class RegistrationControllerTest {
     when(verificationSessionManager.findForId(any()))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession("provider-example","client-example",
-                "","","","",
+                "","","","","",
                 PRINCIPAL,"subject-example", true,
                 System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
@@ -445,7 +445,7 @@ class RegistrationControllerTest {
     when(verificationSessionManager.findForId(any()))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession("provider-example","client-example",
-                "","","","",
+                "","","","","",
                 PRINCIPAL,"subject-example", true,
                 System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
@@ -484,7 +484,7 @@ class RegistrationControllerTest {
     when(verificationSessionManager.findForId(any()))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession("provider-example","client-example",
-                "","","","",
+                "","","","","",
                 PRINCIPAL,"subject-example", true,
                 System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
@@ -510,7 +510,7 @@ class RegistrationControllerTest {
     when(verificationSessionManager.findForId(any()))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession("provider-example","client-example",
-                "","","","",
+                "","","","","",
                 PRINCIPAL,"subject-example", true,
                 System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
@@ -601,7 +601,7 @@ class RegistrationControllerTest {
     when(verificationSessionManager.findForId(any()))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession("provider-example","client-example",
-                "","","","",
+                "","","","","",
                 PRINCIPAL,"subject-example", true,
                 System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
@@ -736,7 +736,7 @@ class RegistrationControllerTest {
     when(verificationSessionManager.findForId(any()))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession("provider-example","client-example",
-                "","","","",
+                "","","","","",
                 PRINCIPAL,"subject-example", true,
                 System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
@@ -790,7 +790,7 @@ class RegistrationControllerTest {
     when(verificationSessionManager.findForId(any()))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession("provider-example","client-example",
-                "","","","",
+                "","","","","",
                 PRINCIPAL,"subject-example", true,
                 System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
@@ -840,7 +840,7 @@ class RegistrationControllerTest {
     when(verificationSessionManager.findForId(any()))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession(verificationProviderId,"client-example",
-                "","","","",
+                "","","","","",
                 PRINCIPAL,verificationSubject, true,
                 System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 

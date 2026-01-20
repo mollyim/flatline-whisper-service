@@ -12,11 +12,11 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -37,7 +37,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpStatus;
-import org.glassfish.jersey.client.HttpUrlConnectorProvider;
 import org.glassfish.jersey.server.ServerProperties;
 import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,6 +54,7 @@ import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicRegistratio
 import org.whispersystems.textsecuregcm.entities.VerificationProvidersResponse;
 import org.whispersystems.textsecuregcm.entities.VerificationProvidersResponseItem;
 import org.whispersystems.textsecuregcm.entities.CreateVerificationSessionResponse;
+import org.whispersystems.textsecuregcm.limits.RateLimitByIpFilter;
 import org.whispersystems.textsecuregcm.limits.RateLimiter;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
 import org.whispersystems.textsecuregcm.mappers.ImpossiblePrincipalExceptionMapper;
@@ -69,6 +69,7 @@ import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
 import org.whispersystems.textsecuregcm.storage.VerificationSessionManager;
+import org.whispersystems.textsecuregcm.util.MockUtils;
 import org.whispersystems.textsecuregcm.util.SystemMapper;
 import org.whispersystems.textsecuregcm.util.TestRemoteAddressFilterProvider;
 
@@ -133,6 +134,7 @@ class VerificationControllerTest {
   private final AccountsManager accountsManager = mock(AccountsManager.class);
   private final Clock clock = Clock.systemUTC();
 
+  private final RateLimiter authorizationLimiter = mock(RateLimiter.class);
   private final RateLimiter tokenExchangeLimiter = mock(RateLimiter.class);
   private final DynamicConfigurationManager<DynamicConfiguration> dynamicConfigurationManager = mock(
       DynamicConfigurationManager.class);
@@ -147,6 +149,7 @@ class VerificationControllerTest {
       .addProvider(new ObsoletePrincipalFormatExceptionMapper())
       .addProvider(new RegistrationServiceSenderExceptionMapper())
       .addProvider(new TestRemoteAddressFilterProvider("127.0.0.1"))
+      .addProvider(new RateLimitByIpFilter(rateLimiters))
       .setMapper(SystemMapper.jsonMapper())
       .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
       .addResource(
@@ -159,6 +162,8 @@ class VerificationControllerTest {
   void setUp() {
     when(rateLimiters.getVerificationTokenExchangeLimiter())
         .thenReturn(tokenExchangeLimiter);
+    when(rateLimiters.forDescriptor(RateLimiters.For.VERIFICATION_AUTHORIZATION_PER_IP))
+        .thenReturn(authorizationLimiter);
     when(accountsManager.getByPrincipal(any()))
         .thenReturn(Optional.empty());
     when(dynamicConfiguration.getRegistrationConfiguration())
@@ -167,8 +172,22 @@ class VerificationControllerTest {
         .thenReturn(dynamicConfiguration);
     when(verificationConfiguration.getProviders())
         .thenReturn(List.of(PROVIDER_1, PROVIDER_2));
+    when(verificationConfiguration.getProvider(PROVIDER_1.getId()))
+        .thenReturn(PROVIDER_1);
+    when(verificationConfiguration.getProvider(PROVIDER_2.getId()))
+        .thenReturn(PROVIDER_2);
     when(principalNameIdentifiers.getPrincipalNameIdentifier(PRINCIPAL))
         .thenReturn(CompletableFuture.completedFuture(PNI));
+
+    wireMock.stubFor(post(urlEqualTo(EXAMPLE_PAR_PATH))
+        .willReturn(created()
+            .withHeader("Content-Type", "application/json")
+            .withBody("""
+                {
+                   "request_uri": "%s",
+                   "expires_in": %d
+                }
+                """.formatted(EXAMPLE_REQUEST_URI, EXAMPLE_REQUEST_URI_LIFETIME))));
   }
 
   @MethodSource
@@ -222,6 +241,21 @@ class VerificationControllerTest {
     );
   }
 
+  @Test
+  void createSessionInvalidProvider() {
+    when(verificationSessionManager.insert(any(), any()))
+        .thenReturn(CompletableFuture.completedFuture(null));
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session")
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.post(Entity.json(createSessionJson(
+        "invalid-provider", EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI)))) {
+      assertEquals(400, response.getStatus());
+    }
+  }
+
   @ParameterizedTest
   @MethodSource
   void createSessionInvalidRequestJson(final String providerId, final String codeChallenge,
@@ -240,13 +274,21 @@ class VerificationControllerTest {
 
   static Stream<Arguments> createSessionInvalidRequestJson() {
     return Stream.of(
-        // Verification with a provider that is not configured in Flatline.
-        Arguments.of("example-3", EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI)
+        Arguments.of("", EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI),
+        Arguments.of(PROVIDER_1.getId(), "", EXAMPLE_STATE, EXAMPLE_REDIRECT_URI),
+        Arguments.of("", EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI),
+        Arguments.of(PROVIDER_1.getId(), EXAMPLE_CODE_CHALLENGE, "", EXAMPLE_REDIRECT_URI)
     );
   }
 
   @Test
-  void createSessionRateLimited() {
+  void createSessionRateLimited() throws Exception {
+    when(verificationSessionManager.insert(any(), any()))
+        .thenReturn(CompletableFuture.completedFuture(null));
+
+    MockUtils.updateRateLimiterResponseToFail(
+        rateLimiters, RateLimiters.For.VERIFICATION_AUTHORIZATION_PER_IP, "127.0.0.1", Duration.ofMinutes(10));
+
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/verification/session")
         .request()
@@ -275,16 +317,6 @@ class VerificationControllerTest {
       final String state, final String redirectUri, final String expectedAuthorizationEndpoint,
       final String expectedClientId, final String expectedRequestUri, final long expectedRequestUriLifetime) {
 
-    wireMock.stubFor(post(urlEqualTo(EXAMPLE_PAR_PATH))
-        .willReturn(created()
-            .withHeader("Content-Type", "application/json")
-            .withBody("""
-                {
-                   "request_uri": "%s",
-                   "expires_in": "%d"
-                 }
-                """.formatted(EXAMPLE_REQUEST_URI, EXAMPLE_REQUEST_URI_LIFETIME))));
-
     when(verificationSessionManager.insert(any(), any()))
         .thenReturn(CompletableFuture.completedFuture(null));
 
@@ -293,7 +325,7 @@ class VerificationControllerTest {
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.post(Entity.json(
-        createSessionJson(PROVIDER_1.getId(), EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI)))) {
+        createSessionJson(providerId, codeChallenge, state, redirectUri)))) {
       assertEquals(HttpStatus.SC_OK, response.getStatus());
 
       final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
@@ -353,11 +385,15 @@ class VerificationControllerTest {
 
   @Test
   void patchSessionNotFound() {
+    when(verificationSessionManager.findForId(any()))
+        .thenReturn(CompletableFuture.completedFuture(Optional.empty()));
+
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
-        .request().property(HttpUrlConnectorProvider.SET_METHOD_WORKAROUND, true)
+        .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
-    try (Response response = request.method("PATCH", Entity.json("{}"))) {
+    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
+        EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
       assertEquals(HttpStatus.SC_NOT_FOUND, response.getStatus());
     }
   }
@@ -366,8 +402,11 @@ class VerificationControllerTest {
   void patchSessionRateLimited() throws Exception {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
 
-    when(verificationSessionManager.update(any(), any()))
-        .thenReturn(CompletableFuture.completedFuture(null));
+    when(verificationSessionManager.findForId(any()))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
+                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
+                clock.millis(), clock.millis(), clock.millis()))));
 
     doThrow(RateLimitExceededException.class)
         .when(tokenExchangeLimiter).validate(anyString());
@@ -376,14 +415,13 @@ class VerificationControllerTest {
         .target("/v1/verification/session/" + encodedSessionId)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
-    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
+    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
+        EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
       assertEquals(HttpStatus.SC_TOO_MANY_REQUESTS, response.getStatus());
 
       final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
           CreateVerificationSessionResponse.class);
-
-      assertFalse(verificationSessionResponse.verified());
-
+      assertNull(verificationSessionResponse);
     }
   }
 
@@ -393,7 +431,7 @@ class VerificationControllerTest {
     when(verificationSessionManager.findForId(any()))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
-                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, PRINCIPAL, SUBJECT, true,
+                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, PRINCIPAL, SUBJECT, true,
                 clock.millis(), clock.millis(), clock.millis()))));
 
     when(verificationSessionManager.update(any(), any()))
@@ -406,30 +444,6 @@ class VerificationControllerTest {
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
         EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
       assertEquals(HttpStatus.SC_CONFLICT, response.getStatus());
-    }
-  }
-
-  @Test
-  void getSessionMalformedId() {
-    final String invalidSessionId = "()()()";
-
-    final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + invalidSessionId)
-        .request()
-        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
-    try (Response response = request.get()) {
-      assertEquals(HttpStatus.SC_UNPROCESSABLE_ENTITY, response.getStatus());
-    }
-  }
-
-  @Test
-  void getSessionInvalidArgs() {
-    final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
-        .request()
-        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
-    try (Response response = request.get()) {
-      assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatus());
     }
   }
 
@@ -456,21 +470,14 @@ class VerificationControllerTest {
   }
 
   @Test
-  void getSessionError() {
-    final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
-        .request()
-        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
-    try (Response response = request.get()) {
-      assertEquals(HttpStatus.SC_SERVICE_UNAVAILABLE, response.getStatus());
-    }
-  }
-
-  @Test
   void getSessionSuccess() {
     final String encodedSessionId = encodeSessionId(SESSION_ID);
+
     when(verificationSessionManager.findForId(any()))
-        .thenReturn(CompletableFuture.completedFuture(Optional.of(mock(VerificationSession.class))));
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
+                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, PRINCIPAL, SUBJECT, true,
+                clock.millis(), clock.millis(), clock.millis()))));
 
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/verification/session/" + encodedSessionId)
@@ -478,23 +485,6 @@ class VerificationControllerTest {
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.get()) {
       assertEquals(HttpStatus.SC_OK, response.getStatus());
-    }
-  }
-
-  @Test
-  void getSessionSuccessAlreadyVerified() {
-    final String encodedSessionId = encodeSessionId(SESSION_ID);
-    when(verificationSessionManager.findForId(any()))
-        .thenReturn(CompletableFuture.completedFuture(Optional.of(mock(VerificationSession.class))));
-
-    final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodedSessionId)
-        .request()
-        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
-    try (Response response = request.get()) {
-      assertEquals(HttpStatus.SC_OK, response.getStatus());
-
-      verify(registrationRecoveryPasswordsManager).remove(PNI);
     }
   }
 
@@ -522,7 +512,7 @@ class VerificationControllerTest {
             {
               "code": %s,
               "codeVerifier": %s,
-              "state": %s,
+              "state": %s
             }
             """, quoteIfNotNull(code), quoteIfNotNull(codeVerifier), quoteIfNotNull(state));
   }

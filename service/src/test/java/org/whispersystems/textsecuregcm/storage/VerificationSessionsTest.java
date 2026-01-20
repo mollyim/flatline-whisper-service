@@ -48,7 +48,7 @@ class VerificationSessionsTest {
 
     final VerificationSession verificationSession = new VerificationSession(
         "providerId", "clientId", "state", "redirectUri",
-        "codeChallenge", "nonce", null, null,
+        "codeChallenge", "nonce", "requestUri", null, null,
         false, created.toEpochMilli(), updates.toEpochMilli(), remoteExpiration.toSeconds());
 
     assertEquals(updates.plus(remoteExpiration).getEpochSecond(), verificationSession.getExpirationEpochSeconds());
@@ -66,7 +66,7 @@ class VerificationSessionsTest {
 
       final VerificationSession session = new VerificationSession(
           "providerId", "clientId", "state", "redirectUri",
-          "codeChallenge", "nonce", null, null,
+          "codeChallenge", "nonce", "requestUri", null, null,
           false, clock.millis(), clock.millis(), Duration.ofMinutes(1).toSeconds());
 
       verificationSessions.insert(sessionId, session).join();
@@ -82,7 +82,7 @@ class VerificationSessionsTest {
 
       final VerificationSession updatedSession = new VerificationSession(
           "providerId", "clientId", "state", "redirectUri",
-          "codeChallenge", "nonce", "user.account@example.com", "subject",
+          "codeChallenge", "nonce", "requestUri", "user.account@example.com", "subject",
           true, session.createdTimestamp(), clock.millis(), Duration.ofMinutes(1).toSeconds());
       verificationSessions.update(sessionId, updatedSession).join();
 

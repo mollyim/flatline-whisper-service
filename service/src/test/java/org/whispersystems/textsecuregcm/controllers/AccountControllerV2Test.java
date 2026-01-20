@@ -185,7 +185,7 @@ class AccountControllerV2Test {
       when(verificationSessionManager.findForId(any()))
           .thenReturn(CompletableFuture.completedFuture(
           Optional.of(new VerificationSession("provider-example","client-example",
-              "","","","",
+              "","","","", "",
               NEW_PRINCIPAL,"subject-example", true,
               System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
@@ -306,7 +306,7 @@ class AccountControllerV2Test {
       //              That session must have validated the new principal being requested in the change.
       when(verificationSessionManager.findForId(any()))
           .thenReturn(CompletableFuture.completedFuture(Optional.of(new VerificationSession("provider-example","client-example",
-                  "","","","",
+                  "","","","","",
                   NEW_PRINCIPAL,"subject-example", true,
                   System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
       final ChangePrincipalRequest changePrincipalRequest = new ChangePrincipalRequest(encodeSessionId("session"), null,
@@ -360,7 +360,7 @@ class AccountControllerV2Test {
       when(verificationSessionManager.findForId(any()))
           .thenReturn(CompletableFuture.completedFuture(
               Optional.of(new VerificationSession("provider-example","client-example",
-                  "","","","",
+                  "","","","","",
                   NEW_PRINCIPAL,"subject-example", true,
                   System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
@@ -468,7 +468,7 @@ class AccountControllerV2Test {
       when(verificationSessionManager.findForId(any()))
           .thenReturn(CompletableFuture.completedFuture(
               Optional.of(new VerificationSession("provider-example","client-example",
-                  "","","","",
+                  "","","","","",
                   NEW_PRINCIPAL,"subject-example", true,
                   System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
 
