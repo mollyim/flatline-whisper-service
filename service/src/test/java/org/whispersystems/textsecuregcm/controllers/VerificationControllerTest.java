@@ -7,29 +7,48 @@
 package org.whispersystems.textsecuregcm.controllers;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.created;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.ok;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.google.common.net.HttpHeaders;
+import com.nimbusds.jose.JOSEObjectType;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.JWSSigner;
+import com.nimbusds.jose.crypto.RSASSASigner;
+import com.nimbusds.jose.jwk.JWKSet;
+import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
 import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 import io.dropwizard.testing.junit5.ResourceExtension;
 import jakarta.ws.rs.client.Entity;
 import jakarta.ws.rs.client.Invocation;
 import jakarta.ws.rs.core.Response;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Base64;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -90,6 +109,10 @@ class VerificationControllerTest {
   private static final String EXAMPLE_REQUEST_URI = "https://auth.example.com/e8786e71-3d9f-4b2b-91ba-5c8c2f9cd985";
   private static final long EXAMPLE_REQUEST_URI_LIFETIME = Duration.ofSeconds(10).toSeconds();
 
+  private static final String EXAMPLE_TOKEN_TYPE = "Bearer";
+  private static final long EXAMPLE_TOKEN_EXPIRATION = Duration.ofMinutes(5).toSeconds();
+  private static final String EXAMPLE_TOKEN_SCOPE = "openid email profile";
+
   private static final byte[] SESSION_ID = "session".getBytes(StandardCharsets.UTF_8);
   private static final String PRINCIPAL = "user.account@example.com";
   private static final String SUBJECT = "25d8f276-120a-4b7c-8c80-f6e237d5e602";
@@ -99,10 +122,12 @@ class VerificationControllerTest {
       .options(wireMockConfig().dynamicPort().dynamicHttpsPort())
       .build();
 
+  private static RSAKey PROVIDER_JWK;
+  private static String PROVIDER_JWKS;
   private static VerificationProviderConfiguration PROVIDER_1;
   private static VerificationProviderConfiguration PROVIDER_2;
   @BeforeEach
-  void init() {
+  void init() throws Exception {
     PROVIDER_1 = new VerificationProviderConfiguration(
         "example-1",
         "Example 1",
@@ -123,6 +148,9 @@ class VerificationControllerTest {
         "http://localhost:" + wireMock.getPort() + EXAMPLE_JWKS_PATH,
         "2082720b-2922-459a-b9d4-935f8dd651bd",
         "https://flatline.example.com", "openid email profile", "email");
+
+    PROVIDER_JWK = generateKeyPair("example-key-1");
+    PROVIDER_JWKS = generateKeyJwks(PROVIDER_JWK);
   }
 
   private static final UUID PNI = UUID.randomUUID();
@@ -132,7 +160,7 @@ class VerificationControllerTest {
   private final PrincipalNameIdentifiers principalNameIdentifiers = mock(PrincipalNameIdentifiers.class);
   private final RateLimiters rateLimiters = mock(RateLimiters.class);
   private final AccountsManager accountsManager = mock(AccountsManager.class);
-  private final Clock clock = Clock.systemUTC();
+  private static final Clock clock = Clock.systemUTC();
 
   private final RateLimiter authorizationLimiter = mock(RateLimiter.class);
   private final RateLimiter tokenExchangeLimiter = mock(RateLimiter.class);
@@ -188,6 +216,11 @@ class VerificationControllerTest {
                    "expires_in": %d
                 }
                 """.formatted(EXAMPLE_REQUEST_URI, EXAMPLE_REQUEST_URI_LIFETIME))));
+
+    wireMock.stubFor(get(urlEqualTo(EXAMPLE_JWKS_PATH))
+        .willReturn(ok()
+            .withHeader("Content-Type", "application/json")
+            .withBody(PROVIDER_JWKS)));
   }
 
   @MethodSource
@@ -447,6 +480,177 @@ class VerificationControllerTest {
     }
   }
 
+
+  @Test
+  void patchSessionInvalidProvider() {
+    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession("invalid-provider",PROVIDER_1.getClientId(), EXAMPLE_STATE,
+                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
+                clock.millis(), clock.millis(), clock.millis()))));
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
+        EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
+      assertEquals(HttpStatus.SC_BAD_REQUEST, response.getStatus());
+      String body = response.readEntity(String.class);
+      assertNotNull(body);
+      assertTrue(body.contains("the requested verification provider is invalid"));
+    }
+  }
+
+  @Test
+  void patchSessionInvalidRedirectUri() {
+    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
+                ":invalid-redirect-uri", EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
+                clock.millis(), clock.millis(), clock.millis()))));
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
+        EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
+      assertEquals(HttpStatus.SC_INTERNAL_SERVER_ERROR, response.getStatus());
+      String body = response.readEntity(String.class);
+      assertNotNull(body);
+      assertTrue(body.contains("the provided redirect URI is invalid"));
+    }
+  }
+
+
+  @Test
+  void patchSessionSuccess() throws Exception {
+    when(verificationSessionManager.findForId(eq(encodeSessionId(SESSION_ID))))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
+                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
+                clock.millis(), 0, EXAMPLE_REQUEST_URI_LIFETIME))));
+    when(verificationSessionManager.insert(eq(encodeSessionId(SESSION_ID)), any()))
+        .thenReturn(CompletableFuture.completedFuture(null));
+
+    // This provider uses the default "sub" claim for the principal.
+    when(principalNameIdentifiers.getPrincipalNameIdentifier(eq(SUBJECT)))
+        .thenReturn(CompletableFuture.completedFuture(UUID.randomUUID()));
+
+    // The identity token is not expected to contain any additional principal claims.
+    final String identityToken = generateIdentityTokenJwt(
+        PROVIDER_JWK, PROVIDER_1.getIssuer(), SUBJECT, PROVIDER_1.getClientId(),
+        EXAMPLE_REQUEST_URI_LIFETIME, EXAMPLE_NONCE, "irrelevant", "irrelevant");
+    // This token is irrelevant for Flatline but still expected by the Nimbus library.
+    final String accessToken = generateAccessTokenJwt(
+        PROVIDER_JWK, PROVIDER_1.getIssuer(), SUBJECT, PROVIDER_1.getClientId(), PROVIDER_1.getScopes(),
+        EXAMPLE_REQUEST_URI_LIFETIME, "irrelevant", "irrelevant");
+
+    wireMock.stubFor(post(urlEqualTo(EXAMPLE_TOKEN_PATH))
+        .willReturn(ok()
+            .withHeader("Content-Type", "application/json")
+            .withBody("""
+                {
+                   "id_token": "%s",
+                   "access_token": "%s",
+                   "token_type": "%s",
+                   "expires_in": %d,
+                   "scope": "%s"
+                }
+                """.formatted(
+                identityToken, accessToken, EXAMPLE_TOKEN_TYPE, EXAMPLE_TOKEN_EXPIRATION, EXAMPLE_TOKEN_SCOPE))));
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
+        EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
+
+      verify(verificationSessionManager).findForId(eq(encodeSessionId(SESSION_ID)));
+      verify(verificationSessionManager).insert(
+          eq(encodeSessionId(SESSION_ID)),
+          argThat(verification -> verificationSessionEquals(verification, new VerificationSession(
+                  // Provider metadata should match the provider used to verify.
+                  PROVIDER_1.getId(), PROVIDER_1.getClientId(),
+                  EXAMPLE_STATE, EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE,
+                  EXAMPLE_NONCE, EXAMPLE_REQUEST_URI,
+                  // Principal and subject should match.
+                  SUBJECT, SUBJECT,
+                  // Verification should be complete.
+                  true,
+                  // Timestamps the update timestamp should be updated to the current time.
+                  clock.millis(), clock.millis(), EXAMPLE_REQUEST_URI_LIFETIME
+              ))
+          ));
+
+      assertEquals(HttpStatus.SC_OK, response.getStatus());
+    }
+  }
+
+  @Test
+  void patchSessionSuccessPrincipalClaim() throws Exception {
+    when(verificationSessionManager.findForId(eq(encodeSessionId(SESSION_ID))))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession(PROVIDER_2.getId(),PROVIDER_2.getClientId(), EXAMPLE_STATE,
+                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
+                clock.millis(), 0, EXAMPLE_REQUEST_URI_LIFETIME))));
+    when(verificationSessionManager.insert(eq(encodeSessionId(SESSION_ID)), any()))
+        .thenReturn(CompletableFuture.completedFuture(null));
+
+    // This provider uses the custom "email" claim for the principal.
+    // The identity token is expected to contain that additional claim with the principal.
+    final String identityToken = generateIdentityTokenJwt(
+        PROVIDER_JWK, PROVIDER_2.getIssuer(), SUBJECT, PROVIDER_2.getClientId(),
+        EXAMPLE_REQUEST_URI_LIFETIME, EXAMPLE_NONCE, PROVIDER_2.getPrincipalClaim(), PRINCIPAL);
+    // This token is irrelevant for Flatline but still expected by the Nimbus library.
+    final String accessToken = generateAccessTokenJwt(
+        PROVIDER_JWK, PROVIDER_2.getIssuer(), SUBJECT, PROVIDER_2.getClientId(), PROVIDER_2.getScopes(),
+        EXAMPLE_REQUEST_URI_LIFETIME, PROVIDER_2.getPrincipalClaim(), PRINCIPAL);
+
+    wireMock.stubFor(post(urlEqualTo(EXAMPLE_TOKEN_PATH))
+        .willReturn(ok()
+            .withHeader("Content-Type", "application/json")
+            .withBody("""
+                {
+                   "id_token": "%s",
+                   "access_token": "%s",
+                   "token_type": "%s",
+                   "expires_in": %d,
+                   "scope": "%s"
+                }
+                """.formatted(
+                identityToken, accessToken, EXAMPLE_TOKEN_TYPE, EXAMPLE_TOKEN_EXPIRATION, EXAMPLE_TOKEN_SCOPE))));
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
+        EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
+
+      verify(verificationSessionManager).findForId(eq(encodeSessionId(SESSION_ID)));
+      verify(verificationSessionManager).insert(
+          eq(encodeSessionId(SESSION_ID)),
+          argThat(verification -> verificationSessionEquals(verification, new VerificationSession(
+                  // Provider metadata should match the provider used to verify.
+                  PROVIDER_2.getId(), PROVIDER_2.getClientId(),
+                  EXAMPLE_STATE, EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE,
+                  EXAMPLE_NONCE, EXAMPLE_REQUEST_URI,
+                  // Principal and subject should be distinct.
+                  PRINCIPAL, SUBJECT,
+                  // Verification should be complete.
+                  true,
+                  // Timestamps the update timestamp should be updated to the current time.
+                  clock.millis(), clock.millis(), EXAMPLE_REQUEST_URI_LIFETIME
+              ))
+          ));
+
+      assertEquals(HttpStatus.SC_OK, response.getStatus());
+    }
+  }
+
   @Test
   void getSessionNotFound() {
     when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
@@ -540,6 +744,92 @@ class VerificationControllerTest {
 
   private static String encodeSessionId(final byte[] sessionId) {
     return Base64.getUrlEncoder().encodeToString(sessionId);
+  }
+
+  private static RSAKey generateKeyPair(String kid) throws Exception {
+    // Since the algorithm is responsibility of the Nimbus library, we use RSA for all tests.
+    KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+    kpg.initialize(2048);
+    KeyPair kp = kpg.generateKeyPair();
+
+    return new RSAKey.Builder((java.security.interfaces.RSAPublicKey) kp.getPublic())
+        .privateKey(kp.getPrivate())
+        .keyID(kid)
+        .build();
+  }
+
+  private static String generateKeyJwks(RSAKey jwk) throws Exception {
+    JWKSet jwks = new JWKSet(jwk);
+    return jwks.toPublicJWKSet().toString(true);
+  }
+
+  private static String generateIdentityTokenJwt(RSAKey jwk,
+      String issuer, String subject, String audience, long lifetime, String nonce,
+      String principalClaim, String principal) throws Exception {
+
+    JWSSigner signer = new RSASSASigner(jwk);
+    JWTClaimsSet claims = new JWTClaimsSet.Builder()
+        .issuer(issuer)
+        .subject(subject)
+        .audience(audience)
+        .claim("nonce", nonce)
+        .claim(principalClaim, principal)
+        .issueTime(new Date())
+        .notBeforeTime(new Date())
+        .expirationTime(new Date(clock.millis() + lifetime))
+        .build();
+
+    SignedJWT signedJWT = new SignedJWT(
+        // Since the algorithm is responsibility of the Nimbus library, we use RS256 for all tests.
+        new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(jwk.getKeyID()).type(JOSEObjectType.JWT).build(),
+        claims
+    );
+    signedJWT.sign(signer);
+
+    return signedJWT.serialize();
+  }
+
+  private static String generateAccessTokenJwt(RSAKey jwk,
+      String issuer, String subject, String audience, String scope, long lifetime,
+      String principalClaim, String principal) throws Exception {
+
+    JWSSigner signer = new RSASSASigner(jwk);
+    JWTClaimsSet claims = new JWTClaimsSet.Builder()
+        .issuer(issuer)
+        .subject(subject)
+        .audience(audience)
+        .claim("scope", scope)
+        .claim(principalClaim, principal)
+        .issueTime(new Date())
+        .notBeforeTime(new Date())
+        .expirationTime(new Date(clock.millis() + lifetime))
+        .build();
+
+    SignedJWT signedJWT = new SignedJWT(
+        // Since the algorithm is responsibility of the Nimbus library, we use RS256 for all tests.
+        new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(jwk.getKeyID()).type(JOSEObjectType.JWT).build(),
+        claims
+    );
+    signedJWT.sign(signer);
+
+    return signedJWT.serialize();
+  }
+
+  private static boolean verificationSessionEquals(final VerificationSession a, final VerificationSession b) {
+    return a.providerId().equals(b.providerId())
+        && a.clientId().equals(b.clientId())
+        && a.state().equals(b.state())
+        && a.redirectUri().equals(b.redirectUri())
+        && a.codeChallenge().equals(b.codeChallenge())
+        && a.nonce().equals(b.nonce())
+        && a.requestUri().equals(b.requestUri())
+        && a.principal().equals(b.principal())
+        && a.subject().equals(b.subject())
+        && a.verified() == b.verified()
+        // Timestamps should match within one second margin.
+        && Math.abs(a.createdTimestamp() - b.createdTimestamp()) < 1000
+        && Math.abs(a.updatedTimestamp() - b.updatedTimestamp()) < 1000
+        && a.remoteExpirationSeconds() == b.remoteExpirationSeconds();
   }
 
 }

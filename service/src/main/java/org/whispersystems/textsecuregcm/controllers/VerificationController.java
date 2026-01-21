@@ -178,6 +178,7 @@ public class VerificationController {
     final String sessionId = UUID.randomUUID().toString();
     final Nonce nonce = new Nonce();
 
+    // This string identifies the Flatline client and should be returned in the audience of the identity token.
     ClientID clientId = new ClientID(provider.getClientId());
 
     final AuthorizationRequest parRequest = new AuthorizationRequest.Builder(
@@ -338,7 +339,7 @@ public class VerificationController {
     try {
       // This validates the following:
       // - The token issuer matches the expected issuer.
-      // - The token client identifier matches the one configured.
+      // - The token audience includes the configured client identifier.
       // - The token nonce value matches the on in the verification session.
       // - The token is valid at this point, given 1 minute of leeway.
       // - The token has a valid signature with the selected key and algorithm.
@@ -349,13 +350,6 @@ public class VerificationController {
           Response.Status.UNAUTHORIZED);
     } catch (JOSEException e) {
       logger.error("failed to process the token returned by the verification provider", e);
-      throw new ServerErrorException("failed to verify token returned by the verification provider",
-          Response.Status.UNAUTHORIZED);
-    }
-
-    // We verify that the expected audience is included in the "aud" claim.
-    if(!claims.getAudience().contains(new Audience(provider.getAudience()))){
-      logger.warn("token returned by the verification provider does not match the configured audience");
       throw new ServerErrorException("failed to verify token returned by the verification provider",
           Response.Status.UNAUTHORIZED);
     }
