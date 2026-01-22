@@ -6,10 +6,12 @@
 
 package org.whispersystems.textsecuregcm.controllers;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.created;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.ok;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
+import static com.github.tomakehurst.wiremock.client.WireMock.serverError;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,16 +28,19 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.google.common.net.HttpHeaders;
 import com.nimbusds.jose.JOSEObjectType;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.JWSSigner;
+import com.nimbusds.jose.PlainHeader;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.PlainJWT;
 import com.nimbusds.jwt.SignedJWT;
 import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 import io.dropwizard.testing.junit5.ResourceExtension;
@@ -265,55 +270,6 @@ class VerificationControllerTest {
     }
   }
 
-  static Stream<Arguments> createSessionUnprocessableRequestJson() {
-    return Stream.of(
-        Arguments.of(PROVIDER_1.getId(), EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, null),
-        Arguments.of(PROVIDER_1.getId(), EXAMPLE_CODE_CHALLENGE, null, EXAMPLE_REDIRECT_URI),
-        Arguments.of(PROVIDER_1.getId(), null, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI),
-        Arguments.of(null, EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI)
-    );
-  }
-
-  @Test
-  void createSessionInvalidProvider() {
-    when(verificationSessionManager.insert(any(), any()))
-        .thenReturn(CompletableFuture.completedFuture(null));
-
-    final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session")
-        .request()
-        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
-    try (Response response = request.post(Entity.json(createSessionJson(
-        "invalid-provider", EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI)))) {
-      assertEquals(400, response.getStatus());
-    }
-  }
-
-  @ParameterizedTest
-  @MethodSource
-  void createSessionInvalidRequestJson(final String providerId, final String codeChallenge,
-      final String state, final String redirectUri) {
-
-    final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session")
-        .request()
-        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
-    try (Response response = request.post(Entity.json(createSessionJson(providerId, codeChallenge, state, redirectUri)))) {
-      assertEquals(422, response.getStatus());
-    }
-  }
-
-  // FLT(uoemai): TODO: Add parametrizable tests for multiple error types, with expected HTTP error codes.
-
-  static Stream<Arguments> createSessionInvalidRequestJson() {
-    return Stream.of(
-        Arguments.of("", EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI),
-        Arguments.of(PROVIDER_1.getId(), "", EXAMPLE_STATE, EXAMPLE_REDIRECT_URI),
-        Arguments.of("", EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI),
-        Arguments.of(PROVIDER_1.getId(), EXAMPLE_CODE_CHALLENGE, "", EXAMPLE_REDIRECT_URI)
-    );
-  }
-
   @Test
   void createSessionRateLimited() throws Exception {
     when(verificationSessionManager.insert(any(), any()))
@@ -332,8 +288,49 @@ class VerificationControllerTest {
     }
   }
 
+  @ParameterizedTest
+  @MethodSource
+  void createSessionInvalidRequestJson(final String providerId, final String codeChallenge,
+      final String state, final String redirectUri) {
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session")
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.post(Entity.json(createSessionJson(providerId, codeChallenge, state, redirectUri)))) {
+      assertEquals(422, response.getStatus());
+    }
+  }
+
+  static Stream<Arguments> createSessionInvalidRequestJson() {
+    return Stream.of(
+        Arguments.of("", EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI),
+        Arguments.of(PROVIDER_1.getId(), "", EXAMPLE_STATE, EXAMPLE_REDIRECT_URI),
+        Arguments.of("", EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI),
+        Arguments.of(PROVIDER_1.getId(), EXAMPLE_CODE_CHALLENGE, "", EXAMPLE_REDIRECT_URI)
+    );
+  }
+
   @Test
-  void createSessionRegistrationServiceError() {
+  void createSessionInvalidProvider() {
+    when(verificationSessionManager.insert(any(), any()))
+        .thenReturn(CompletableFuture.completedFuture(null));
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session")
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.post(Entity.json(createSessionJson(
+        "invalid-provider", EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI)))) {
+      assertEquals(400, response.getStatus());
+    }
+  }
+
+  @Test
+  void createSessionParError() {
+    wireMock.stubFor(post(urlEqualTo(EXAMPLE_PAR_PATH))
+        .willReturn(serverError()));
+
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/verification/session")
         .request()
@@ -341,14 +338,53 @@ class VerificationControllerTest {
     try (Response response = request.post(Entity.json(
         createSessionJson(PROVIDER_1.getId(), EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI)))) {
       assertEquals(HttpStatus.SC_INTERNAL_SERVER_ERROR, response.getStatus());
+      String body = response.readEntity(String.class);
+      assertNotNull(body);
+      assertTrue(body.contains("pushed authorization request with the verification provider failed"));
+    }
+  }
+
+  @Test
+  void createSessionParInvalidResponse() {
+    wireMock.stubFor(post(urlEqualTo(EXAMPLE_PAR_PATH))
+        .willReturn(created()
+            .withHeader("Content-Type", "application/json")
+            .withBody("invalid")));
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session")
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.post(Entity.json(
+        createSessionJson(PROVIDER_1.getId(), EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI)))) {
+      assertEquals(HttpStatus.SC_INTERNAL_SERVER_ERROR, response.getStatus());
+      String body = response.readEntity(String.class);
+      assertNotNull(body);
+      assertTrue(body.contains("pushed authorization request with the verification provider failed"));
+    }
+  }
+
+  @Test
+  void createSessionParFailedConnect() {
+    wireMock.stubFor(post(urlEqualTo(EXAMPLE_PAR_PATH))
+        .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session")
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.post(Entity.json(
+        createSessionJson(PROVIDER_1.getId(), EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI)))) {
+      assertEquals(HttpStatus.SC_INTERNAL_SERVER_ERROR, response.getStatus());
+      String body = response.readEntity(String.class);
+      assertNotNull(body);
+      assertTrue(body.contains("pushed authorization request with the verification provider failed"));
     }
   }
 
   @ParameterizedTest
   @MethodSource
-  void createSessionSuccess(final String providerId, final String codeChallenge,
-      final String state, final String redirectUri, final String expectedAuthorizationEndpoint,
-      final String expectedClientId, final String expectedRequestUri, final long expectedRequestUriLifetime) {
+  void createSessionSuccess(final String providerId, final String clientId, final String authorizationEndpoint) {
 
     when(verificationSessionManager.insert(any(), any()))
         .thenReturn(CompletableFuture.completedFuture(null));
@@ -358,15 +394,33 @@ class VerificationControllerTest {
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.post(Entity.json(
-        createSessionJson(providerId, codeChallenge, state, redirectUri)))) {
+        createSessionJson(providerId, EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI)))) {
       assertEquals(HttpStatus.SC_OK, response.getStatus());
+      verify(verificationSessionManager).insert(
+          // The session identifier is created by the controller.
+          any(),
+          argThat(verification -> verificationSessionEquals(verification, new VerificationSession(
+                  // Provider metadata should match the provider used to verify.
+                  providerId, clientId,
+                  EXAMPLE_STATE, EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE,
+                  // The nonce is generated by the verification controller. Null represents any value.
+                  null, EXAMPLE_REQUEST_URI,
+                  // Principal and subject are not known yet.
+                  null, null,
+                  // Verification should be incomplete.
+                  false,
+                  // Timestamps should be updated to the current time.
+                  clock.millis(), clock.millis(), EXAMPLE_REQUEST_URI_LIFETIME
+              ))
+          ));
+
 
       final CreateVerificationSessionResponse verificationSessionResponse = response.readEntity(
           CreateVerificationSessionResponse.class);
-      assertEquals(expectedAuthorizationEndpoint, verificationSessionResponse.authorizationEndpoint());
-      assertEquals(expectedClientId, verificationSessionResponse.clientId());
-      assertEquals(expectedRequestUri, verificationSessionResponse.requestUri());
-      assertEquals(expectedRequestUriLifetime, verificationSessionResponse.requestUriLifetime());
+      assertEquals(authorizationEndpoint, verificationSessionResponse.authorizationEndpoint());
+      assertEquals(clientId, verificationSessionResponse.clientId());
+      assertEquals(EXAMPLE_REQUEST_URI, verificationSessionResponse.requestUri());
+      assertEquals(EXAMPLE_REQUEST_URI_LIFETIME, verificationSessionResponse.requestUriLifetime());
       assertFalse(verificationSessionResponse.id().isEmpty());
       assertFalse(verificationSessionResponse.verified());
     }
@@ -374,11 +428,9 @@ class VerificationControllerTest {
 
   static Stream<Arguments> createSessionSuccess() {
     return Stream.of(
-        Arguments.of(PROVIDER_1.getId(), EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI,
-            PROVIDER_1.getAuthorizationEndpoint(), PROVIDER_1.getClientId(), EXAMPLE_REQUEST_URI, EXAMPLE_REQUEST_URI_LIFETIME),
-        Arguments.of(PROVIDER_2.getId(), EXAMPLE_CODE_CHALLENGE, EXAMPLE_STATE, EXAMPLE_REDIRECT_URI,
-            PROVIDER_2.getAuthorizationEndpoint(), PROVIDER_2.getClientId(), EXAMPLE_REQUEST_URI, EXAMPLE_REQUEST_URI_LIFETIME)
-    );
+        Arguments.of(PROVIDER_1.getId(), PROVIDER_1.getClientId(), PROVIDER_1.getAuthorizationEndpoint()),
+        Arguments.of(PROVIDER_2.getId(), PROVIDER_2.getClientId(), PROVIDER_2.getAuthorizationEndpoint())
+        );
   }
 
   @ParameterizedTest
@@ -477,6 +529,9 @@ class VerificationControllerTest {
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
         EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
       assertEquals(HttpStatus.SC_CONFLICT, response.getStatus());
+      String body = response.readEntity(String.class);
+      assertNotNull(body);
+      assertTrue(body.contains("the verification session is already verified"));
     }
   }
 
@@ -523,6 +578,419 @@ class VerificationControllerTest {
     }
   }
 
+  @Test
+  void patchSessionTokenExchangeFailedConnect() {
+    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
+                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
+                clock.millis(), clock.millis(), clock.millis()))));
+
+    wireMock.stubFor(post(urlEqualTo(EXAMPLE_TOKEN_PATH))
+        .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
+        EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
+      assertEquals(HttpStatus.SC_INTERNAL_SERVER_ERROR, response.getStatus());
+      String body = response.readEntity(String.class);
+      assertNotNull(body);
+      assertTrue(body.contains("token exchange with verification provider failed"));
+    }
+  }
+
+  @Test
+  void patchSessionTokenExchangeFailedParse() {
+    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
+                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
+                clock.millis(), clock.millis(), clock.millis()))));
+
+    wireMock.stubFor(post(urlEqualTo(EXAMPLE_TOKEN_PATH))
+        .willReturn(ok()
+            .withHeader("Content-Type", "application/json")
+            .withBody("invalid")));
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
+        EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
+      assertEquals(HttpStatus.SC_INTERNAL_SERVER_ERROR, response.getStatus());
+      String body = response.readEntity(String.class);
+      assertNotNull(body);
+      assertTrue(body.contains("token exchange with verification provider failed"));
+    }
+  }
+
+  @Test
+  void patchSessionTokenExchangeFailedResponse() {
+    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
+                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
+                clock.millis(), clock.millis(), clock.millis()))));
+
+    wireMock.stubFor(post(urlEqualTo(EXAMPLE_TOKEN_PATH))
+        .willReturn(serverError()));
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
+        EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
+      assertEquals(HttpStatus.SC_INTERNAL_SERVER_ERROR, response.getStatus());
+      String body = response.readEntity(String.class);
+      assertNotNull(body);
+      assertTrue(body.contains("token exchange with the verification provider failed"));
+    }
+  }
+
+  @Test
+  void patchSessionNoneAlgorithm() throws Exception {
+    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
+                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
+                clock.millis(), clock.millis(), clock.millis()))));
+
+    final String identityToken = generateInsecureIdentityTokenJwt(
+        PROVIDER_1.getIssuer(), SUBJECT, PROVIDER_1.getClientId(),
+        EXAMPLE_REQUEST_URI_LIFETIME, EXAMPLE_NONCE, "irrelevant", "irrelevant");
+    final String accessToken = generateAccessTokenJwt(
+        PROVIDER_JWK, PROVIDER_1.getIssuer(), SUBJECT, PROVIDER_1.getClientId(), PROVIDER_1.getScopes(),
+        EXAMPLE_REQUEST_URI_LIFETIME, "irrelevant", "irrelevant");
+
+    wireMock.stubFor(post(urlEqualTo(EXAMPLE_TOKEN_PATH))
+        .willReturn(ok()
+            .withHeader("Content-Type", "application/json")
+            .withBody("""
+                {
+                   "id_token": "%s",
+                   "access_token": "%s",
+                   "token_type": "%s",
+                   "expires_in": %d,
+                   "scope": "%s"
+                }
+                """.formatted(
+                identityToken, accessToken, EXAMPLE_TOKEN_TYPE, EXAMPLE_TOKEN_EXPIRATION, EXAMPLE_TOKEN_SCOPE))));
+
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
+        EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
+      assertEquals(HttpStatus.SC_UNAUTHORIZED, response.getStatus());
+      String body = response.readEntity(String.class);
+      assertNotNull(body);
+      assertTrue(body.contains("failed to verify token returned by the verification provider"));
+    }
+  }
+
+  @Test
+  void patchSessionInvalidJwksUrl() throws Exception {
+    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
+                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
+                clock.millis(), clock.millis(), clock.millis()))));
+
+    VerificationProviderConfiguration providerInvalidJwksUrl = new VerificationProviderConfiguration(
+        "example-1",
+        "Example 1",
+        "https://auth1.example.com",
+        "http://localhost:" + wireMock.getPort() + EXAMPLE_AUTHORIZATION_PATH,
+        "http://localhost:" + wireMock.getPort() + EXAMPLE_TOKEN_PATH,
+        "http://localhost:" + wireMock.getPort() + EXAMPLE_PAR_PATH,
+        // Invalid JWKS URL.
+        "invalid",
+        "0e0ccedd-8d6c-4530-b277-5042ea7ead5b",
+        "https://flatline.example.com", "openid profile", "sub");
+    when(verificationConfiguration.getProvider(providerInvalidJwksUrl.getId()))
+        .thenReturn(providerInvalidJwksUrl);
+
+    final String identityToken = generateIdentityTokenJwt(
+        PROVIDER_JWK, PROVIDER_1.getIssuer(), SUBJECT, PROVIDER_1.getClientId(),
+        EXAMPLE_REQUEST_URI_LIFETIME, EXAMPLE_NONCE, "irrelevant", "irrelevant");
+    final String accessToken = generateAccessTokenJwt(
+        PROVIDER_JWK, PROVIDER_1.getIssuer(), SUBJECT, PROVIDER_1.getClientId(), PROVIDER_1.getScopes(),
+        EXAMPLE_REQUEST_URI_LIFETIME, "irrelevant", "irrelevant");
+
+    wireMock.stubFor(post(urlEqualTo(EXAMPLE_TOKEN_PATH))
+        .willReturn(ok()
+            .withHeader("Content-Type", "application/json")
+            .withBody("""
+                {
+                   "id_token": "%s",
+                   "access_token": "%s",
+                   "token_type": "%s",
+                   "expires_in": %d,
+                   "scope": "%s"
+                }
+                """.formatted(
+                identityToken, accessToken, EXAMPLE_TOKEN_TYPE, EXAMPLE_TOKEN_EXPIRATION, EXAMPLE_TOKEN_SCOPE))));
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
+        EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
+      assertEquals(HttpStatus.SC_INTERNAL_SERVER_ERROR, response.getStatus());
+      String body = response.readEntity(String.class);
+      assertNotNull(body);
+      assertTrue(body.contains("failed to verify token returned by the verification provider"));
+    }
+  }
+
+  @Test
+  void patchSessionRetrieveJwksFailedConnect() throws Exception {
+    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
+                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
+                clock.millis(), clock.millis(), clock.millis()))));
+
+    wireMock.stubFor(get(urlEqualTo(EXAMPLE_JWKS_PATH))
+        .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
+
+    final String identityToken = generateIdentityTokenJwt(
+        PROVIDER_JWK, PROVIDER_1.getIssuer(), SUBJECT, PROVIDER_1.getClientId(),
+        EXAMPLE_REQUEST_URI_LIFETIME, EXAMPLE_NONCE, "irrelevant", "irrelevant");
+    final String accessToken = generateAccessTokenJwt(
+        PROVIDER_JWK, PROVIDER_1.getIssuer(), SUBJECT, PROVIDER_1.getClientId(), PROVIDER_1.getScopes(),
+        EXAMPLE_REQUEST_URI_LIFETIME, "irrelevant", "irrelevant");
+
+    wireMock.stubFor(post(urlEqualTo(EXAMPLE_TOKEN_PATH))
+        .willReturn(ok()
+            .withHeader("Content-Type", "application/json")
+            .withBody("""
+                {
+                   "id_token": "%s",
+                   "access_token": "%s",
+                   "token_type": "%s",
+                   "expires_in": %d,
+                   "scope": "%s"
+                }
+                """.formatted(
+                identityToken, accessToken, EXAMPLE_TOKEN_TYPE, EXAMPLE_TOKEN_EXPIRATION, EXAMPLE_TOKEN_SCOPE))));
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
+        EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
+      assertEquals(HttpStatus.SC_INTERNAL_SERVER_ERROR, response.getStatus());
+      String body = response.readEntity(String.class);
+      assertNotNull(body);
+      assertTrue(body.contains("failed to verify token returned by the verification provider"));
+    }
+  }
+
+  @Test
+  void patchSessionRetrieveJwksFailedParse() throws Exception {
+    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
+                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
+                clock.millis(), clock.millis(), clock.millis()))));
+
+    wireMock.stubFor(get(urlEqualTo(EXAMPLE_JWKS_PATH))
+        .willReturn(ok()
+            .withHeader("Content-Type", "application/json")
+            .withBody("invalid")));
+
+    final String identityToken = generateIdentityTokenJwt(
+        PROVIDER_JWK, PROVIDER_1.getIssuer(), SUBJECT, PROVIDER_1.getClientId(),
+        EXAMPLE_REQUEST_URI_LIFETIME, EXAMPLE_NONCE, "irrelevant", "irrelevant");
+    final String accessToken = generateAccessTokenJwt(
+        PROVIDER_JWK, PROVIDER_1.getIssuer(), SUBJECT, PROVIDER_1.getClientId(), PROVIDER_1.getScopes(),
+        EXAMPLE_REQUEST_URI_LIFETIME, "irrelevant", "irrelevant");
+
+    wireMock.stubFor(post(urlEqualTo(EXAMPLE_TOKEN_PATH))
+        .willReturn(ok()
+            .withHeader("Content-Type", "application/json")
+            .withBody("""
+                {
+                   "id_token": "%s",
+                   "access_token": "%s",
+                   "token_type": "%s",
+                   "expires_in": %d,
+                   "scope": "%s"
+                }
+                """.formatted(
+                identityToken, accessToken, EXAMPLE_TOKEN_TYPE, EXAMPLE_TOKEN_EXPIRATION, EXAMPLE_TOKEN_SCOPE))));
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
+        EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
+      assertEquals(HttpStatus.SC_INTERNAL_SERVER_ERROR, response.getStatus());
+      String body = response.readEntity(String.class);
+      assertNotNull(body);
+      assertTrue(body.contains("failed to verify token returned by the verification provider"));
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource
+  void patchSessionInvalidClaims(String issuer, String subject, String audience, String nonce, long lifetime) throws Exception {
+    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
+                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
+                clock.millis(), clock.millis(), clock.millis()))));
+
+    final String identityToken = generateIdentityTokenJwt(
+        PROVIDER_JWK, issuer, subject, audience,
+        lifetime, nonce, "irrelevant", "irrelevant");
+    final String accessToken = generateAccessTokenJwt(
+        PROVIDER_JWK, PROVIDER_1.getIssuer(), SUBJECT, PROVIDER_1.getClientId(), PROVIDER_1.getScopes(),
+        EXAMPLE_REQUEST_URI_LIFETIME, "irrelevant", "irrelevant");
+
+    wireMock.stubFor(post(urlEqualTo(EXAMPLE_TOKEN_PATH))
+        .willReturn(ok()
+            .withHeader("Content-Type", "application/json")
+            .withBody("""
+                {
+                   "id_token": "%s",
+                   "access_token": "%s",
+                   "token_type": "%s",
+                   "expires_in": %d,
+                   "scope": "%s"
+                }
+                """.formatted(
+                identityToken, accessToken, EXAMPLE_TOKEN_TYPE, EXAMPLE_TOKEN_EXPIRATION, EXAMPLE_TOKEN_SCOPE))));
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
+        EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
+      assertEquals(HttpStatus.SC_UNAUTHORIZED, response.getStatus());
+      String body = response.readEntity(String.class);
+      assertNotNull(body);
+      assertTrue(body.contains("failed to verify token returned by the verification provider"));
+    }
+  }
+
+  static Stream<Arguments> patchSessionInvalidClaims() {
+    return Stream.of(
+        // Invalid issuer.
+        Arguments.of("invalid", SUBJECT, PROVIDER_1.getClientId(), EXAMPLE_NONCE, 10000),
+        // Invalid subject. Missing or empty claim.
+        Arguments.of(PROVIDER_1.getIssuer(), "", PROVIDER_1.getClientId(), EXAMPLE_NONCE, 10000),
+        // Invalid audience.
+        Arguments.of(PROVIDER_1.getIssuer(), SUBJECT, "invalid", EXAMPLE_NONCE, 10000),
+        // Invalid nonce.
+        Arguments.of(PROVIDER_1.getIssuer(), SUBJECT, PROVIDER_1.getClientId(), "invalid", 10000),
+        // Expired token. Lifetime is negative.
+        Arguments.of(PROVIDER_1.getIssuer(), SUBJECT, PROVIDER_1.getClientId(), EXAMPLE_NONCE, -100000)
+    );
+  }
+
+  @Test
+  void patchSessionInvalidSignature() throws Exception {
+    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
+                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
+                clock.millis(), clock.millis(), clock.millis()))));
+
+    // The key identifier matches, but the keys themselves will not.
+    RSAKey invalidJwk = generateKeyPair("example-key-1");
+
+    final String identityToken = generateIdentityTokenJwt(
+        invalidJwk, PROVIDER_1.getIssuer(), SUBJECT, PROVIDER_1.getClientId(),
+        EXAMPLE_REQUEST_URI_LIFETIME, EXAMPLE_NONCE, "irrelevant", "irrelevant");
+    final String accessToken = generateAccessTokenJwt(
+        PROVIDER_JWK, PROVIDER_1.getIssuer(), SUBJECT, PROVIDER_1.getClientId(), PROVIDER_1.getScopes(),
+        EXAMPLE_REQUEST_URI_LIFETIME, "irrelevant", "irrelevant");
+
+    wireMock.stubFor(post(urlEqualTo(EXAMPLE_TOKEN_PATH))
+        .willReturn(ok()
+            .withHeader("Content-Type", "application/json")
+            .withBody("""
+                {
+                   "id_token": "%s",
+                   "access_token": "%s",
+                   "token_type": "%s",
+                   "expires_in": %d,
+                   "scope": "%s"
+                }
+                """.formatted(
+                identityToken, accessToken, EXAMPLE_TOKEN_TYPE, EXAMPLE_TOKEN_EXPIRATION, EXAMPLE_TOKEN_SCOPE))));
+
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
+        EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
+      assertEquals(HttpStatus.SC_UNAUTHORIZED, response.getStatus());
+      String body = response.readEntity(String.class);
+      assertNotNull(body);
+      assertTrue(body.contains("failed to verify token returned by the verification provider"));
+    }
+  }
+
+  @Test
+  void patchSessionMissingPrincipalClaim() throws Exception {
+    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession(PROVIDER_2.getId(),PROVIDER_2.getClientId(), EXAMPLE_STATE,
+                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
+                clock.millis(), clock.millis(), clock.millis()))));
+
+    final String identityToken = generateIdentityTokenJwt(
+        PROVIDER_JWK, PROVIDER_2.getIssuer(), SUBJECT, PROVIDER_2.getClientId(),
+        // The principal claim added to the token has an unexpected key.
+        // This key is different from the principal claim configured for PROVIDER_2.
+        EXAMPLE_REQUEST_URI_LIFETIME, EXAMPLE_NONCE, "unexpected", "irrelevant");
+    final String accessToken = generateAccessTokenJwt(
+        PROVIDER_JWK, PROVIDER_1.getIssuer(), SUBJECT, PROVIDER_1.getClientId(), PROVIDER_1.getScopes(),
+        EXAMPLE_REQUEST_URI_LIFETIME, "irrelevant", "irrelevant");
+
+    wireMock.stubFor(post(urlEqualTo(EXAMPLE_TOKEN_PATH))
+        .willReturn(ok()
+            .withHeader("Content-Type", "application/json")
+            .withBody("""
+                {
+                   "id_token": "%s",
+                   "access_token": "%s",
+                   "token_type": "%s",
+                   "expires_in": %d,
+                   "scope": "%s"
+                }
+                """.formatted(
+                identityToken, accessToken, EXAMPLE_TOKEN_TYPE, EXAMPLE_TOKEN_EXPIRATION, EXAMPLE_TOKEN_SCOPE))));
+
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
+        EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
+      assertEquals(HttpStatus.SC_UNAUTHORIZED, response.getStatus());
+      String body = response.readEntity(String.class);
+      assertNotNull(body);
+      assertTrue(body.contains("failed to verify token returned by the verification provider"));
+    }
+  }
 
   @Test
   void patchSessionSuccess() throws Exception {
@@ -531,7 +999,7 @@ class VerificationControllerTest {
             Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
                 EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
                 clock.millis(), 0, EXAMPLE_REQUEST_URI_LIFETIME))));
-    when(verificationSessionManager.insert(eq(encodeSessionId(SESSION_ID)), any()))
+    when(verificationSessionManager.update(eq(encodeSessionId(SESSION_ID)), any()))
         .thenReturn(CompletableFuture.completedFuture(null));
 
     // This provider uses the default "sub" claim for the principal.
@@ -569,7 +1037,7 @@ class VerificationControllerTest {
         EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
 
       verify(verificationSessionManager).findForId(eq(encodeSessionId(SESSION_ID)));
-      verify(verificationSessionManager).insert(
+      verify(verificationSessionManager).update(
           eq(encodeSessionId(SESSION_ID)),
           argThat(verification -> verificationSessionEquals(verification, new VerificationSession(
                   // Provider metadata should match the provider used to verify.
@@ -580,7 +1048,7 @@ class VerificationControllerTest {
                   SUBJECT, SUBJECT,
                   // Verification should be complete.
                   true,
-                  // Timestamps the update timestamp should be updated to the current time.
+                  // Timestamps should be updated to the current time.
                   clock.millis(), clock.millis(), EXAMPLE_REQUEST_URI_LIFETIME
               ))
           ));
@@ -596,7 +1064,7 @@ class VerificationControllerTest {
             Optional.of(new VerificationSession(PROVIDER_2.getId(),PROVIDER_2.getClientId(), EXAMPLE_STATE,
                 EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
                 clock.millis(), 0, EXAMPLE_REQUEST_URI_LIFETIME))));
-    when(verificationSessionManager.insert(eq(encodeSessionId(SESSION_ID)), any()))
+    when(verificationSessionManager.update(eq(encodeSessionId(SESSION_ID)), any()))
         .thenReturn(CompletableFuture.completedFuture(null));
 
     // This provider uses the custom "email" claim for the principal.
@@ -631,7 +1099,7 @@ class VerificationControllerTest {
         EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
 
       verify(verificationSessionManager).findForId(eq(encodeSessionId(SESSION_ID)));
-      verify(verificationSessionManager).insert(
+      verify(verificationSessionManager).update(
           eq(encodeSessionId(SESSION_ID)),
           argThat(verification -> verificationSessionEquals(verification, new VerificationSession(
                   // Provider metadata should match the provider used to verify.
@@ -815,16 +1283,39 @@ class VerificationControllerTest {
     return signedJWT.serialize();
   }
 
+  private static String generateInsecureIdentityTokenJwt(
+      String issuer, String subject, String audience, long lifetime, String nonce,
+      String principalClaim, String principal) {
+
+    JWTClaimsSet claims = new JWTClaimsSet.Builder()
+        .issuer(issuer)
+        .subject(subject)
+        .audience(audience)
+        .claim("nonce", nonce)
+        .claim(principalClaim, principal)
+        .issueTime(new Date())
+        .notBeforeTime(new Date())
+        .expirationTime(new Date(clock.millis() + lifetime))
+        .build();
+
+    PlainHeader header = new PlainHeader.Builder().type(JOSEObjectType.JWT).build();
+    PlainJWT plainJwt = new PlainJWT(header, claims);
+
+    return plainJwt.serialize();
+  }
+
   private static boolean verificationSessionEquals(final VerificationSession a, final VerificationSession b) {
     return a.providerId().equals(b.providerId())
         && a.clientId().equals(b.clientId())
         && a.state().equals(b.state())
         && a.redirectUri().equals(b.redirectUri())
         && a.codeChallenge().equals(b.codeChallenge())
-        && a.nonce().equals(b.nonce())
+        // In instances where the nonce is expected to be any value, a null value will be used.
+        && a.nonce() == null || b.nonce() == null || a.nonce().equals(b.nonce())
         && a.requestUri().equals(b.requestUri())
-        && a.principal().equals(b.principal())
-        && a.subject().equals(b.subject())
+        // The principal and subject need to be compared as nullable strings.
+        && (a.principal() == b.principal() || (a.principal() != null && a.principal().equals(b.principal())))
+        && (a.subject() == b.subject() || (a.subject() != null && a.subject().equals(b.subject())))
         && a.verified() == b.verified()
         // Timestamps should match within one second margin.
         && Math.abs(a.createdTimestamp() - b.createdTimestamp()) < 1000

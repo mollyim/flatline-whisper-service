@@ -107,11 +107,6 @@ public class VerificationController {
   private final VerificationConfiguration verificationConfiguration;
   private final Clock clock;
 
-  private record ParResponse(
-        String request_uri,
-        int expires_in) {
-  }
-
   public VerificationController(
       final VerificationSessionManager verificationSessionManager,
       final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager,
@@ -160,6 +155,7 @@ public class VerificationController {
           authorization parameters to the client. The client is then expected to perform the authorization step and
           request PATCH /session/{sessionId} with the token exchange parameters.
           """)
+  // It would make sense for this status code to be "201 Created". The original status code is kept for compatibility.
   @ApiResponse(responseCode = "200", description = "The verification session was created successfully", useReturnTypeSchema = true)
   @ApiResponse(responseCode = "422", description = "The request did not pass validation")
   @ApiResponse(responseCode = "429", description = "Too many attempts", headers = @Header(
@@ -219,11 +215,11 @@ public class VerificationController {
     }
 
     final PushedAuthorizationSuccessResponse parData = parResponse.toSuccessResponse();
-    final long parLifetimeMillis = 1000L * parData.getLifetime();
+    final long parLifetimeSeconds = parData.getLifetime();
     final VerificationSession verificationSession = new VerificationSession(provider.getId(), clientId.toString(),
        request.state(), request.redirectUri(), request.codeChallenge(), nonce.toString(),
         parData.getRequestURI().toString(), null, null, false,
-        clock.millis(), clock.millis(), parLifetimeMillis);
+        clock.millis(), clock.millis(), parLifetimeSeconds);
     storeVerificationSession(sessionId, verificationSession);
 
     return new CreateVerificationSessionResponse(sessionId, provider.getAuthorizationEndpoint(), clientId.toString(),
@@ -328,8 +324,11 @@ public class VerificationController {
     final JWSAlgorithm alg = new JWSAlgorithm(idToken.getHeader().getAlgorithm().toString());
     if (alg.equals(JWSAlgorithm.NONE)) {
       logger.warn("verification provider issued token using no signature algorithm");
-      throw new ServerErrorException("failed to verify token returned by the verification provider",
-          Response.Status.INTERNAL_SERVER_ERROR);
+      throw new WebApplicationException(
+          Response.status(Response.Status.UNAUTHORIZED)
+              .entity("failed to verify token returned by the verification provider")
+              .type("text/plain")
+              .build());
     }
     final JWKSet jwks = retrieveJwksWithCache(provider.getJwksUri());
     final IDTokenValidator validator = new IDTokenValidator(iss, clientId, alg, jwks);
@@ -346,32 +345,43 @@ public class VerificationController {
       claims = validator.validate(idToken, expectedNonce);
     } catch (BadJOSEException e) {
       logger.error("failed to verify the signature or claims from the token returned by the verification provider", e);
-      throw new ServerErrorException("failed to verify token returned by the verification provider",
-          Response.Status.UNAUTHORIZED);
+      throw new WebApplicationException(
+          Response.status(Response.Status.UNAUTHORIZED)
+              .entity("failed to verify token returned by the verification provider")
+              .type("text/plain")
+              .build());
     } catch (JOSEException e) {
       logger.error("failed to process the token returned by the verification provider", e);
-      throw new ServerErrorException("failed to verify token returned by the verification provider",
-          Response.Status.UNAUTHORIZED);
+      throw new WebApplicationException(
+          Response.status(Response.Status.UNAUTHORIZED)
+              .entity("failed to verify token returned by the verification provider")
+              .type("text/plain")
+              .build());
     }
 
     // We verify that the "sub" claim is present and store it.
     final String subject = claims.getStringClaim("sub");
     if (subject.isEmpty()) {
       logger.warn("token returned by the verification provider has an empty subject claim");
-      throw new ServerErrorException("failed to verify token returned by the verification provider",
-          Response.Status.UNAUTHORIZED);
+      throw new WebApplicationException(
+          Response.status(Response.Status.UNAUTHORIZED)
+              .entity("failed to verify token returned by the verification provider")
+              .type("text/plain")
+              .build());
     }
 
-    String principalClaim = (provider.getPrincipalClaim().isEmpty()) ? "sub" : provider.getPrincipalClaim();;
     Principal principal;
     try {
       // We verify that the configured principal claim (defaulting to "sub") is present in the token.
       // The value of the claim must also be a valid principal.
-      principal = Principal.parse(Util.canonicalizePrincipal(claims.getStringClaim(principalClaim)));
+      principal = Principal.parse(Util.canonicalizePrincipal(claims.getStringClaim(provider.getPrincipalClaim())));
     } catch (final InvalidPrincipalException e) {
       logger.warn("failed to parse principal from the token returned by the verification provider");
-      throw new ServerErrorException("failed to verify token returned by the verification provider",
-          Response.Status.UNAUTHORIZED);
+      throw new WebApplicationException(
+          Response.status(Response.Status.UNAUTHORIZED)
+              .entity("failed to verify token returned by the verification provider")
+              .type("text/plain")
+              .build());
     }
 
     // Once the principal is validated, the recovery password is removed for the account with that principal.
@@ -383,7 +393,7 @@ public class VerificationController {
         verificationSession.state(), verificationSession.redirectUri(), verificationSession.codeChallenge(),
         verificationSession.nonce(), verificationSession.requestUri(), principal.toString(), subject, true,
         verificationSession.createdTimestamp(), clock.millis(), verificationSession.remoteExpirationSeconds());
-    storeVerificationSession(sessionId, verifiedVerificationSession);
+    updateStoredVerificationSession(sessionId, verifiedVerificationSession);
 
     return new UpdateVerificationSessionResponse(sessionId, principal.toString(), true);
   }
@@ -440,7 +450,7 @@ public class VerificationController {
   private JWKSet retrieveJwksWithCache(final String uri) {
     // FLT(uoemai): TODO: Attempt to fetch JWKS from cache by URI.
 
-    URL url = null;
+    URL url;
     try {
       url = new URL(uri);
     } catch (MalformedURLException e) {

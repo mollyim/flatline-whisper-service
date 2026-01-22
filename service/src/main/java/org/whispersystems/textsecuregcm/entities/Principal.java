@@ -20,7 +20,11 @@ public final class Principal {
   public static Principal parse(String value) throws InvalidPrincipalException {
     // FLT(uoemai): For principals, parsing just means normalizing the principal string.
     //              Principal normalization currently involves trimming leading and trailing spaces.
+    if (value == null) {
+      throw new InvalidPrincipalException("cannot parse a null principal string");
+    }
     value = value.trim();
+
     try {
       return new Principal(value);
     } catch (NonNormalizedPrincipalException e) {

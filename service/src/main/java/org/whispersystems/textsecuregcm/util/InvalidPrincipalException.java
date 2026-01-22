@@ -14,4 +14,8 @@ public class InvalidPrincipalException extends Exception {
   public InvalidPrincipalException(final Throwable cause) {
     super(cause);
   }
+
+  public InvalidPrincipalException(final String cause) {
+    super(cause);
+  }
 }
