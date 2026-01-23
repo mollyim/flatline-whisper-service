@@ -6,6 +6,8 @@
 package org.whispersystems.textsecuregcm.controllers;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -814,6 +816,38 @@ class RegistrationControllerTest {
       assertEquals(200, response.getStatus());
       final AccountCreationResponse creationResponse = response.readEntity(AccountCreationResponse.class);
       assertEquals(existingAccount, creationResponse.reregistration());
+    }
+  }
+
+  @Test
+  void reregistrationMissingSubjectConstraint() throws Exception {
+    when(verificationSessionManager.findForId(any()))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession("provider-example","client-example",
+                "","","","","",
+                PRINCIPAL,"subject-example", true,
+                System.currentTimeMillis(), System.currentTimeMillis(), SESSION_EXPIRATION_SECONDS))));
+
+    final Account account = mock(Account.class);
+    when(account.getPrimaryDevice()).thenReturn(mock(Device.class));
+
+    // An existing account must be present.
+    when(accountsManager.getByPrincipal(any())).thenReturn(Optional.of(account));
+    // No subject can be found by the given account identifier.
+    when(accountsManager.getSubjectByAccountIdentifier(any())).thenReturn(Optional.empty());
+
+    when(accountsManager.create(any(), any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(account);
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/registration")
+        .request()
+        .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
+    try (Response response = request.post(Entity.json(requestJson("sessionId")))) {
+      assertEquals(500, response.getStatus());
+      String body = response.readEntity(String.class);
+      assertNotNull(body);
+      assertTrue(body.contains("account found without verification subject"));
     }
   }
 
