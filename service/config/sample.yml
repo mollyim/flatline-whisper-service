@@ -176,6 +176,8 @@ dynamoDbTables:
     tableName: Example_ClientPublicKeys
   verificationSessions:
     tableName: Example_VerificationSessions
+  verificationTokenKeys:
+    tableName: Example_VerificationTokenKeys
 
 pagedSingleUseKEMPreKeyStore:
   bucket: preKeyBucket # S3 Bucket name

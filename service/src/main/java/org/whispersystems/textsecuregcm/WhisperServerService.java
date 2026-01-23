@@ -241,6 +241,8 @@ import org.whispersystems.textsecuregcm.storage.SingleUseKEMPreKeyStore;
 import org.whispersystems.textsecuregcm.storage.Subscriptions;
 import org.whispersystems.textsecuregcm.storage.VerificationSessionManager;
 import org.whispersystems.textsecuregcm.storage.VerificationSessions;
+import org.whispersystems.textsecuregcm.storage.VerificationTokenKeys;
+import org.whispersystems.textsecuregcm.storage.VerificationTokenKeysManager;
 import org.whispersystems.textsecuregcm.storage.devicecheck.AppleDeviceCheckManager;
 import org.whispersystems.textsecuregcm.storage.devicecheck.AppleDeviceCheckTrustAnchor;
 import org.whispersystems.textsecuregcm.storage.devicecheck.AppleDeviceChecks;
@@ -481,6 +483,8 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
 
     final VerificationSessions verificationSessions = new VerificationSessions(dynamoDbAsyncClient,
         config.getDynamoDbTables().getVerificationSessions().getTableName(), clock);
+    final VerificationTokenKeys verificationTokenKeys = new VerificationTokenKeys(dynamoDbAsyncClient,
+        config.getDynamoDbTables().getVerificationTokenKeys().getTableName(), clock);
 
     final ClientResources sharedClientResources = ClientResources.builder()
         .commandLatencyRecorder(
@@ -1118,6 +1122,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
 
     final PersistentTimer persistentTimer = new PersistentTimer(rateLimitersCluster, clock);
     final VerificationSessionManager verificationSessionManager = new VerificationSessionManager(verificationSessions);
+    final VerificationTokenKeysManager verificationTokenKeysManager = new VerificationTokenKeysManager(verificationTokenKeys);
 
     final PrincipalVerificationTokenManager principalVerificationTokenManager = new PrincipalVerificationTokenManager(
         principalNameIdentifiers, verificationSessionManager, registrationRecoveryPasswordsManager, registrationRecoveryChecker);
@@ -1168,7 +1173,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         new StickerController(rateLimiters, config.getCdnConfiguration().credentials().accessKeyId().value(),
             config.getCdnConfiguration().credentials().secretAccessKey().value(), config.getCdnConfiguration().region(),
             config.getCdnConfiguration().bucket()),
-        new VerificationController(verificationSessionManager,
+        new VerificationController(verificationSessionManager, verificationTokenKeysManager,
             registrationRecoveryPasswordsManager, principalNameIdentifiers, rateLimiters,
              config.getVerificationConfiguration(), clock)
     );

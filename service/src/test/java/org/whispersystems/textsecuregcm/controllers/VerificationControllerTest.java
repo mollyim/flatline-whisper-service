@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -93,6 +94,7 @@ import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
 import org.whispersystems.textsecuregcm.storage.VerificationSessionManager;
+import org.whispersystems.textsecuregcm.storage.VerificationTokenKeysManager;
 import org.whispersystems.textsecuregcm.util.MockUtils;
 import org.whispersystems.textsecuregcm.util.SystemMapper;
 import org.whispersystems.textsecuregcm.util.TestRemoteAddressFilterProvider;
@@ -128,7 +130,8 @@ class VerificationControllerTest {
       .build();
 
   private static RSAKey PROVIDER_JWK;
-  private static String PROVIDER_JWKS;
+  private static JWKSet PROVIDER_JWKS;
+  private static String PROVIDER_JWKS_STRING;
   private static VerificationProviderConfiguration PROVIDER_1;
   private static VerificationProviderConfiguration PROVIDER_2;
   @BeforeEach
@@ -155,11 +158,13 @@ class VerificationControllerTest {
         "https://flatline.example.com", "openid email profile", "email");
 
     PROVIDER_JWK = generateKeyPair("example-key-1");
-    PROVIDER_JWKS = generateKeyJwks(PROVIDER_JWK);
+    PROVIDER_JWKS = new JWKSet(PROVIDER_JWK);
+    PROVIDER_JWKS_STRING = PROVIDER_JWKS.toPublicJWKSet().toString(true);
   }
 
   private static final UUID PNI = UUID.randomUUID();
   private final VerificationSessionManager verificationSessionManager = mock(VerificationSessionManager.class);
+  private final VerificationTokenKeysManager verificationTokenKeysManager = mock(VerificationTokenKeysManager.class);
   private final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager = mock(
       RegistrationRecoveryPasswordsManager.class);
   private final PrincipalNameIdentifiers principalNameIdentifiers = mock(PrincipalNameIdentifiers.class);
@@ -186,7 +191,7 @@ class VerificationControllerTest {
       .setMapper(SystemMapper.jsonMapper())
       .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
       .addResource(
-          new VerificationController(verificationSessionManager,
+          new VerificationController(verificationSessionManager, verificationTokenKeysManager,
               registrationRecoveryPasswordsManager, principalNameIdentifiers, rateLimiters,
               verificationConfiguration, clock))
       .build();
@@ -211,6 +216,8 @@ class VerificationControllerTest {
         .thenReturn(PROVIDER_2);
     when(principalNameIdentifiers.getPrincipalNameIdentifier(PRINCIPAL))
         .thenReturn(CompletableFuture.completedFuture(PNI));
+    when(verificationTokenKeysManager.findForUri(any()))
+        .thenReturn(CompletableFuture.completedFuture(Optional.empty()));
 
     wireMock.stubFor(post(urlEqualTo(EXAMPLE_PAR_PATH))
         .willReturn(created()
@@ -225,7 +232,7 @@ class VerificationControllerTest {
     wireMock.stubFor(get(urlEqualTo(EXAMPLE_JWKS_PATH))
         .willReturn(ok()
             .withHeader("Content-Type", "application/json")
-            .withBody(PROVIDER_JWKS)));
+            .withBody(PROVIDER_JWKS_STRING)));
   }
 
   @MethodSource
@@ -1037,6 +1044,9 @@ class VerificationControllerTest {
         EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
 
       verify(verificationSessionManager).findForId(eq(encodeSessionId(SESSION_ID)));
+      verify(verificationTokenKeysManager).findForUri(eq(PROVIDER_1.getJwksUri()));
+      verify(verificationTokenKeysManager).insert(eq(PROVIDER_1.getJwksUri()),
+          argThat(jwks -> jwks.toString().equals(PROVIDER_JWKS.toString())));
       verify(verificationSessionManager).update(
           eq(encodeSessionId(SESSION_ID)),
           argThat(verification -> verificationSessionEquals(verification, new VerificationSession(
@@ -1099,6 +1109,79 @@ class VerificationControllerTest {
         EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
 
       verify(verificationSessionManager).findForId(eq(encodeSessionId(SESSION_ID)));
+      verify(verificationTokenKeysManager).findForUri(eq(PROVIDER_2.getJwksUri()));
+      verify(verificationTokenKeysManager).insert(eq(PROVIDER_2.getJwksUri()),
+          argThat(jwks -> jwks.toString().equals(PROVIDER_JWKS.toString())));
+      verify(verificationSessionManager).update(
+          eq(encodeSessionId(SESSION_ID)),
+          argThat(verification -> verificationSessionEquals(verification, new VerificationSession(
+                  // Provider metadata should match the provider used to verify.
+                  PROVIDER_2.getId(), PROVIDER_2.getClientId(),
+                  EXAMPLE_STATE, EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE,
+                  EXAMPLE_NONCE, EXAMPLE_REQUEST_URI,
+                  // Principal and subject should be distinct.
+                  PRINCIPAL, SUBJECT,
+                  // Verification should be complete.
+                  true,
+                  // Timestamps the update timestamp should be updated to the current time.
+                  clock.millis(), clock.millis(), EXAMPLE_REQUEST_URI_LIFETIME
+              ))
+          ));
+
+      assertEquals(HttpStatus.SC_OK, response.getStatus());
+    }
+  }
+
+  @Test
+  void patchSessionSuccessKeysFromCache() throws Exception {
+    when(verificationSessionManager.findForId(eq(encodeSessionId(SESSION_ID))))
+        .thenReturn(CompletableFuture.completedFuture(
+            Optional.of(new VerificationSession(PROVIDER_2.getId(),PROVIDER_2.getClientId(), EXAMPLE_STATE,
+                EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
+                clock.millis(), 0, EXAMPLE_REQUEST_URI_LIFETIME))));
+    when(verificationSessionManager.update(eq(encodeSessionId(SESSION_ID)), any()))
+        .thenReturn(CompletableFuture.completedFuture(null));
+
+    // The cache must return a valid JWKS for the requested URI.
+    when(verificationTokenKeysManager.findForUri(eq(PROVIDER_2.getJwksUri())))
+        .thenReturn(CompletableFuture.completedFuture(Optional.of(PROVIDER_JWKS)));
+    // The JWKS endpoint will not respond to ensure the cache is used.
+    wireMock.stubFor(get(urlEqualTo(EXAMPLE_JWKS_PATH))
+        .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
+
+    final String identityToken = generateIdentityTokenJwt(
+        PROVIDER_JWK, PROVIDER_2.getIssuer(), SUBJECT, PROVIDER_2.getClientId(),
+        EXAMPLE_REQUEST_URI_LIFETIME, EXAMPLE_NONCE, PROVIDER_2.getPrincipalClaim(), PRINCIPAL);
+    // This token is irrelevant for Flatline but still expected by the Nimbus library.
+    final String accessToken = generateAccessTokenJwt(
+        PROVIDER_JWK, PROVIDER_2.getIssuer(), SUBJECT, PROVIDER_2.getClientId(), PROVIDER_2.getScopes(),
+        EXAMPLE_REQUEST_URI_LIFETIME, PROVIDER_2.getPrincipalClaim(), PRINCIPAL);
+
+    wireMock.stubFor(post(urlEqualTo(EXAMPLE_TOKEN_PATH))
+        .willReturn(ok()
+            .withHeader("Content-Type", "application/json")
+            .withBody("""
+                {
+                   "id_token": "%s",
+                   "access_token": "%s",
+                   "token_type": "%s",
+                   "expires_in": %d,
+                   "scope": "%s"
+                }
+                """.formatted(
+                identityToken, accessToken, EXAMPLE_TOKEN_TYPE, EXAMPLE_TOKEN_EXPIRATION, EXAMPLE_TOKEN_SCOPE))));
+
+    final Invocation.Builder request = resources.getJerseyTest()
+        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .request()
+        .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
+    try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
+        EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
+
+      verify(verificationSessionManager).findForId(eq(encodeSessionId(SESSION_ID)));
+      verify(verificationTokenKeysManager).findForUri(eq(PROVIDER_2.getJwksUri()));
+      // The keys should never be updated in the cache, as they were retrieved from it.
+      verify(verificationTokenKeysManager, never()).insert(any(), any());
       verify(verificationSessionManager).update(
           eq(encodeSessionId(SESSION_ID)),
           argThat(verification -> verificationSessionEquals(verification, new VerificationSession(
@@ -1224,11 +1307,6 @@ class VerificationControllerTest {
         .privateKey(kp.getPrivate())
         .keyID(kid)
         .build();
-  }
-
-  private static String generateKeyJwks(RSAKey jwk) throws Exception {
-    JWKSet jwks = new JWKSet(jwk);
-    return jwks.toPublicJWKSet().toString(true);
   }
 
   private static String generateIdentityTokenJwt(RSAKey jwk,

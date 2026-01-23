@@ -86,6 +86,7 @@ import org.whispersystems.textsecuregcm.registration.VerificationSession;
 import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
 import org.whispersystems.textsecuregcm.storage.VerificationSessionManager;
+import org.whispersystems.textsecuregcm.storage.VerificationTokenKeysManager;
 import org.whispersystems.textsecuregcm.util.InvalidPrincipalException;
 import org.whispersystems.textsecuregcm.util.Util;
 
@@ -101,6 +102,7 @@ public class VerificationController {
   private static final Duration DYNAMODB_TIMEOUT = Duration.ofSeconds(5);
 
   private final VerificationSessionManager verificationSessionManager;
+  private final VerificationTokenKeysManager verificationTokenKeysManager;
   private final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager;
   private final PrincipalNameIdentifiers principalNameIdentifiers;
   private final RateLimiters rateLimiters;
@@ -109,12 +111,14 @@ public class VerificationController {
 
   public VerificationController(
       final VerificationSessionManager verificationSessionManager,
+      final VerificationTokenKeysManager verificationTokenKeysManager,
       final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager,
       final PrincipalNameIdentifiers principalNameIdentifiers,
       final RateLimiters rateLimiters,
       final VerificationConfiguration verificationConfiguration,
       final Clock clock) {
     this.verificationSessionManager = verificationSessionManager;
+    this.verificationTokenKeysManager = verificationTokenKeysManager;
     this.registrationRecoveryPasswordsManager = registrationRecoveryPasswordsManager;
     this.principalNameIdentifiers = principalNameIdentifiers;
     this.rateLimiters = rateLimiters;
@@ -443,37 +447,39 @@ public class VerificationController {
   }
 
   /**
-   * Attempts to retrieve a JWKS object from the JWKS cache
+   * Attempts to retrieve a JWKS object from the JWKS cache by its URI
    * If the object is not found in the cache, it will be retrieved from the provided URI
    * @throws NotFoundException if the object is retrieved from a URI that not point to a JWKS object
    */
   private JWKSet retrieveJwksWithCache(final String uri) {
-    // FLT(uoemai): TODO: Attempt to fetch JWKS from cache by URI.
+    return verificationTokenKeysManager.findForUri(uri).orTimeout(5, TimeUnit.SECONDS).join().orElseGet(
+        () -> {
+          URL url;
+          try {
+            url = new URL(uri);
+          } catch (MalformedURLException e) {
+            logger.warn("failed to parse JWKS URI for the verification provider", e);
+            throw new ServerErrorException("failed to verify token returned by the verification provider",
+                Response.Status.INTERNAL_SERVER_ERROR);
+          }
 
-    URL url;
-    try {
-      url = new URL(uri);
-    } catch (MalformedURLException e) {
-      logger.warn("failed to parse JWKS URI for the verification provider", e);
-      throw new ServerErrorException("failed to verify token returned by the verification provider",
-          Response.Status.INTERNAL_SERVER_ERROR);
-    }
+          JWKSet jwks;
+          try {
+            jwks = JWKSet.load(url);
+          } catch (IOException e) {
+            logger.warn("failed to retrieve JWKS from the verification provider", e);
+            throw new ServerErrorException("failed to verify token returned by the verification provider",
+                Response.Status.INTERNAL_SERVER_ERROR);
+          } catch (java.text.ParseException e) {
+            logger.warn("failed to parse JWKS returned by the verification provider", e);
+            throw new ServerErrorException("failed to verify token returned by the verification provider",
+                Response.Status.INTERNAL_SERVER_ERROR);
+          }
 
-    JWKSet jwks;
-    try {
-      jwks = JWKSet.load(url);
-    } catch (IOException e) {
-      logger.warn("failed to retrieve JWKS from the verification provider", e);
-      throw new ServerErrorException("failed to verify token returned by the verification provider",
-          Response.Status.INTERNAL_SERVER_ERROR);
-    } catch (java.text.ParseException e) {
-      logger.warn("failed to parse JWKS returned by the verification provider", e);
-      throw new ServerErrorException("failed to verify token returned by the verification provider",
-          Response.Status.INTERNAL_SERVER_ERROR);
-    }
+          verificationTokenKeysManager.insert(uri, jwks);
 
-    // FLT(uoemai): TODO: Store JWKS in cache by URI.
-
-    return jwks;
+          return jwks;
+        }
+    );
   }
 }

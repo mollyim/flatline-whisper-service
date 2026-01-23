@@ -74,6 +74,7 @@ public class DynamoDbTables {
   private final TableWithExpiration scheduledJobs;
   private final Table subscriptions;
   private final Table verificationSessions;
+  private final Table verificationTokenKeys;
 
   public DynamoDbTables(
       @JsonProperty("accounts") final AccountsTableConfiguration accounts,
@@ -102,7 +103,8 @@ public class DynamoDbTables {
       @JsonProperty("reportMessage") final Table reportMessage,
       @JsonProperty("scheduledJobs") final TableWithExpiration scheduledJobs,
       @JsonProperty("subscriptions") final Table subscriptions,
-      @JsonProperty("verificationSessions") final Table verificationSessions) {
+      @JsonProperty("verificationSessions") final Table verificationSessions,
+      @JsonProperty("verificationTokenKeys") final Table verificationTokenKeys) {
 
     this.accounts = accounts;
     this.appleDeviceChecks = appleDeviceChecks;
@@ -131,6 +133,7 @@ public class DynamoDbTables {
     this.scheduledJobs = scheduledJobs;
     this.subscriptions = subscriptions;
     this.verificationSessions = verificationSessions;
+    this.verificationTokenKeys = verificationTokenKeys;
   }
 
   @NotNull
@@ -293,5 +296,11 @@ public class DynamoDbTables {
   @Valid
   public Table getVerificationSessions() {
     return verificationSessions;
+  }
+
+  @NotNull
+  @Valid
+  public Table getVerificationTokenKeys() {
+    return verificationTokenKeys;
   }
 }

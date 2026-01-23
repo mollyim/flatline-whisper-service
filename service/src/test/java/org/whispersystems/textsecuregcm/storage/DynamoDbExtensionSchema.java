@@ -439,6 +439,15 @@ public final class DynamoDbExtensionSchema {
             .build()),
         List.of(), List.of()),
 
+    VERIFICATION_TOKEN_KEYS("verification_token_keys_test",
+        VerificationSessions.KEY_KEY,
+        null,
+        List.of(AttributeDefinition.builder()
+            .attributeName(VerificationSessions.KEY_KEY)
+            .attributeType(ScalarAttributeType.S)
+            .build()),
+        List.of(), List.of()),
+
     APPLE_DEVICE_CHECKS("apple_device_check",
         AppleDeviceChecks.KEY_ACCOUNT_UUID,
         AppleDeviceChecks.KEY_PUBLIC_KEY_ID,
