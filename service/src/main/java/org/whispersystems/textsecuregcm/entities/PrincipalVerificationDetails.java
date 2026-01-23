@@ -1,21 +1,10 @@
 /*
- * Copyright 2023 Signal Messenger, LLC
+ * Copyright 2025 Molly Instant Messenger
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
 package org.whispersystems.textsecuregcm.entities;
 
-import static org.apache.commons.lang3.StringUtils.isNotBlank;
-
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.AssertTrue;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.ws.rs.ClientErrorException;
-import java.util.Base64;
-import org.apache.http.HttpStatus;
-import org.jetbrains.annotations.NotNull;
 import org.whispersystems.textsecuregcm.storage.Subject;
 
 
