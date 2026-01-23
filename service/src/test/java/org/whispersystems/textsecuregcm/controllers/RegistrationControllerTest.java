@@ -28,7 +28,6 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -93,6 +92,7 @@ import org.whispersystems.textsecuregcm.util.SystemMapper;
 @ExtendWith(DropwizardExtensionsSupport.class)
 class RegistrationControllerTest {
 
+  private static final String SESSION_ID = "e82368a3-6048-4af6-8e89-2f8a077bb056";
   private static final long SESSION_EXPIRATION_SECONDS = Duration.ofMinutes(10).toSeconds();
 
   private static final String PRINCIPAL = "user.account@example.com";
@@ -182,7 +182,7 @@ class RegistrationControllerTest {
     when(accountsManager.create(any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(account);
 
-    final String json = requestJson("sessionId", new byte[0], true, registrationId.orElse(0), pniRegistrationId.orElse(0));
+    final String json = requestJson(SESSION_ID, new byte[0], true, registrationId.orElse(0), pniRegistrationId.orElse(0));
 
     try (Response response = request.post(Entity.json(json))) {
       assertEquals(statusCode, response.getStatus());
@@ -194,7 +194,7 @@ class RegistrationControllerTest {
     final Invocation.Builder request = resources.getJerseyTest()
         .target("/v1/registration")
         .request();
-    try (Response response = request.post(Entity.json(requestJson("sessionId")))) {
+    try (Response response = request.post(Entity.json(requestJson(SESSION_ID)))) {
       assertEquals(400, response.getStatus());
     }
   }
@@ -230,7 +230,7 @@ class RegistrationControllerTest {
         .target("/v1/registration")
         .request()
         .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
-    try (Response response = request.post(Entity.json(requestJson("sessionId")))) {
+    try (Response response = request.post(Entity.json(requestJson(SESSION_ID)))) {
       assertEquals(429, response.getStatus());
     }
   }
@@ -263,7 +263,7 @@ class RegistrationControllerTest {
         .target("/v1/registration")
         .request()
         .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
-    try (Response response = request.post(Entity.json(requestJson("sessionId")))) {
+    try (Response response = request.post(Entity.json(requestJson(SESSION_ID)))) {
       assertEquals(expectedStatus, response.getStatus(), message);
     }
   }
@@ -418,7 +418,7 @@ class RegistrationControllerTest {
         .target("/v1/registration")
         .request()
         .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
-    try (Response response = request.post(Entity.json(requestJson("sessionId")))) {
+    try (Response response = request.post(Entity.json(requestJson(SESSION_ID)))) {
       assertEquals(expectedStatus, response.getStatus());
     }
   }
@@ -474,7 +474,7 @@ class RegistrationControllerTest {
         .target("/v1/registration")
         .request()
         .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
-    try (Response response = request.post(Entity.json(requestJson("sessionId", new byte[0], skipDeviceTransfer, 1, 2)))) {
+    try (Response response = request.post(Entity.json(requestJson(SESSION_ID, new byte[0], skipDeviceTransfer, 1, 2)))) {
       assertEquals(expectedStatus, response.getStatus());
     }
   }
@@ -500,7 +500,7 @@ class RegistrationControllerTest {
         .target("/v1/registration")
         .request()
         .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
-    try (Response response = request.post(Entity.json(requestJson("sessionId")))) {
+    try (Response response = request.post(Entity.json(requestJson(SESSION_ID)))) {
       assertEquals(200, response.getStatus());
     }
   }
@@ -812,7 +812,7 @@ class RegistrationControllerTest {
         .target("/v1/registration")
         .request()
         .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
-    try (Response response = request.post(Entity.json(requestJson("sessionId")))) {
+    try (Response response = request.post(Entity.json(requestJson(SESSION_ID)))) {
       assertEquals(200, response.getStatus());
       final AccountCreationResponse creationResponse = response.readEntity(AccountCreationResponse.class);
       assertEquals(existingAccount, creationResponse.reregistration());
@@ -843,7 +843,7 @@ class RegistrationControllerTest {
         .target("/v1/registration")
         .request()
         .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
-    try (Response response = request.post(Entity.json(requestJson("sessionId")))) {
+    try (Response response = request.post(Entity.json(requestJson(SESSION_ID)))) {
       assertEquals(500, response.getStatus());
       String body = response.readEntity(String.class);
       assertNotNull(body);
@@ -891,7 +891,7 @@ class RegistrationControllerTest {
         .target("/v1/registration")
         .request()
         .header(HttpHeaders.AUTHORIZATION, AuthHelper.getProvisioningAuthHeader(PRINCIPAL, PASSWORD));
-    try (Response response = request.post(Entity.json(requestJson("sessionId")))) {
+    try (Response response = request.post(Entity.json(requestJson(SESSION_ID)))) {
       assertEquals(expectedStatus, response.getStatus());
       if (expectedStatus == 200) {
         final AccountCreationResponse creationResponse = response.readEntity(AccountCreationResponse.class);
@@ -1066,7 +1066,7 @@ class RegistrationControllerTest {
             true, Set.of());
 
     final RegistrationRequest request = new RegistrationRequest(
-        Base64.getEncoder().encodeToString(sessionId.getBytes(StandardCharsets.UTF_8)),
+        sessionId,
         recoveryPassword,
         accountAttributes,
         skipDeviceTransfer,

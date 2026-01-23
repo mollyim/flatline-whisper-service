@@ -48,7 +48,6 @@ import io.dropwizard.testing.junit5.ResourceExtension;
 import jakarta.ws.rs.client.Entity;
 import jakarta.ws.rs.client.Invocation;
 import jakarta.ws.rs.core.Response;
-import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.time.Clock;
@@ -120,7 +119,7 @@ class VerificationControllerTest {
   private static final long EXAMPLE_TOKEN_EXPIRATION = Duration.ofMinutes(5).toSeconds();
   private static final String EXAMPLE_TOKEN_SCOPE = "openid email profile";
 
-  private static final byte[] SESSION_ID = "session".getBytes(StandardCharsets.UTF_8);
+  private static final String SESSION_ID = "e82368a3-6048-4af6-8e89-2f8a077bb056";
   private static final String PRINCIPAL = "user.account@example.com";
   private static final String SUBJECT = "25d8f276-120a-4b7c-8c80-f6e237d5e602";
 
@@ -481,7 +480,7 @@ class VerificationControllerTest {
         .thenReturn(CompletableFuture.completedFuture(Optional.empty()));
 
     final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
@@ -492,7 +491,7 @@ class VerificationControllerTest {
 
   @Test
   void patchSessionRateLimited() throws Exception {
-    final String encodedSessionId = encodeSessionId(SESSION_ID);
+    final String encodedSessionId = SESSION_ID;
 
     when(verificationSessionManager.findForId(any()))
         .thenReturn(CompletableFuture.completedFuture(
@@ -519,7 +518,7 @@ class VerificationControllerTest {
 
   @Test
   void patchSessionAlreadyVerified() {
-    final String encodedSessionId = encodeSessionId(SESSION_ID);
+    final String encodedSessionId = SESSION_ID;
     when(verificationSessionManager.findForId(any()))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
@@ -545,14 +544,14 @@ class VerificationControllerTest {
 
   @Test
   void patchSessionInvalidProvider() {
-    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+    when(verificationSessionManager.findForId(SESSION_ID))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession("invalid-provider",PROVIDER_1.getClientId(), EXAMPLE_STATE,
                 EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
                 clock.millis(), clock.millis(), clock.millis()))));
 
     final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
@@ -566,14 +565,14 @@ class VerificationControllerTest {
 
   @Test
   void patchSessionInvalidRedirectUri() {
-    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+    when(verificationSessionManager.findForId(SESSION_ID))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
                 ":invalid-redirect-uri", EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
                 clock.millis(), clock.millis(), clock.millis()))));
 
     final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
@@ -587,7 +586,7 @@ class VerificationControllerTest {
 
   @Test
   void patchSessionTokenExchangeFailedConnect() {
-    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+    when(verificationSessionManager.findForId(SESSION_ID))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
                 EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
@@ -597,7 +596,7 @@ class VerificationControllerTest {
         .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
 
     final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
@@ -611,7 +610,7 @@ class VerificationControllerTest {
 
   @Test
   void patchSessionTokenExchangeFailedParse() {
-    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+    when(verificationSessionManager.findForId(SESSION_ID))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
                 EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
@@ -623,7 +622,7 @@ class VerificationControllerTest {
             .withBody("invalid")));
 
     final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
@@ -637,7 +636,7 @@ class VerificationControllerTest {
 
   @Test
   void patchSessionTokenExchangeFailedResponse() {
-    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+    when(verificationSessionManager.findForId(SESSION_ID))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
                 EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
@@ -647,7 +646,7 @@ class VerificationControllerTest {
         .willReturn(serverError()));
 
     final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
@@ -661,7 +660,7 @@ class VerificationControllerTest {
 
   @Test
   void patchSessionNoneAlgorithm() throws Exception {
-    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+    when(verificationSessionManager.findForId(SESSION_ID))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
                 EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
@@ -690,7 +689,7 @@ class VerificationControllerTest {
 
 
     final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
@@ -704,7 +703,7 @@ class VerificationControllerTest {
 
   @Test
   void patchSessionInvalidJwksUrl() throws Exception {
-    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+    when(verificationSessionManager.findForId(SESSION_ID))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
                 EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
@@ -746,7 +745,7 @@ class VerificationControllerTest {
                 identityToken, accessToken, EXAMPLE_TOKEN_TYPE, EXAMPLE_TOKEN_EXPIRATION, EXAMPLE_TOKEN_SCOPE))));
 
     final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
@@ -760,7 +759,7 @@ class VerificationControllerTest {
 
   @Test
   void patchSessionRetrieveJwksFailedConnect() throws Exception {
-    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+    when(verificationSessionManager.findForId(SESSION_ID))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
                 EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
@@ -791,7 +790,7 @@ class VerificationControllerTest {
                 identityToken, accessToken, EXAMPLE_TOKEN_TYPE, EXAMPLE_TOKEN_EXPIRATION, EXAMPLE_TOKEN_SCOPE))));
 
     final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
@@ -805,7 +804,7 @@ class VerificationControllerTest {
 
   @Test
   void patchSessionRetrieveJwksFailedParse() throws Exception {
-    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+    when(verificationSessionManager.findForId(SESSION_ID))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
                 EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
@@ -838,7 +837,7 @@ class VerificationControllerTest {
                 identityToken, accessToken, EXAMPLE_TOKEN_TYPE, EXAMPLE_TOKEN_EXPIRATION, EXAMPLE_TOKEN_SCOPE))));
 
     final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
@@ -853,7 +852,7 @@ class VerificationControllerTest {
   @ParameterizedTest
   @MethodSource
   void patchSessionInvalidClaims(String issuer, String subject, String audience, String nonce, long lifetime) throws Exception {
-    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+    when(verificationSessionManager.findForId(SESSION_ID))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
                 EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
@@ -881,7 +880,7 @@ class VerificationControllerTest {
                 identityToken, accessToken, EXAMPLE_TOKEN_TYPE, EXAMPLE_TOKEN_EXPIRATION, EXAMPLE_TOKEN_SCOPE))));
 
     final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
@@ -910,7 +909,7 @@ class VerificationControllerTest {
 
   @Test
   void patchSessionInvalidSignature() throws Exception {
-    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+    when(verificationSessionManager.findForId(SESSION_ID))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
                 EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
@@ -942,7 +941,7 @@ class VerificationControllerTest {
 
 
     final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
@@ -956,7 +955,7 @@ class VerificationControllerTest {
 
   @Test
   void patchSessionMissingPrincipalClaim() throws Exception {
-    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+    when(verificationSessionManager.findForId(SESSION_ID))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession(PROVIDER_2.getId(),PROVIDER_2.getClientId(), EXAMPLE_STATE,
                 EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
@@ -987,7 +986,7 @@ class VerificationControllerTest {
 
 
     final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
@@ -1001,12 +1000,12 @@ class VerificationControllerTest {
 
   @Test
   void patchSessionSuccess() throws Exception {
-    when(verificationSessionManager.findForId(eq(encodeSessionId(SESSION_ID))))
+    when(verificationSessionManager.findForId(eq(SESSION_ID)))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession(PROVIDER_1.getId(),PROVIDER_1.getClientId(), EXAMPLE_STATE,
                 EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
                 clock.millis(), 0, EXAMPLE_REQUEST_URI_LIFETIME))));
-    when(verificationSessionManager.update(eq(encodeSessionId(SESSION_ID)), any()))
+    when(verificationSessionManager.update(eq(SESSION_ID), any()))
         .thenReturn(CompletableFuture.completedFuture(null));
 
     // This provider uses the default "sub" claim for the principal.
@@ -1037,18 +1036,18 @@ class VerificationControllerTest {
                 identityToken, accessToken, EXAMPLE_TOKEN_TYPE, EXAMPLE_TOKEN_EXPIRATION, EXAMPLE_TOKEN_SCOPE))));
 
     final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
         EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
 
-      verify(verificationSessionManager).findForId(eq(encodeSessionId(SESSION_ID)));
+      verify(verificationSessionManager).findForId(eq(SESSION_ID));
       verify(verificationTokenKeysManager).findForUri(eq(PROVIDER_1.getJwksUri()));
       verify(verificationTokenKeysManager).insert(eq(PROVIDER_1.getJwksUri()),
           argThat(jwks -> jwks.toString().equals(PROVIDER_JWKS.toString())));
       verify(verificationSessionManager).update(
-          eq(encodeSessionId(SESSION_ID)),
+          eq(SESSION_ID),
           argThat(verification -> verificationSessionEquals(verification, new VerificationSession(
                   // Provider metadata should match the provider used to verify.
                   PROVIDER_1.getId(), PROVIDER_1.getClientId(),
@@ -1069,12 +1068,12 @@ class VerificationControllerTest {
 
   @Test
   void patchSessionSuccessPrincipalClaim() throws Exception {
-    when(verificationSessionManager.findForId(eq(encodeSessionId(SESSION_ID))))
+    when(verificationSessionManager.findForId(eq(SESSION_ID)))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession(PROVIDER_2.getId(),PROVIDER_2.getClientId(), EXAMPLE_STATE,
                 EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
                 clock.millis(), 0, EXAMPLE_REQUEST_URI_LIFETIME))));
-    when(verificationSessionManager.update(eq(encodeSessionId(SESSION_ID)), any()))
+    when(verificationSessionManager.update(eq(SESSION_ID), any()))
         .thenReturn(CompletableFuture.completedFuture(null));
 
     // This provider uses the custom "email" claim for the principal.
@@ -1102,18 +1101,18 @@ class VerificationControllerTest {
                 identityToken, accessToken, EXAMPLE_TOKEN_TYPE, EXAMPLE_TOKEN_EXPIRATION, EXAMPLE_TOKEN_SCOPE))));
 
     final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
         EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
 
-      verify(verificationSessionManager).findForId(eq(encodeSessionId(SESSION_ID)));
+      verify(verificationSessionManager).findForId(eq(SESSION_ID));
       verify(verificationTokenKeysManager).findForUri(eq(PROVIDER_2.getJwksUri()));
       verify(verificationTokenKeysManager).insert(eq(PROVIDER_2.getJwksUri()),
           argThat(jwks -> jwks.toString().equals(PROVIDER_JWKS.toString())));
       verify(verificationSessionManager).update(
-          eq(encodeSessionId(SESSION_ID)),
+          eq(SESSION_ID),
           argThat(verification -> verificationSessionEquals(verification, new VerificationSession(
                   // Provider metadata should match the provider used to verify.
                   PROVIDER_2.getId(), PROVIDER_2.getClientId(),
@@ -1134,12 +1133,12 @@ class VerificationControllerTest {
 
   @Test
   void patchSessionSuccessKeysFromCache() throws Exception {
-    when(verificationSessionManager.findForId(eq(encodeSessionId(SESSION_ID))))
+    when(verificationSessionManager.findForId(eq(SESSION_ID)))
         .thenReturn(CompletableFuture.completedFuture(
             Optional.of(new VerificationSession(PROVIDER_2.getId(),PROVIDER_2.getClientId(), EXAMPLE_STATE,
                 EXAMPLE_REDIRECT_URI, EXAMPLE_CODE_CHALLENGE, EXAMPLE_NONCE, EXAMPLE_REQUEST_URI, "", "", false,
                 clock.millis(), 0, EXAMPLE_REQUEST_URI_LIFETIME))));
-    when(verificationSessionManager.update(eq(encodeSessionId(SESSION_ID)), any()))
+    when(verificationSessionManager.update(eq(SESSION_ID), any()))
         .thenReturn(CompletableFuture.completedFuture(null));
 
     // The cache must return a valid JWKS for the requested URI.
@@ -1172,18 +1171,18 @@ class VerificationControllerTest {
                 identityToken, accessToken, EXAMPLE_TOKEN_TYPE, EXAMPLE_TOKEN_EXPIRATION, EXAMPLE_TOKEN_SCOPE))));
 
     final Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.method("PATCH", Entity.json(updateSessionJson(
         EXAMPLE_CODE, EXAMPLE_CODER_VERIFIER, EXAMPLE_STATE)))) {
 
-      verify(verificationSessionManager).findForId(eq(encodeSessionId(SESSION_ID)));
+      verify(verificationSessionManager).findForId(eq(SESSION_ID));
       verify(verificationTokenKeysManager).findForUri(eq(PROVIDER_2.getJwksUri()));
       // The keys should never be updated in the cache, as they were retrieved from it.
       verify(verificationTokenKeysManager, never()).insert(any(), any());
       verify(verificationSessionManager).update(
-          eq(encodeSessionId(SESSION_ID)),
+          eq(SESSION_ID),
           argThat(verification -> verificationSessionEquals(verification, new VerificationSession(
                   // Provider metadata should match the provider used to verify.
                   PROVIDER_2.getId(), PROVIDER_2.getClientId(),
@@ -1204,11 +1203,11 @@ class VerificationControllerTest {
 
   @Test
   void getSessionNotFound() {
-    when(verificationSessionManager.findForId(encodeSessionId(SESSION_ID)))
+    when(verificationSessionManager.findForId(SESSION_ID))
         .thenReturn(CompletableFuture.completedFuture(Optional.empty()));
 
     Invocation.Builder request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.get()) {
@@ -1216,7 +1215,7 @@ class VerificationControllerTest {
     }
 
     request = resources.getJerseyTest()
-        .target("/v1/verification/session/" + encodeSessionId(SESSION_ID))
+        .target("/v1/verification/session/" + SESSION_ID)
         .request()
         .header(HttpHeaders.X_FORWARDED_FOR, "127.0.0.1");
     try (Response response = request.get()) {
@@ -1226,7 +1225,7 @@ class VerificationControllerTest {
 
   @Test
   void getSessionSuccess() {
-    final String encodedSessionId = encodeSessionId(SESSION_ID);
+    final String encodedSessionId = SESSION_ID;
 
     when(verificationSessionManager.findForId(any()))
         .thenReturn(CompletableFuture.completedFuture(
