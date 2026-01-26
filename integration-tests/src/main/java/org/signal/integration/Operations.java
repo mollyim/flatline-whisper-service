@@ -116,11 +116,6 @@ public final class Operations {
     apiDelete("/v1/accounts/me").authorized(user).executeExpectSuccess();
   }
 
-  public static String peekVerificationSessionPushChallenge(final String sessionId) {
-    return INTEGRATION_TOOLS.peekVerificationSessionPushChallenge(sessionId).join()
-        .orElseThrow(() -> new RuntimeException("push challenge not found for the verification session"));
-  }
-
   public static byte[] populateRandomRecoveryPassword(final String principal) {
     final byte[] recoveryPassword = randomBytes(32);
     INTEGRATION_TOOLS.populateRecoveryPassword(principal, recoveryPassword).join();
