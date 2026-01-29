@@ -1,5 +1,6 @@
 /*
  * Copyright 2023 Signal Messenger, LLC
+ * Copyright 2025 Molly Instant Messenger
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
@@ -12,6 +13,7 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.time.Clock;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -25,6 +27,7 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
 
 public abstract class SerializedExpireableJsonDynamoStore<T> {
 
@@ -145,6 +148,20 @@ public abstract class SerializedExpireableJsonDynamoStore<T> {
             .key(Map.of(KEY_KEY, AttributeValues.fromString(key)))
             .build())
         .thenRun(() -> {
+        });
+  }
+
+  public CompletableFuture<Void> removeAll() {
+    return dynamoDbClient.scan(ScanRequest.builder()
+            .tableName(tableName)
+            .projectionExpression(KEY_KEY)
+            .build())
+        .thenCompose(scanResp -> {
+          List<CompletableFuture<Void>> deletes = scanResp.items().stream()
+              .map(item -> remove(item.get(KEY_KEY).toString()).thenRun(() -> {})).toList();
+          return deletes.isEmpty()
+              ? CompletableFuture.completedFuture(null)
+              : CompletableFuture.allOf(deletes.toArray(new CompletableFuture[0]));
         });
   }
 

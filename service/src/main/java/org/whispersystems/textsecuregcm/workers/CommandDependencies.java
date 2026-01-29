@@ -1,5 +1,6 @@
 /*
  * Copyright 2023 Signal Messenger, LLC
+ * Copyright 2025 Molly Instant Messenger
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
@@ -77,6 +78,8 @@ import org.whispersystems.textsecuregcm.storage.SingleUseECPreKeyStore;
 import org.whispersystems.textsecuregcm.storage.SingleUseKEMPreKeyStore;
 import org.whispersystems.textsecuregcm.storage.SubscriptionManager;
 import org.whispersystems.textsecuregcm.storage.Subscriptions;
+import org.whispersystems.textsecuregcm.storage.VerificationTokenKeys;
+import org.whispersystems.textsecuregcm.storage.VerificationTokenKeysManager;
 import org.whispersystems.textsecuregcm.subscriptions.AppleAppStoreManager;
 import org.whispersystems.textsecuregcm.subscriptions.GooglePlayBillingManager;
 import org.whispersystems.textsecuregcm.util.ManagedAwsCrt;
@@ -114,7 +117,8 @@ record CommandDependencies(
     DynamicConfigurationManager<DynamicConfiguration> dynamicConfigurationManager,
     DynamoDbAsyncClient dynamoDbAsyncClient,
     PrincipalNameIdentifiers principalNameIdentifiers,
-    DynamoDbRecoveryManager dynamoDbRecoveryManager) {
+    DynamoDbRecoveryManager dynamoDbRecoveryManager,
+    VerificationTokenKeysManager verificationTokenKeysManager) {
 
   static CommandDependencies build(
       final String name,
@@ -359,6 +363,10 @@ record CommandDependencies(
     final DynamoDbRecoveryManager dynamoDbRecoveryManager =
         new DynamoDbRecoveryManager(accounts, principalNameIdentifiers);
 
+    final VerificationTokenKeys verificationTokenKeys = new VerificationTokenKeys(dynamoDbAsyncClient,
+        configuration.getDynamoDbTables().getVerificationTokenKeys().getTableName(), clock);
+    final VerificationTokenKeysManager verificationTokenKeysManager = new VerificationTokenKeysManager(verificationTokenKeys);
+
     environment.lifecycle().manage(apnSender);
     environment.lifecycle().manage(disconnectionRequestManager);
     environment.lifecycle().manage(redisMessageAvailabilityManager);
@@ -387,7 +395,8 @@ record CommandDependencies(
         dynamicConfigurationManager,
         dynamoDbAsyncClient,
             principalNameIdentifiers,
-        dynamoDbRecoveryManager
+        dynamoDbRecoveryManager,
+        verificationTokenKeysManager
     );
   }
 

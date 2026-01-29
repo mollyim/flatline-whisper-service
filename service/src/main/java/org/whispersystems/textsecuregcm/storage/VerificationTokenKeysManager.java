@@ -26,6 +26,14 @@ public class VerificationTokenKeysManager {
     return tokenKeysStore.update(uri, jwks);
   }
 
+  public CompletableFuture<Void> remove(final String uri) {
+    return tokenKeysStore.remove(uri);
+  }
+
+  public CompletableFuture<Void> removeAll() {
+    return tokenKeysStore.removeAll();
+  }
+
   public CompletableFuture<Optional<JWKSet>> findForUri(final String uri) {
     return tokenKeysStore.findForKey(uri);
   }
