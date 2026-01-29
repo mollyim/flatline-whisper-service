@@ -20,7 +20,6 @@ public class VerificationProviderConfiguration {
   private final String tokenEndpoint;
   private final String parEndpoint;
   private final String jwksUri;
-  private final String audience;
   private final String scopes;
   private final String principalClaim;
   private final String clientId;
@@ -37,7 +36,6 @@ public class VerificationProviderConfiguration {
       @JsonProperty("parEndpoint") final String parEndpoint,
       @JsonProperty("jwksUri") final String jwksUri,
       @JsonProperty("clientId") final String clientId,
-      @JsonProperty("audience") final String audience,
       @JsonProperty("scopes") final String scopes,
       @JsonProperty("principalClaim") final String principalClaim) {
     this.id = id;
@@ -48,7 +46,6 @@ public class VerificationProviderConfiguration {
     this.parEndpoint = parEndpoint;
     this.jwksUri = jwksUri;
     this.clientId = clientId;
-    this.audience = audience;
     this.scopes = scopes;
     this.principalClaim = principalClaim;
   }
@@ -92,11 +89,6 @@ public class VerificationProviderConfiguration {
   @NotEmpty
   public String getClientId() {
     return clientId;
-  }
-
-  @NotEmpty
-  public String getAudience() {
-    return audience;
   }
 
   @DefaultValue("openid email profile")

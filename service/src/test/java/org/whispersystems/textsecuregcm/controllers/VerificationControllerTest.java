@@ -144,7 +144,7 @@ class VerificationControllerTest {
         "http://localhost:" + wireMock.getPort() + EXAMPLE_PAR_PATH,
         "http://localhost:" + wireMock.getPort() + EXAMPLE_JWKS_PATH,
         "0e0ccedd-8d6c-4530-b277-5042ea7ead5b",
-        "https://flatline.example.com", "openid profile", "sub");
+        "openid profile", "sub");
     PROVIDER_2 = new VerificationProviderConfiguration(
         "example-2",
         "Example 2",
@@ -154,7 +154,7 @@ class VerificationControllerTest {
         "http://localhost:" + wireMock.getPort() + EXAMPLE_PAR_PATH,
         "http://localhost:" + wireMock.getPort() + EXAMPLE_JWKS_PATH,
         "2082720b-2922-459a-b9d4-935f8dd651bd",
-        "https://flatline.example.com", "openid email profile", "email");
+        "openid email profile", "email");
 
     PROVIDER_JWK = generateKeyPair("example-key-1");
     PROVIDER_JWKS = new JWKSet(PROVIDER_JWK);
@@ -719,7 +719,7 @@ class VerificationControllerTest {
         // Invalid JWKS URL.
         "invalid",
         "0e0ccedd-8d6c-4530-b277-5042ea7ead5b",
-        "https://flatline.example.com", "openid profile", "sub");
+        "openid profile", "sub");
     when(verificationConfiguration.getProvider(providerInvalidJwksUrl.getId()))
         .thenReturn(providerInvalidJwksUrl);
 
