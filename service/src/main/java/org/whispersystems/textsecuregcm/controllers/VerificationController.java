@@ -156,7 +156,7 @@ public class VerificationController {
           authorization request for a chosen verification provider. Flatline will perform
           PAR (i.e. pushed authorization request) with the chosen verification provider and return the resulting
           authorization parameters to the client. The client is then expected to perform the authorization step and
-          request PATCH /session/{sessionId} with the token exchange parameters.
+          request `PATCH /session/{sessionId}` with the token exchange parameters.
           """)
   // It would make sense for this status code to be "201 Created". The original status code is kept for compatibility.
   @ApiResponse(responseCode = "200", description = "The verification session was created successfully", useReturnTypeSchema = true)
