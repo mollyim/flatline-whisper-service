@@ -5,15 +5,13 @@ cacheTTL: 0
 readerClass: org.signal.openapi.OpenApiReader
 openAPI:
   info:
-    title: Signal Server API
+    title: Flatline Whisper API
     license:
       name: AGPL-3.0-only
       url: https://www.gnu.org/licenses/agpl-3.0.txt
   servers:
-    - url: https://chat.signal.org
-      description: Production service
-    - url: https://chat.staging.signal.org
-      description: Staging service
+    - url: https://whisper.flatline.internal
+      description: Internal Service
   components:
     securitySchemes:
       authenticatedAccount:
