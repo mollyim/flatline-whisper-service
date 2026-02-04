@@ -25,7 +25,7 @@
         <artifactId>swagger-maven-plugin-jakarta</artifactId>
         <version>${swagger.version}</version>
         <configuration>
-          <outputFileName>signal-server-openapi</outputFileName>
+          <outputFileName>whisper-openapi</outputFileName>
           <outputPath>${project.build.directory}/openapi</outputPath>
           <outputFormat>YAML</outputFormat>
           <configurationFilePath>${project.basedir}/src/main/resources/openapi/openapi-configuration.yaml
