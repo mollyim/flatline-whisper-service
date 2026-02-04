@@ -64,6 +64,7 @@ import org.whispersystems.textsecuregcm.configuration.SubscriptionConfiguration;
 import org.whispersystems.textsecuregcm.configuration.TlsKeyStoreConfiguration;
 import org.whispersystems.textsecuregcm.configuration.TurnConfiguration;
 import org.whispersystems.textsecuregcm.configuration.UnidentifiedDeliveryConfiguration;
+import org.whispersystems.textsecuregcm.configuration.VerificationConfiguration;
 import org.whispersystems.textsecuregcm.configuration.VirtualThreadConfiguration;
 import org.whispersystems.textsecuregcm.configuration.ZkConfig;
 import org.whispersystems.websocket.configuration.WebSocketConfiguration;
@@ -348,6 +349,11 @@ public class WhisperServerConfiguration extends Configuration {
   @NotNull
   private RetryConfiguration generalRedisRetry = new RetryConfiguration();
 
+  @Valid
+  @NotNull
+  @JsonProperty
+  private VerificationConfiguration verification;
+
   public TlsKeyStoreConfiguration getTlsKeyStoreConfiguration() {
     return tlsKeyStore;
   }
@@ -581,5 +587,9 @@ public class WhisperServerConfiguration extends Configuration {
 
   public RetryConfiguration getGeneralRedisRetryConfiguration() {
     return generalRedisRetry;
+  }
+
+  public VerificationConfiguration getVerificationConfiguration() {
+    return verification;
   }
 }

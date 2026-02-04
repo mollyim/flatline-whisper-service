@@ -6,19 +6,35 @@
 
 package org.whispersystems.textsecuregcm.controllers;
 
-import static org.whispersystems.textsecuregcm.metrics.MetricsUtil.name;
-
-import com.google.i18n.phonenumbers.NumberParseException;
-import com.google.i18n.phonenumbers.PhoneNumberUtil;
-import com.google.i18n.phonenumbers.Phonenumber;
-import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
-import io.micrometer.core.instrument.Metrics;
-import io.micrometer.core.instrument.Tag;
-import io.micrometer.core.instrument.Tags;
+import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.jwk.JWKSet;
+import com.nimbusds.jose.proc.BadJOSEException;
+import com.nimbusds.jwt.JWT;
+import com.nimbusds.oauth2.sdk.AuthorizationCode;
+import com.nimbusds.oauth2.sdk.AuthorizationCodeGrant;
+import com.nimbusds.oauth2.sdk.AuthorizationRequest;
+import com.nimbusds.oauth2.sdk.ParseException;
+import com.nimbusds.oauth2.sdk.PushedAuthorizationRequest;
+import com.nimbusds.oauth2.sdk.PushedAuthorizationResponse;
+import com.nimbusds.oauth2.sdk.PushedAuthorizationSuccessResponse;
+import com.nimbusds.oauth2.sdk.ResponseType;
+import com.nimbusds.oauth2.sdk.Scope;
+import com.nimbusds.oauth2.sdk.TokenErrorResponse;
+import com.nimbusds.oauth2.sdk.TokenRequest;
+import com.nimbusds.oauth2.sdk.TokenResponse;
+import com.nimbusds.oauth2.sdk.http.HTTPRequest;
+import com.nimbusds.oauth2.sdk.http.HTTPResponse;
+import com.nimbusds.oauth2.sdk.id.ClientID;
+import com.nimbusds.oauth2.sdk.id.Issuer;
+import com.nimbusds.oauth2.sdk.id.State;
+import com.nimbusds.oauth2.sdk.pkce.CodeVerifier;
+import com.nimbusds.openid.connect.sdk.Nonce;
+import com.nimbusds.openid.connect.sdk.OIDCTokenResponse;
+import com.nimbusds.openid.connect.sdk.OIDCTokenResponseParser;
+import com.nimbusds.openid.connect.sdk.claims.IDTokenClaimsSet;
+import com.nimbusds.openid.connect.sdk.validators.IDTokenValidator;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -26,15 +42,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.BadRequestException;
-import jakarta.ws.rs.ClientErrorException;
 import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.PATCH;
 import jakarta.ws.rs.POST;
-import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -46,196 +59,174 @@ import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.SecureRandom;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.time.Clock;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.Collections;
-import java.util.HexFormat;
 import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletionException;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.whispersystems.textsecuregcm.captcha.AssessmentResult;
-import org.whispersystems.textsecuregcm.captcha.RegistrationCaptchaManager;
-import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicConfiguration;
+import org.whispersystems.textsecuregcm.configuration.VerificationProviderConfiguration;
+import org.whispersystems.textsecuregcm.configuration.VerificationConfiguration;
 import org.whispersystems.textsecuregcm.entities.CreateVerificationSessionRequest;
-import org.whispersystems.textsecuregcm.entities.RegistrationServiceSession;
-import org.whispersystems.textsecuregcm.entities.SubmitVerificationCodeRequest;
+import org.whispersystems.textsecuregcm.entities.Principal;
 import org.whispersystems.textsecuregcm.entities.UpdateVerificationSessionRequest;
-import org.whispersystems.textsecuregcm.entities.VerificationCodeRequest;
-import org.whispersystems.textsecuregcm.entities.VerificationSessionResponse;
-import org.whispersystems.textsecuregcm.filters.RemoteAddressFilter;
+import org.whispersystems.textsecuregcm.entities.UpdateVerificationSessionResponse;
+import org.whispersystems.textsecuregcm.entities.VerificationProvidersResponse;
+import org.whispersystems.textsecuregcm.entities.VerificationProvidersResponseItem;
+import org.whispersystems.textsecuregcm.entities.CreateVerificationSessionResponse;
+import org.whispersystems.textsecuregcm.limits.RateLimitedByIp;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
-import org.whispersystems.textsecuregcm.mappers.RegistrationServiceSenderExceptionMapper;
-import org.whispersystems.textsecuregcm.metrics.UserAgentTagUtil;
-import org.whispersystems.textsecuregcm.push.PushNotification;
-import org.whispersystems.textsecuregcm.push.PushNotificationManager;
-import org.whispersystems.textsecuregcm.registration.ClientType;
-import org.whispersystems.textsecuregcm.registration.MessageTransport;
-import org.whispersystems.textsecuregcm.registration.RegistrationFraudException;
-import org.whispersystems.textsecuregcm.registration.RegistrationServiceClient;
-import org.whispersystems.textsecuregcm.registration.RegistrationServiceException;
-import org.whispersystems.textsecuregcm.registration.RegistrationServiceSenderException;
-import org.whispersystems.textsecuregcm.registration.TransportNotAllowedException;
 import org.whispersystems.textsecuregcm.registration.VerificationSession;
-import org.whispersystems.textsecuregcm.spam.RegistrationFraudChecker;
-import org.whispersystems.textsecuregcm.spam.RegistrationFraudChecker.VerificationCheck;
-import org.whispersystems.textsecuregcm.storage.AccountsManager;
-import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
 import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
 import org.whispersystems.textsecuregcm.storage.VerificationSessionManager;
-import org.whispersystems.textsecuregcm.util.ExceptionUtils;
+import org.whispersystems.textsecuregcm.storage.VerificationTokenKeysManager;
 import org.whispersystems.textsecuregcm.util.InvalidPrincipalException;
-import org.whispersystems.textsecuregcm.util.ObsoletePrincipalFormatException;
-import org.whispersystems.textsecuregcm.util.Pair;
-import org.whispersystems.textsecuregcm.entities.Principal;
 import org.whispersystems.textsecuregcm.util.Util;
 
+// FLT(uoemai): This controller has been completely rewritten for Flatline.
+//              All comments in this controller are from the Flatline project, even if missing the FLT prefix.
+//              This controller verifies that a client has ownership of a specific principal in at least
+//              one of the verification providers that have been configured by the Flatline operator.
 @Path("/v1/verification")
 @io.swagger.v3.oas.annotations.tags.Tag(name = "Verification")
 public class VerificationController {
 
   private static final Logger logger = LoggerFactory.getLogger(VerificationController.class);
-  private static final Duration REGISTRATION_RPC_TIMEOUT = Duration.ofSeconds(15);
   private static final Duration DYNAMODB_TIMEOUT = Duration.ofSeconds(5);
 
-  private static final SecureRandom RANDOM = new SecureRandom();
-
-  private static final String PUSH_CHALLENGE_COUNTER_NAME = name(VerificationController.class, "pushChallenge");
-  private static final String CHALLENGE_PRESENT_TAG_NAME = "present";
-  private static final String CHALLENGE_MATCH_TAG_NAME = "matches";
-  private static final String CAPTCHA_ATTEMPT_COUNTER_NAME = name(VerificationController.class, "captcha");
-  private static final String SCORE_TAG_NAME = "score";
-  private static final String CODE_REQUESTED_COUNTER_NAME = name(VerificationController.class, "codeRequested");
-  private static final String VERIFICATION_TRANSPORT_TAG_NAME = "transport";
-  private static final String VERIFIED_COUNTER_NAME = name(VerificationController.class, "verified");
-  private static final String SUCCESS_TAG_NAME = "success";
-
-  private final RegistrationServiceClient registrationServiceClient;
   private final VerificationSessionManager verificationSessionManager;
-  private final PushNotificationManager pushNotificationManager;
-  private final RegistrationCaptchaManager registrationCaptchaManager;
+  private final VerificationTokenKeysManager verificationTokenKeysManager;
   private final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager;
   private final PrincipalNameIdentifiers principalNameIdentifiers;
   private final RateLimiters rateLimiters;
-  private final AccountsManager accountsManager;
-  private final RegistrationFraudChecker registrationFraudChecker;
-  private final DynamicConfigurationManager<DynamicConfiguration> dynamicConfigurationManager;
+  private final VerificationConfiguration verificationConfiguration;
   private final Clock clock;
 
-  public VerificationController(final RegistrationServiceClient registrationServiceClient,
+  public VerificationController(
       final VerificationSessionManager verificationSessionManager,
-      final PushNotificationManager pushNotificationManager,
-      final RegistrationCaptchaManager registrationCaptchaManager,
+      final VerificationTokenKeysManager verificationTokenKeysManager,
       final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager,
       final PrincipalNameIdentifiers principalNameIdentifiers,
       final RateLimiters rateLimiters,
-      final AccountsManager accountsManager,
-      final RegistrationFraudChecker registrationFraudChecker,
-      final DynamicConfigurationManager<DynamicConfiguration> dynamicConfigurationManager,
+      final VerificationConfiguration verificationConfiguration,
       final Clock clock) {
-    this.registrationServiceClient = registrationServiceClient;
     this.verificationSessionManager = verificationSessionManager;
-    this.pushNotificationManager = pushNotificationManager;
-    this.registrationCaptchaManager = registrationCaptchaManager;
+    this.verificationTokenKeysManager = verificationTokenKeysManager;
     this.registrationRecoveryPasswordsManager = registrationRecoveryPasswordsManager;
     this.principalNameIdentifiers = principalNameIdentifiers;
     this.rateLimiters = rateLimiters;
-    this.accountsManager = accountsManager;
-    this.registrationFraudChecker = registrationFraudChecker;
-    this.dynamicConfigurationManager = dynamicConfigurationManager;
+    this.verificationConfiguration = verificationConfiguration;
     this.clock = clock;
+  }
+
+  @GET
+  @Consumes(MediaType.APPLICATION_JSON)
+  @Produces(MediaType.APPLICATION_JSON)
+  @Operation(
+      summary = "Retrieve the list of verification providers",
+      description = """
+          Retrieves the list of verification providers that can be used to start a verification session.
+          This list includes the details that the client needs to communicate with each provider.
+          """)
+  @ApiResponse(responseCode = "200", description = "The list of providers was retrieved", useReturnTypeSchema = true)
+  public VerificationProvidersResponse getVerificationConfiguration() {
+    final List<VerificationProvidersResponseItem> responseItems = verificationConfiguration.getProviders().stream()
+        .map(provider -> new VerificationProvidersResponseItem(
+            provider.getId(), provider.getName(), provider.getIssuer(),
+            provider.getAuthorizationEndpoint(), provider.getPrincipalClaim())).toList();
+    return new VerificationProvidersResponse(responseItems);
   }
 
   @POST
   @Path("/session")
+  // This rate limiting mitigates anonymous clients causing Flatline to overload the identity provider.
+  @RateLimitedByIp(RateLimiters.For.VERIFICATION_AUTHORIZATION_PER_IP)
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
   @Operation(
-      summary = "Creates a new verification session for a specific principal",
+      summary = "Creates a new verification session",
       description = """
-          Initiates a session to be able to verify the principal for account registration. Check the response and
-          submit requested information at PATCH /session/{sessionId}
+          Initiates a session to be able to verify a principal for account registration. Expects to receive an
+          authorization request for a chosen verification provider. Flatline will perform
+          PAR (i.e. pushed authorization request) with the chosen verification provider and return the resulting
+          authorization parameters to the client. The client is then expected to perform the authorization step and
+          request `PATCH /session/{sessionId}` with the token exchange parameters.
           """)
+  // It would make sense for this status code to be "201 Created". The original status code is kept for compatibility.
   @ApiResponse(responseCode = "200", description = "The verification session was created successfully", useReturnTypeSchema = true)
   @ApiResponse(responseCode = "422", description = "The request did not pass validation")
   @ApiResponse(responseCode = "429", description = "Too many attempts", headers = @Header(
       name = "Retry-After",
       description = "If present, an positive integer indicating the number of seconds before a subsequent attempt could succeed",
       schema = @Schema(implementation = Integer.class)))
-  public VerificationSessionResponse createSession(@NotNull @Valid final CreateVerificationSessionRequest request,
-      @Context final ContainerRequestContext requestContext)
-      throws RateLimitExceededException, ObsoletePrincipalFormatException {
+  public CreateVerificationSessionResponse createSession(@NotNull @Valid final CreateVerificationSessionRequest request,
+      @Context final ContainerRequestContext requestContext) {
 
-    // FLT(uoemai): Use dummy verification handler during development.
-    // final Pair<String, PushNotification.TokenType> pushTokenAndType = validateAndExtractPushToken(
-    //    request.updateVerificationSessionRequest());
-
-    final Principal principal;
-    try {
-      // FLT(uoemai): Canonicalization no longer applies to phone numbers specifically, only to principals.
-      //              With principals, technically equivalent phone numbers are treated as different principals.
-      principal = Principal.parse(Util.canonicalizePrincipal(request.principal()));
-    } catch (final InvalidPrincipalException e) {
-      throw new ServerErrorException("could not parse already validated principal", Response.Status.INTERNAL_SERVER_ERROR);
+    final VerificationProviderConfiguration provider = verificationConfiguration.getProvider(request.providerId());
+    if (provider == null) {
+      logger.info("failed to find verification provider requested by the verification client");
+      throw new BadRequestException("the requested verification provider is invalid");
     }
 
-    // FLT(uoemai): At this point, we start assuming that the principal is a phone number.
-    //              This is only done in the interim, before registration is migrated to OIDC.
-    //              TODO: Migrate registration to use OIDC.
-    final Phonenumber.PhoneNumber phoneNumber;
+    final String sessionId = UUID.randomUUID().toString();
+    final Nonce nonce = new Nonce();
+
+    // This string identifies the Flatline client and should be returned in the audience of the identity token.
+    ClientID clientId = new ClientID(provider.getClientId());
+
+    final AuthorizationRequest parRequest = new AuthorizationRequest.Builder(
+        new ResponseType("code"), clientId)
+        .redirectionURI(URI.create(request.redirectUri()))
+        .scope(Scope.parse(provider.getScopes()))
+        .state(new State(request.state()))
+        .build();
+
+    final HTTPRequest parHttpRequest = new PushedAuthorizationRequest(
+        URI.create(provider.getParEndpoint()), parRequest)
+        .toHTTPRequest();
+    HTTPResponse parHttpResponse = null;
     try {
-      phoneNumber = PhoneNumberUtil.getInstance().parse(principal.getValue(), null);
-    } catch (final NumberParseException e) {
-      throw new ServerErrorException("could not parse principal as phone number", Response.Status.INTERNAL_SERVER_ERROR);
+      parHttpResponse = parHttpRequest.send();
+    } catch (IOException e) {
+      logger.warn("PAR request to provider \"{}\" failed", provider.getId(), e);
+      throw new ServerErrorException("pushed authorization request with the verification provider failed",
+          Response.Status.INTERNAL_SERVER_ERROR);
     }
 
-    final RegistrationServiceSession registrationServiceSession;
+    PushedAuthorizationResponse parResponse = null;
     try {
-      final String sourceHost = (String) requestContext.getProperty(RemoteAddressFilter.REMOTE_ADDRESS_ATTRIBUTE_NAME);
-
-      registrationServiceSession = registrationServiceClient.createRegistrationSession(phoneNumber, sourceHost,
-          accountsManager.getByPrincipal(request.principal()).isPresent(),
-          REGISTRATION_RPC_TIMEOUT).join();
-    } catch (final CancellationException e) {
-
-      throw new ServerErrorException("registration service unavailable", Response.Status.SERVICE_UNAVAILABLE);
-    } catch (final CompletionException e) {
-
-      if (ExceptionUtils.unwrap(e) instanceof RateLimitExceededException re) {
-        throw re;
-      }
-
-      throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR, e);
+      parResponse = PushedAuthorizationResponse.parse(parHttpResponse);
+    } catch (ParseException e) {
+      logger.warn("PAR response from provider \"{}\" failed to parse", provider.getId(), e);
+      throw new ServerErrorException("pushed authorization request with the verification provider failed",
+          Response.Status.INTERNAL_SERVER_ERROR);
     }
 
-    VerificationSession verificationSession = new VerificationSession(null, new ArrayList<>(),
-        Collections.emptyList(), null, null, false,
-        clock.millis(), clock.millis(), registrationServiceSession.expiration());
+    if (!parResponse.indicatesSuccess()) {
+      logger.warn("PAR request to provider \"{}\" was unsuccessful with status: {}, code: {}",
+          provider.getId(),
+          parResponse.toErrorResponse().getErrorObject().getHTTPStatusCode(),
+          parResponse.toErrorResponse().getErrorObject().getCode());
+      throw new ServerErrorException("pushed authorization request with the verification provider failed",
+          Response.Status.INTERNAL_SERVER_ERROR);
+    }
 
-    // FLT(uoemai): Use dummy verification handler during development.
-    // Original: verificationSession = handlePushToken(pushTokenAndType, verificationSession);
-    verificationSession = handleDummy(verificationSession);
+    final PushedAuthorizationSuccessResponse parData = parResponse.toSuccessResponse();
+    final long parLifetimeSeconds = parData.getLifetime();
+    final VerificationSession verificationSession = new VerificationSession(provider.getId(), clientId.toString(),
+       request.state(), request.redirectUri(), request.codeChallenge(), nonce.toString(),
+        parData.getRequestURI().toString(), null, null, false,
+        clock.millis(), clock.millis(), parLifetimeSeconds);
+    storeVerificationSession(sessionId, verificationSession);
 
-    // unconditionally request a captcha -- it will either be the only requested information, or a fallback
-    // if a push challenge sent in `handlePushToken` doesn't arrive in time
-    // FLT(uoemai): Disable captcha verification during development.
-    // verificationSession.requestedInformation().add(VerificationSession.Information.CAPTCHA);
-
-    storeVerificationSession(registrationServiceSession, verificationSession);
-
-    return buildResponse(registrationServiceSession, verificationSession);
+    return new CreateVerificationSessionResponse(sessionId, provider.getAuthorizationEndpoint(), clientId.toString(),
+        parData.getRequestURI().toString(), parData.getLifetime(), false);
   }
 
   @PATCH
@@ -245,256 +236,176 @@ public class VerificationController {
   @Operation(
       summary = "Update a registration verification session",
       description = """
-          Updates the session with requested information like an answer to a push challenge or captcha. 
-          If `requestedInformation` in the response is empty, and `allowedToRequestCode` is `true`, proceed to call 
-          `POST /session/{sessionId}/code`. If `requestedInformation` is empty and `allowedToRequestCode` is `false`, 
-          then the caller must create a new verification session.
+          Updates the session with the token exchange parameters obtained by the client after completing the
+          authorization step. Flatline will then exchange those parameters for a token from the verification provider,
+          verify the signature and contents of the token as configured and create a verified registration session for an
+          the principal matching the value in the token claim configured as the principal for the verification provider.
           """)
   @ApiResponse(responseCode = "200", description = "Session was updated successfully with the information provided", useReturnTypeSchema = true)
-  @ApiResponse(responseCode = "403", description = "The information provided was not accepted (e.g push challenge or captcha verification failed)")
+  @ApiResponse(responseCode = "403", description = "The information provided was not accepted (e.g token exchange failed)")
+  @ApiResponse(responseCode = "404", description = "Session with the specified ID could not be found")
   @ApiResponse(responseCode = "422", description = "The request did not pass validation")
   @ApiResponse(responseCode = "429", description = "Too many attempts",
-      content = @Content(schema = @Schema(implementation = VerificationSessionResponse.class)),
+      content = @Content(schema = @Schema(implementation = CreateVerificationSessionResponse.class)),
       headers = @Header(
           name = "Retry-After",
           description = "If present, an positive integer indicating the number of seconds before a subsequent attempt could succeed",
           schema = @Schema(implementation = Integer.class)))
-  public VerificationSessionResponse updateSession(
-      @PathParam("sessionId") final String encodedSessionId,
+  public UpdateVerificationSessionResponse updateSession(
+      @PathParam("sessionId") final String sessionId,
       @HeaderParam(HttpHeaders.USER_AGENT) final String userAgent,
       @Context final ContainerRequestContext requestContext,
-      @NotNull @Valid final UpdateVerificationSessionRequest updateVerificationSessionRequest) {
+      @NotNull @Valid final UpdateVerificationSessionRequest updateVerificationSessionRequest) throws RateLimitExceededException {
 
-    final String sourceHost = (String) requestContext.getProperty(RemoteAddressFilter.REMOTE_ADDRESS_ATTRIBUTE_NAME);
 
-    // final Pair<String, PushNotification.TokenType> pushTokenAndType = validateAndExtractPushToken(
-    //    updateVerificationSessionRequest);
+    VerificationSession verificationSession = retrieveVerificationSession(sessionId);
+    // This rate limiting mitigates clients causing Flatline to overload the identity provider.
+    rateLimiters.getVerificationTokenExchangeLimiter().validate(sessionId);
 
-    final RegistrationServiceSession registrationServiceSession = retrieveRegistrationServiceSession(encodedSessionId);
-    VerificationSession verificationSession = retrieveVerificationSession(registrationServiceSession);
-
-    final VerificationCheck verificationCheck = registrationFraudChecker.checkVerificationAttempt(
-        requestContext,
-        verificationSession,
-        registrationServiceSession.principal(),
-        updateVerificationSessionRequest);
-
-    try {
-      // these handle* methods ordered from least likely to fail to most, so take care when considering a change
-
-      // FLT(uoemai): Use dummy handler as the first verification method during development.
-      verificationSession = handleDummy(verificationSession);
-      verificationSession = verificationCheck.updatedSession().orElse(verificationSession);
-
-      // FLT(uoemai): The following additional verification methods are currently ignored in the Flatline prototype.
-      // verificationSession = handlePushToken(pushTokenAndType, verificationSession);
-      // verificationSession = handlePushChallenge(updateVerificationSessionRequest, registrationServiceSession,
-      //     verificationSession);
-      // verificationSession = handleCaptcha(sourceHost, updateVerificationSessionRequest, registrationServiceSession,
-      //    verificationSession, userAgent, verificationCheck.scoreThreshold());
-
-    // FLT(uoemai): There are no rate limited verification methods currently in the Flatline prototype.
-    //} catch (final RateLimitExceededException e) {
-      // final Response response = buildResponseForRateLimitExceeded(verificationSession, registrationServiceSession,
-      //     e.getRetryDuration());
-      // throw new ClientErrorException(response);
-
-    } catch (final ForbiddenException e) {
-
-      throw new ClientErrorException(Response.status(Response.Status.FORBIDDEN)
-          .entity(buildResponse(registrationServiceSession, verificationSession))
-          .build());
-
-    } finally {
-      // Each of the handle* methods may update requestedInformation, submittedInformation, and allowedToRequestCode,
-      // and we want to be sure to store a changes, even if a later method throws
-      updateStoredVerificationSession(registrationServiceSession, verificationSession);
+    if (verificationSession.verified()) {
+      logger.debug("refused to update a session that is already verified");
+      throw new WebApplicationException(
+          Response.status(Response.Status.CONFLICT)
+              .entity("the verification session is already verified")
+              .type("text/plain")
+              .build()
+      );
     }
 
-    return buildResponse(registrationServiceSession, verificationSession);
+    final VerificationProviderConfiguration provider = verificationConfiguration.getProvider(verificationSession.providerId());
+    if (provider == null) {
+      logger.info("failed to find verification provider from the verification session");
+      throw new BadRequestException("the requested verification provider is invalid");
+    }
+
+    final AuthorizationCode code = new AuthorizationCode(updateVerificationSessionRequest.code());
+    CodeVerifier codeVerifier = new CodeVerifier(updateVerificationSessionRequest.codeVerifier());
+    final URI redirectURI;
+    try {
+      redirectURI = new URI(verificationSession.redirectUri());
+    } catch (URISyntaxException e) {
+      logger.info("failed to parse redirect URI provided by the verification client", e);
+      throw new ServerErrorException("the provided redirect URI is invalid",
+          Response.Status.INTERNAL_SERVER_ERROR);
+    }
+
+    TokenRequest tokenRequest = new TokenRequest(
+        URI.create(provider.getTokenEndpoint()),
+        new ClientID(verificationSession.clientId()),
+        new AuthorizationCodeGrant(code, redirectURI, codeVerifier),
+        Scope.parse(provider.getScopes()));
+
+    final TokenResponse tokenResponse;
+    try {
+      tokenResponse = OIDCTokenResponseParser.parse(tokenRequest.toHTTPRequest().send());
+    } catch (ParseException e) {
+      logger.warn("failed to parse token response from verification provider", e);
+      throw new ServerErrorException("token exchange with verification provider failed",
+          Response.Status.INTERNAL_SERVER_ERROR);
+    } catch (IOException e) {
+      logger.warn("failed to request token from the verification provider", e);
+      throw new ServerErrorException("token exchange with verification provider failed",
+          Response.Status.INTERNAL_SERVER_ERROR);
+    }
+
+    if (! tokenResponse.indicatesSuccess()) {
+      TokenErrorResponse errorResponse = tokenResponse.toErrorResponse();
+      logger.warn("verification provider returned an error to token request: {}", errorResponse);
+      throw new ServerErrorException("token exchange with the verification provider failed",
+          Response.Status.INTERNAL_SERVER_ERROR);
+    }
+    final OIDCTokenResponse successResponse = (OIDCTokenResponse)tokenResponse.toSuccessResponse();
+
+    // We retrieve the identity token from the OIDC response.
+    final JWT idToken = successResponse.getOIDCTokens().getIDToken();
+
+    // We verify the token against the expected issuer, client identifier and JWKS.
+    final Issuer iss = new Issuer(provider.getIssuer());
+    final ClientID clientId = new ClientID(verificationSession.clientId());
+    // At this point, we allow any algorithm used to sign token as long as it is not "none".
+    // Further down, we will also ensure that algorithm is allowed by the IdP in its JWKS.
+    final JWSAlgorithm alg = new JWSAlgorithm(idToken.getHeader().getAlgorithm().toString());
+    if (alg.equals(JWSAlgorithm.NONE)) {
+      logger.warn("verification provider issued token using no signature algorithm");
+      throw new WebApplicationException(
+          Response.status(Response.Status.UNAUTHORIZED)
+              .entity("failed to verify token returned by the verification provider")
+              .type("text/plain")
+              .build());
+    }
+    final JWKSet jwks = retrieveJwksWithCache(provider.getJwksUri());
+    final IDTokenValidator validator = new IDTokenValidator(iss, clientId, alg, jwks);
+    final Nonce expectedNonce = new Nonce(verificationSession.nonce());
+
+    IDTokenClaimsSet claims;
+    try {
+      // This validates the following:
+      // - The token issuer matches the expected issuer.
+      // - The token audience includes the configured client identifier.
+      // - The token nonce value matches the on in the verification session.
+      // - The token is valid at this point, given 1 minute of leeway.
+      // - The token has a valid signature with the selected key and algorithm.
+      claims = validator.validate(idToken, expectedNonce);
+    } catch (BadJOSEException e) {
+      logger.error("failed to verify the signature or claims from the token returned by the verification provider", e);
+      throw new WebApplicationException(
+          Response.status(Response.Status.UNAUTHORIZED)
+              .entity("failed to verify token returned by the verification provider")
+              .type("text/plain")
+              .build());
+    } catch (JOSEException e) {
+      logger.error("failed to process the token returned by the verification provider", e);
+      throw new WebApplicationException(
+          Response.status(Response.Status.UNAUTHORIZED)
+              .entity("failed to verify token returned by the verification provider")
+              .type("text/plain")
+              .build());
+    }
+
+    // We verify that the "sub" claim is present and store it.
+    final String subject = claims.getStringClaim("sub");
+    if (subject.isEmpty()) {
+      logger.warn("token returned by the verification provider has an empty subject claim");
+      throw new WebApplicationException(
+          Response.status(Response.Status.UNAUTHORIZED)
+              .entity("failed to verify token returned by the verification provider")
+              .type("text/plain")
+              .build());
+    }
+
+    Principal principal;
+    try {
+      // We verify that the configured principal claim (defaulting to "sub") is present in the token.
+      // The value of the claim must also be a valid principal.
+      principal = Principal.parse(Util.canonicalizePrincipal(claims.getStringClaim(provider.getPrincipalClaim())));
+    } catch (final InvalidPrincipalException e) {
+      logger.warn("failed to parse principal from the token returned by the verification provider");
+      throw new WebApplicationException(
+          Response.status(Response.Status.UNAUTHORIZED)
+              .entity("failed to verify token returned by the verification provider")
+              .type("text/plain")
+              .build());
+    }
+
+    // Once the principal is validated, the recovery password is removed for the account with that principal.
+    // The account must be registered with the verification session that will be returned at this point.
+    registrationRecoveryPasswordsManager.remove(principalNameIdentifiers.getPrincipalNameIdentifier(principal.toString()).join());
+
+    final VerificationSession verifiedVerificationSession = new VerificationSession(
+        verificationSession.providerId(), verificationSession.clientId(),
+        verificationSession.state(), verificationSession.redirectUri(), verificationSession.codeChallenge(),
+        verificationSession.nonce(), verificationSession.requestUri(), principal.toString(), subject, true,
+        verificationSession.createdTimestamp(), clock.millis(), verificationSession.remoteExpirationSeconds());
+    updateStoredVerificationSession(sessionId, verifiedVerificationSession);
+
+    return new UpdateVerificationSessionResponse(sessionId, principal.toString(), true);
   }
 
-  private void storeVerificationSession(final RegistrationServiceSession registrationServiceSession,
+  private void updateStoredVerificationSession(final String sessionId,
       final VerificationSession verificationSession) {
-    verificationSessionManager.insert(registrationServiceSession.encodedSessionId(), verificationSession)
+    verificationSessionManager.update(sessionId, verificationSession)
         .orTimeout(DYNAMODB_TIMEOUT.toSeconds(), TimeUnit.SECONDS)
         .join();
-  }
-
-  private void updateStoredVerificationSession(final RegistrationServiceSession registrationServiceSession,
-      final VerificationSession verificationSession) {
-    verificationSessionManager.update(registrationServiceSession.encodedSessionId(), verificationSession)
-        .orTimeout(DYNAMODB_TIMEOUT.toSeconds(), TimeUnit.SECONDS)
-        .join();
-  }
-
-  /**
-   * If {@code pushTokenAndType} values are not {@code null}, sends a push challenge. If there is no existing push
-   * challenge in the session, one will be created, set on the returned session record, and
-   * {@link VerificationSession#requestedInformation()} will be updated.
-   */
-  private VerificationSession handlePushToken(
-      final Pair<String, PushNotification.TokenType> pushTokenAndType, VerificationSession verificationSession) {
-
-    if (pushTokenAndType.first() != null) {
-
-      if (verificationSession.pushChallenge() == null) {
-
-        final List<VerificationSession.Information> requestedInformation = new ArrayList<>();
-        requestedInformation.add(VerificationSession.Information.PUSH_CHALLENGE);
-        requestedInformation.addAll(verificationSession.requestedInformation());
-
-        verificationSession = new VerificationSession(generatePushChallenge(), requestedInformation,
-            verificationSession.submittedInformation(), verificationSession.smsSenderOverride(),
-            verificationSession.voiceSenderOverride(), verificationSession.allowedToRequestCode(),
-            verificationSession.createdTimestamp(), clock.millis(), verificationSession.remoteExpirationSeconds()
-        );
-      }
-
-      pushNotificationManager.sendRegistrationChallengeNotification(pushTokenAndType.first(), pushTokenAndType.second(),
-          verificationSession.pushChallenge());
-    }
-
-    return verificationSession;
-  }
-
-  /**
-   * If a push challenge value is present, compares against the stored value. If they match, then
-   * {@link VerificationSession.Information#PUSH_CHALLENGE} is removed from requested information, added to submitted
-   * information, and {@link VerificationSession#allowedToRequestCode()} is re-evaluated.
-   *
-   * @throws ForbiddenException         if values to not match.
-   * @throws RateLimitExceededException if too many push challenges have been submitted
-   */
-  private VerificationSession handlePushChallenge(
-      final UpdateVerificationSessionRequest updateVerificationSessionRequest,
-      final RegistrationServiceSession registrationServiceSession,
-      VerificationSession verificationSession) throws RateLimitExceededException {
-
-    if (verificationSession.submittedInformation()
-        .contains(VerificationSession.Information.PUSH_CHALLENGE)) {
-      // skip if a challenge has already been submitted
-      return verificationSession;
-    }
-
-    final boolean pushChallengePresent = updateVerificationSessionRequest.pushChallenge() != null;
-    if (pushChallengePresent) {
-      rateLimiters.getVerificationPushChallengeLimiter()
-          .validate(registrationServiceSession.encodedSessionId());
-    }
-
-    final boolean pushChallengeMatches;
-    if (pushChallengePresent && verificationSession.pushChallenge() != null) {
-      pushChallengeMatches = MessageDigest.isEqual(
-          updateVerificationSessionRequest.pushChallenge().getBytes(StandardCharsets.UTF_8),
-          verificationSession.pushChallenge().getBytes(StandardCharsets.UTF_8));
-    } else {
-      pushChallengeMatches = false;
-    }
-
-    Metrics.counter(PUSH_CHALLENGE_COUNTER_NAME,
-            CHALLENGE_PRESENT_TAG_NAME, Boolean.toString(pushChallengePresent),
-            CHALLENGE_MATCH_TAG_NAME, Boolean.toString(pushChallengeMatches))
-        .increment();
-
-    if (pushChallengeMatches) {
-      final List<VerificationSession.Information> submittedInformation = new ArrayList<>(
-          verificationSession.submittedInformation());
-      submittedInformation.add(VerificationSession.Information.PUSH_CHALLENGE);
-
-      final List<VerificationSession.Information> requestedInformation = new ArrayList<>(
-          verificationSession.requestedInformation());
-      // a push challenge satisfies a requested captcha
-      requestedInformation.remove(VerificationSession.Information.CAPTCHA);
-      final boolean allowedToRequestCode = (verificationSession.allowedToRequestCode()
-          || requestedInformation.remove(VerificationSession.Information.PUSH_CHALLENGE))
-          && requestedInformation.isEmpty();
-
-      verificationSession = new VerificationSession(verificationSession.pushChallenge(), requestedInformation,
-          submittedInformation, verificationSession.smsSenderOverride(), verificationSession.voiceSenderOverride(),
-          allowedToRequestCode, verificationSession.createdTimestamp(), clock.millis(),
-          verificationSession.remoteExpirationSeconds());
-
-    } else if (pushChallengePresent) {
-      throw new ForbiddenException();
-    }
-    return verificationSession;
-  }
-
-  /**
-   * If a captcha value is present, it is assessed. If it is valid, then {@link VerificationSession.Information#CAPTCHA}
-   * is removed from requested information, added to submitted information, and
-   * {@link VerificationSession#allowedToRequestCode()} is re-evaluated.
-   *
-   * @throws ForbiddenException         if assessment is not valid.
-   * @throws RateLimitExceededException if too many captchas have been submitted
-   */
-  private VerificationSession handleCaptcha(
-      final String sourceHost,
-      final UpdateVerificationSessionRequest updateVerificationSessionRequest,
-      final RegistrationServiceSession registrationServiceSession,
-      VerificationSession verificationSession,
-      final String userAgent,
-      final Optional<Float> captchaScoreThreshold) throws RateLimitExceededException {
-
-    if (updateVerificationSessionRequest.captcha() == null) {
-      return verificationSession;
-    }
-
-    rateLimiters.getVerificationCaptchaLimiter().validate(registrationServiceSession.encodedSessionId());
-
-    final AssessmentResult assessmentResult;
-    try {
-
-      assessmentResult = registrationCaptchaManager.assessCaptcha(
-              Optional.empty(),
-              Optional.of(updateVerificationSessionRequest.captcha()), sourceHost, userAgent)
-          .orElseThrow(() -> new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR));
-
-      Metrics.counter(CAPTCHA_ATTEMPT_COUNTER_NAME, Tags.of(
-              Tag.of(SUCCESS_TAG_NAME, String.valueOf(assessmentResult.isValid(captchaScoreThreshold))),
-              UserAgentTagUtil.getPlatformTag(userAgent),
-              Tag.of(SCORE_TAG_NAME, assessmentResult.getScoreString())))
-          .increment();
-
-    } catch (final IOException e) {
-      logger.error("error assessing captcha", e);
-      throw new ServerErrorException(Response.Status.SERVICE_UNAVAILABLE, e);
-    }
-
-    if (assessmentResult.isValid(captchaScoreThreshold)) {
-      final List<VerificationSession.Information> submittedInformation = new ArrayList<>(
-          verificationSession.submittedInformation());
-      submittedInformation.add(VerificationSession.Information.CAPTCHA);
-
-      final List<VerificationSession.Information> requestedInformation = new ArrayList<>(
-          verificationSession.requestedInformation());
-      // a captcha satisfies a push challenge, in case of push deliverability issues
-      requestedInformation.remove(VerificationSession.Information.PUSH_CHALLENGE);
-      final boolean allowedToRequestCode = (verificationSession.allowedToRequestCode()
-          || requestedInformation.remove(VerificationSession.Information.CAPTCHA))
-          && requestedInformation.isEmpty();
-
-      verificationSession = new VerificationSession(verificationSession.pushChallenge(), requestedInformation,
-          submittedInformation, verificationSession.smsSenderOverride(), verificationSession.voiceSenderOverride(),
-          allowedToRequestCode, verificationSession.createdTimestamp(), clock.millis(),
-          verificationSession.remoteExpirationSeconds());
-    } else {
-      throw new ForbiddenException();
-    }
-
-    return verificationSession;
-  }
-
-  // FLT(uoemai): Dummy handler that always succeeds and allows requesting a verification code.
-  private VerificationSession handleDummy(VerificationSession verificationSession) {
-    // FLT(uoemai): The dummy handler never requires any additional information.
-    final List<VerificationSession.Information> requestedInformation = new ArrayList<>();
-
-    return new VerificationSession(verificationSession.pushChallenge(), requestedInformation,
-        null, verificationSession.smsSenderOverride(), verificationSession.voiceSenderOverride(),
-        true, verificationSession.createdTimestamp(), clock.millis(),
-        verificationSession.remoteExpirationSeconds());
   }
 
   @GET
@@ -509,345 +420,65 @@ public class VerificationController {
   @ApiResponse(responseCode = "400", description = "Invalid session ID")
   @ApiResponse(responseCode = "404", description = "Session with the specified ID could not be found")
   @ApiResponse(responseCode = "422", description = "Malformed session ID encoding")
-  public VerificationSessionResponse getSession(@PathParam("sessionId") final String encodedSessionId) {
+  public CreateVerificationSessionResponse getSession(@PathParam("sessionId") final String sessionId) {
 
-    final RegistrationServiceSession registrationServiceSession = retrieveRegistrationServiceSession(encodedSessionId);
-    final VerificationSession verificationSession = retrieveVerificationSession(registrationServiceSession);
+    final VerificationSession verificationSession = retrieveVerificationSession(sessionId);
+    final VerificationProviderConfiguration provider = verificationConfiguration.getProvider(verificationSession.providerId());
 
-    return buildResponse(registrationServiceSession, verificationSession);
+    return new CreateVerificationSessionResponse(sessionId, provider.getAuthorizationEndpoint(),
+        verificationSession.clientId(), verificationSession.requestUri(),
+        verificationSession.remoteExpirationSeconds(), verificationSession.verified());
   }
 
-  @POST
-  @Path("/session/{sessionId}/code")
-  @Consumes(MediaType.APPLICATION_JSON)
-  @Produces(MediaType.APPLICATION_JSON)
-  @Operation(
-      summary = "Request a verification code",
-      description = """
-          Sends a verification code to the phone number associated with the specified session via SMS or phone call.
-          This endpoint can only be called when the session metadata includes "allowedToRequestCode = true"
-          """)
-  @ApiResponse(responseCode = "200", description = "Verification code was successfully sent", useReturnTypeSchema = true)
-  @ApiResponse(responseCode = "400", description = "Invalid session ID")
-  @ApiResponse(responseCode = "404", description = "Session with the specified ID could not be found")
-  @ApiResponse(responseCode = "409", description = "The session is already verified or not in a state to request a code because requested information hasn't been provided yet",
-      content = @Content(schema = @Schema(implementation = VerificationSessionResponse.class)))
-  @ApiResponse(responseCode = "418", description = "The request to send a verification code with the given transport could not be fulfilled, but may succeed with a different transport",
-      content = @Content(schema = @Schema(implementation = VerificationSessionResponse.class)))
-  @ApiResponse(responseCode = "422", description = "Request did not pass validation")
-  @ApiResponse(responseCode = "429", description = """
-      Too may attempts; the caller is not permitted to send a verification code via the requested channel at this time 
-      and may need to wait before trying again; if the session metadata does not specify a time at which the caller may 
-      try again, then the caller has exhausted their permitted attempts and must either try a different transport or 
-      create a new verification session.
-      """,
-      content = @Content(schema = @Schema(implementation = VerificationSessionResponse.class)),
-      headers = @Header(
-          name = "Retry-After",
-          description = "If present, an positive integer indicating the number of seconds before a subsequent attempt could succeed",
-          schema = @Schema(implementation = Integer.class)
-      ))
-  @ApiResponse(responseCode = "440", description = """
-      The attempt to send a verification code failed because an external service (e.g. the SMS provider) refused to 
-      deliver the code. This may be a temporary or permanent failure, as indicated in the response body. If temporary, 
-      clients may try again after a reasonable delay. If permanent, clients should not retry the request and should 
-      communicate the permanent failure to the end user. Permanent failures may result in the server disallowing all 
-      future attempts to request or submit verification codes (since those attempts would be all but guaranteed to fail).
-      """,
-      content = @Content(schema = @Schema(implementation = RegistrationServiceSenderExceptionMapper.SendVerificationCodeFailureResponse.class)))
-  public VerificationSessionResponse requestVerificationCode(@PathParam("sessionId") final String encodedSessionId,
-      @HeaderParam(HttpHeaders.USER_AGENT) final String userAgent,
-      @Parameter(in = ParameterIn.HEADER, description = "Ordered list of languages in which the client prefers to receive SMS or voice verification messages") @HeaderParam(HttpHeaders.ACCEPT_LANGUAGE)
-      final Optional<String> acceptLanguage,
-      @NotNull @Valid final VerificationCodeRequest verificationCodeRequest) throws Throwable {
-
-    final RegistrationServiceSession registrationServiceSession = retrieveRegistrationServiceSession(encodedSessionId);
-    final VerificationSession verificationSession = retrieveVerificationSession(registrationServiceSession);
-
-    if (registrationServiceSession.verified()) {
-      throw new ClientErrorException(
-          Response.status(Response.Status.CONFLICT)
-              .entity(buildResponse(registrationServiceSession, verificationSession))
-              .build());
-    }
-
-    if (!verificationSession.allowedToRequestCode()) {
-      final Response.Status status = verificationSession.requestedInformation().isEmpty()
-          ? Response.Status.TOO_MANY_REQUESTS
-          : Response.Status.CONFLICT;
-
-      throw new ClientErrorException(
-          Response.status(status)
-              .entity(buildResponse(registrationServiceSession, verificationSession))
-              .build());
-    }
-
-    final MessageTransport messageTransport = verificationCodeRequest.transport().toMessageTransport();
-
-    final ClientType clientType = switch (verificationCodeRequest.client()) {
-      case "ios" -> ClientType.IOS;
-      case "android-2021-03" -> ClientType.ANDROID_WITH_FCM;
-      default -> {
-        if (StringUtils.startsWithIgnoreCase(verificationCodeRequest.client(), "android")) {
-          yield ClientType.ANDROID_WITHOUT_FCM;
-        }
-        yield ClientType.UNKNOWN;
-      }
-    };
-
-    final String senderOverride = switch (messageTransport) {
-      case SMS -> verificationSession.smsSenderOverride();
-      case VOICE -> verificationSession.voiceSenderOverride();
-    };
-
-    final RegistrationServiceSession resultSession;
-    try {
-      resultSession = registrationServiceClient.sendVerificationCode(registrationServiceSession.id(),
-          messageTransport,
-          clientType,
-          acceptLanguage.orElse(null),
-          senderOverride,
-          REGISTRATION_RPC_TIMEOUT).join();
-    } catch (final CancellationException e) {
-      throw new ServerErrorException("registration service unavailable", Response.Status.SERVICE_UNAVAILABLE);
-    } catch (final CompletionException e) {
-      final Throwable unwrappedException = ExceptionUtils.unwrap(e);
-      if (unwrappedException instanceof RateLimitExceededException rateLimitExceededException) {
-        if (rateLimitExceededException instanceof VerificationSessionRateLimitExceededException ve) {
-          final Response response = buildResponseForRateLimitExceeded(verificationSession, ve.getRegistrationSession(),
-              ve.getRetryDuration());
-          throw new ClientErrorException(response);
-        }
-
-        throw new RateLimitExceededException(rateLimitExceededException.getRetryDuration().orElse(null));
-      } else if (unwrappedException instanceof RegistrationServiceException registrationServiceException) {
-
-        throw registrationServiceException.getRegistrationSession()
-            .map(s -> buildResponse(s, verificationSession))
-            .map(verificationSessionResponse -> {
-              final Response response = registrationServiceException instanceof TransportNotAllowedException
-                  ? Response.status(418).entity(verificationSessionResponse).build()
-                  : Response.status(Response.Status.CONFLICT).entity(verificationSessionResponse).build();
-
-              return new ClientErrorException(response);
-            })
-            .orElseGet(NotFoundException::new);
-
-      } else if (unwrappedException instanceof RegistrationFraudException) {
-        if (dynamicConfigurationManager.getConfiguration().getRegistrationConfiguration().squashDeclinedAttemptErrors()) {
-          return buildResponse(registrationServiceSession, verificationSession);
-        } else {
-          throw unwrappedException.getCause();
-        }
-      } else if (unwrappedException instanceof RegistrationServiceSenderException) {
-        throw unwrappedException;
-      } else {
-        logger.error("Registration service failure", unwrappedException);
-        throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR);
-      }
-    }
-
-    Metrics.counter(CODE_REQUESTED_COUNTER_NAME, Tags.of(
-            UserAgentTagUtil.getPlatformTag(userAgent),
-            Tag.of(VERIFICATION_TRANSPORT_TAG_NAME, verificationCodeRequest.transport().toString())))
-        .increment();
-
-    return buildResponse(resultSession, verificationSession);
-  }
-
-  @PUT
-  @Path("/session/{sessionId}/code")
-  @Consumes(MediaType.APPLICATION_JSON)
-  @Produces(MediaType.APPLICATION_JSON)
-  @Operation(
-      summary = "Submit a verification code",
-      description = """
-          Submits a verification code received via SMS or voice for verification
-          """)
-  @ApiResponse(responseCode = "200", description = """
-      The request to check a verification code was processed (though the submitted code may not be the correct code);
-      the session metadata will indicate whether the submitted code was correct
-      """, useReturnTypeSchema = true)
-  @ApiResponse(responseCode = "400", description = "Invalid session ID or verification  code")
-  @ApiResponse(responseCode = "404", description = "Session with the specified ID could not be found")
-  @ApiResponse(responseCode = "409", description = "The session is already verified or no code has been requested yet for this session",
-      content = @Content(schema = @Schema(implementation = VerificationSessionResponse.class)))
-  @ApiResponse(responseCode = "429", description = """
-      Too many attempts; the caller is not permitted to submit a verification code at this time and may need to wait 
-      before trying again; if the session metadata does not specify a time at which the caller may try again, then the 
-      caller has exhausted their permitted attempts and must create a new verification session.
-      """,
-      content = @Content(schema = @Schema(implementation = VerificationSessionResponse.class)),
-      headers = @Header(
-          name = "Retry-After",
-          description = "If present, an positive integer indicating the number of seconds before a subsequent attempt could succeed",
-          schema = @Schema(implementation = Integer.class)))
-  public VerificationSessionResponse verifyCode(@PathParam("sessionId") final String encodedSessionId,
-      @HeaderParam(HttpHeaders.USER_AGENT) final String userAgent,
-      @NotNull @Valid final SubmitVerificationCodeRequest submitVerificationCodeRequest)
-      throws RateLimitExceededException {
-
-    final RegistrationServiceSession registrationServiceSession = retrieveRegistrationServiceSession(encodedSessionId);
-    final VerificationSession verificationSession = retrieveVerificationSession(registrationServiceSession);
-
-    if (registrationServiceSession.verified()) {
-      final VerificationSessionResponse verificationSessionResponse = buildResponse(registrationServiceSession,
-          verificationSession);
-
-      throw new ClientErrorException(
-          Response.status(Response.Status.CONFLICT).entity(verificationSessionResponse).build());
-    }
-
-    final RegistrationServiceSession resultSession;
-    try {
-      resultSession = registrationServiceClient.checkVerificationCode(registrationServiceSession.id(),
-              submitVerificationCodeRequest.code(),
-              REGISTRATION_RPC_TIMEOUT)
-          .join();
-    } catch (final CancellationException e) {
-      logger.warn("Unexpected cancellation from registration service", e);
-      throw new ServerErrorException(Response.Status.SERVICE_UNAVAILABLE);
-    } catch (final CompletionException e) {
-      final Throwable unwrappedException = ExceptionUtils.unwrap(e);
-      if (unwrappedException instanceof RateLimitExceededException rateLimitExceededException) {
-
-        if (rateLimitExceededException instanceof VerificationSessionRateLimitExceededException ve) {
-          final Response response = buildResponseForRateLimitExceeded(verificationSession, ve.getRegistrationSession(),
-              ve.getRetryDuration());
-          throw new ClientErrorException(response);
-        }
-
-        throw new RateLimitExceededException(rateLimitExceededException.getRetryDuration().orElse(null));
-
-      } else if (unwrappedException instanceof RegistrationServiceException registrationServiceException) {
-
-        throw registrationServiceException.getRegistrationSession()
-            .map(s -> buildResponse(s, verificationSession))
-            .map(verificationSessionResponse -> new ClientErrorException(
-                Response.status(Response.Status.CONFLICT).entity(verificationSessionResponse).build()))
-            .orElseGet(NotFoundException::new);
-
-      } else {
-        logger.error("Registration service failure", unwrappedException);
-        throw new ServerErrorException(Response.Status.INTERNAL_SERVER_ERROR);
-      }
-    }
-
-    if (resultSession.verified()) {
-      registrationRecoveryPasswordsManager.remove(
-          principalNameIdentifiers.getPrincipalNameIdentifier(registrationServiceSession.principal()).join());
-    }
-
-    Metrics.counter(VERIFIED_COUNTER_NAME, Tags.of(
-            UserAgentTagUtil.getPlatformTag(userAgent),
-            Tag.of(SUCCESS_TAG_NAME, Boolean.toString(resultSession.verified()))))
-        .increment();
-
-    return buildResponse(resultSession, verificationSession);
-  }
-
-  private Response buildResponseForRateLimitExceeded(final VerificationSession verificationSession,
-      final RegistrationServiceSession registrationServiceSession,
-      final Optional<Duration> retryDuration) {
-
-    final Response.ResponseBuilder responseBuilder = Response.status(Response.Status.TOO_MANY_REQUESTS)
-        .entity(buildResponse(registrationServiceSession, verificationSession));
-
-    retryDuration
-        .filter(d -> !d.isNegative())
-        .ifPresent(d -> responseBuilder.header(HttpHeaders.RETRY_AFTER, d.toSeconds()));
-
-    return responseBuilder.build();
+  private void storeVerificationSession(String sessionId, final VerificationSession verificationSession) {
+    verificationSessionManager.insert(sessionId, verificationSession)
+        .orTimeout(DYNAMODB_TIMEOUT.toSeconds(), TimeUnit.SECONDS)
+        .join();
   }
 
   /**
-   * @throws ClientErrorException with {@code 422} status if the ID cannot be decoded
-   * @throws NotFoundException    if the ID cannot be found
+   * @throws NotFoundException if the session has no record
    */
-  private RegistrationServiceSession retrieveRegistrationServiceSession(final String encodedSessionId) {
-    final byte[] sessionId;
-
-    try {
-      sessionId = decodeSessionId(encodedSessionId);
-    } catch (final IllegalArgumentException e) {
-      throw new ClientErrorException("Malformed session ID", HttpStatus.SC_UNPROCESSABLE_ENTITY);
-    }
-
-    try {
-      final RegistrationServiceSession registrationServiceSession = registrationServiceClient.getSession(sessionId,
-              REGISTRATION_RPC_TIMEOUT).join()
-          .orElseThrow(NotFoundException::new);
-
-      if (registrationServiceSession.verified()) {
-        registrationRecoveryPasswordsManager.remove(
-            principalNameIdentifiers.getPrincipalNameIdentifier(registrationServiceSession.principal()).join());
-      }
-
-      return registrationServiceSession;
-
-    } catch (final CompletionException | CancellationException e) {
-      final Throwable unwrapped = ExceptionUtils.unwrap(e);
-
-      if (unwrapped instanceof StatusRuntimeException grpcRuntimeException) {
-        if (grpcRuntimeException.getStatus().getCode() == Status.Code.INVALID_ARGUMENT) {
-          throw new BadRequestException();
-        }
-      }
-      logger.error("Registration service failure", e);
-      throw new ServerErrorException(Response.Status.SERVICE_UNAVAILABLE, e);
-    }
-  }
-
-  /**
-   * @throws NotFoundException if the session is has no record
-   */
-  private VerificationSession retrieveVerificationSession(final RegistrationServiceSession registrationServiceSession) {
-
-    return verificationSessionManager.findForId(registrationServiceSession.encodedSessionId())
+  private VerificationSession retrieveVerificationSession(final String sessionId) {
+    return verificationSessionManager.findForId(sessionId)
         .orTimeout(5, TimeUnit.SECONDS)
         .join().orElseThrow(NotFoundException::new);
   }
 
   /**
-   * @throws ClientErrorException with {@code 422} status if the only one of token and type are present
+   * Attempts to retrieve a JWKS object from the JWKS cache by its URI
+   * If the object is not found in the cache, it will be retrieved from the provided URI
+   * @throws NotFoundException if the object is retrieved from a URI that not point to a JWKS object
    */
-  private Pair<String, PushNotification.TokenType> validateAndExtractPushToken(
-      final UpdateVerificationSessionRequest request) {
+  private JWKSet retrieveJwksWithCache(final String uri) {
+    return verificationTokenKeysManager.findForUri(uri).orTimeout(5, TimeUnit.SECONDS).join().orElseGet(
+        () -> {
+          URL url;
+          try {
+            url = new URL(uri);
+          } catch (MalformedURLException e) {
+            logger.warn("failed to parse JWKS URI for the verification provider", e);
+            throw new ServerErrorException("failed to verify token returned by the verification provider",
+                Response.Status.INTERNAL_SERVER_ERROR);
+          }
 
-    final String pushToken;
-    final PushNotification.TokenType pushTokenType;
-    if (Objects.isNull(request.pushToken())
-        != Objects.isNull(request.pushTokenType())) {
-      throw new WebApplicationException("must specify both pushToken and pushTokenType or neither",
-          HttpStatus.SC_UNPROCESSABLE_ENTITY);
-    } else {
-      pushToken = request.pushToken();
-      pushTokenType = pushToken == null
-          ? null
-          : request.pushTokenType().toTokenType();
-    }
+          JWKSet jwks;
+          try {
+            jwks = JWKSet.load(url);
+          } catch (IOException e) {
+            logger.warn("failed to retrieve JWKS from the verification provider", e);
+            throw new ServerErrorException("failed to verify token returned by the verification provider",
+                Response.Status.INTERNAL_SERVER_ERROR);
+          } catch (java.text.ParseException e) {
+            logger.warn("failed to parse JWKS returned by the verification provider", e);
+            throw new ServerErrorException("failed to verify token returned by the verification provider",
+                Response.Status.INTERNAL_SERVER_ERROR);
+          }
 
-    return new Pair<>(pushToken, pushTokenType);
+          verificationTokenKeysManager.insert(uri, jwks);
+
+          return jwks;
+        }
+    );
   }
-
-  private VerificationSessionResponse buildResponse(final RegistrationServiceSession registrationServiceSession,
-      final VerificationSession verificationSession) {
-    return new VerificationSessionResponse(registrationServiceSession.encodedSessionId(),
-        registrationServiceSession.nextSms(),
-        registrationServiceSession.nextVoiceCall(), registrationServiceSession.nextVerificationAttempt(),
-        verificationSession.allowedToRequestCode(), verificationSession.requestedInformation(),
-        registrationServiceSession.verified());
-  }
-
-  public static byte[] decodeSessionId(final String sessionId) {
-    return Base64.getUrlDecoder().decode(sessionId);
-  }
-
-  private static String generatePushChallenge() {
-    final byte[] challenge = new byte[16];
-    RANDOM.nextBytes(challenge);
-
-    return HexFormat.of().formatHex(challenge);
-  }
-
 }

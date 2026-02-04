@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2021 Signal Messenger, LLC
+ * Copyright 2025 Molly Instant Messenger
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
@@ -12,6 +12,10 @@ public class InvalidPrincipalException extends Exception {
   }
 
   public InvalidPrincipalException(final Throwable cause) {
+    super(cause);
+  }
+
+  public InvalidPrincipalException(final String cause) {
     super(cause);
   }
 }

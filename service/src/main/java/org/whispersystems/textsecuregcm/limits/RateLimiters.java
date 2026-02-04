@@ -1,5 +1,6 @@
 /*
  * Copyright 2013 Signal Messenger, LLC
+ * Copyright 2025 Molly Instant Messenger
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 package org.whispersystems.textsecuregcm.limits;
@@ -34,8 +35,8 @@ public class RateLimiters extends BaseRateLimiters<RateLimiters.For> {
     USERNAME_LINK_LOOKUP_PER_IP("usernameLinkLookupPerIp", new RateLimiterConfig(100, Duration.ofSeconds(15), true)),
     CHECK_ACCOUNT_EXISTENCE("checkAccountExistence", new RateLimiterConfig(1000, Duration.ofSeconds(4), true)),
     REGISTRATION("registration", new RateLimiterConfig(6, Duration.ofSeconds(30), false)),
-    VERIFICATION_PUSH_CHALLENGE("verificationPushChallenge", new RateLimiterConfig(5, Duration.ofSeconds(30), false)),
-    VERIFICATION_CAPTCHA("verificationCaptcha", new RateLimiterConfig(10, Duration.ofSeconds(30), false)),
+    VERIFICATION_AUTHORIZATION_PER_IP("verificationAuthorization", new RateLimiterConfig(100, Duration.ofSeconds(15), false)),
+    VERIFICATION_TOKEN_EXCHANGE("verificationTokenExchange", new RateLimiterConfig(5, Duration.ofSeconds(30), false)),
     RATE_LIMIT_RESET("rateLimitReset", new RateLimiterConfig(2, Duration.ofHours(12), false)),
     CAPTCHA_CHALLENGE_ATTEMPT("captchaChallengeAttempt", new RateLimiterConfig(10, Duration.ofMinutes(144), false)),
     CAPTCHA_CHALLENGE_SUCCESS("captchaChallengeSuccess", new RateLimiterConfig(2, Duration.ofHours(12), false)),
@@ -174,12 +175,12 @@ public class RateLimiters extends BaseRateLimiters<RateLimiters.For> {
     return forDescriptor(For.PUSH_CHALLENGE_SUCCESS);
   }
 
-  public RateLimiter getVerificationPushChallengeLimiter() {
-    return forDescriptor(For.VERIFICATION_PUSH_CHALLENGE);
+  public RateLimiter getVerificationAuthorizationLimiter() {
+    return forDescriptor(For.VERIFICATION_AUTHORIZATION_PER_IP);
   }
 
-  public RateLimiter getVerificationCaptchaLimiter() {
-    return forDescriptor(For.VERIFICATION_CAPTCHA);
+  public RateLimiter getVerificationTokenExchangeLimiter() {
+    return forDescriptor(For.VERIFICATION_TOKEN_EXCHANGE);
   }
 
   public RateLimiter getCreateCallLinkLimiter() {

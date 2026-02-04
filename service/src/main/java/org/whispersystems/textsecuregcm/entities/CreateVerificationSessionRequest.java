@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Signal Messenger, LLC
+ * Copyright 2025 Molly Instant Messenger
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
@@ -10,20 +10,27 @@ import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import org.hibernate.validator.constraints.URL;
 import org.whispersystems.textsecuregcm.util.Principal;
 
 public record CreateVerificationSessionRequest(
-
-    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "The principal to be verified")
-    @Principal
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Identifier of the provider used for the principal verification")
     @NotBlank
     @JsonProperty
-    String principal,
+    String providerId,
 
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Value provided by the client to be used in the PKCE challenge")
+    @NotBlank
+    @JsonProperty
+    String codeChallenge,
 
-    @Valid
-    @JsonUnwrapped
-    UpdateVerificationSessionRequest updateVerificationSessionRequest) {
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Value provided by the client to verify authorization responses")
+    @NotBlank
+    @JsonProperty
+    String state,
 
-
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Location provided by the client to be redirected after authorization")
+    @NotBlank
+    @JsonProperty
+    String redirectUri) {
 }

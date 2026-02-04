@@ -1,46 +1,27 @@
 /*
- * Copyright 2023 Signal Messenger, LLC
+ * Copyright 2025 Molly Instant Messenger
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
 package org.whispersystems.textsecuregcm.entities;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import javax.annotation.Nullable;
 import io.swagger.v3.oas.annotations.media.Schema;
-import org.whispersystems.textsecuregcm.push.PushNotification;
+import jakarta.validation.constraints.NotBlank;
 
 public record UpdateVerificationSessionRequest(
-    @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED, description = "The APNs or FCM device token to which a push challenge can be sent")
-    @Nullable String pushToken,
-    @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED, description = "The type of push token")
-    @Nullable PushTokenType pushTokenType,
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Authorization code used to obtain a token from the verification provider")
+    @NotBlank
+    @JsonProperty
+    String code,
 
-    @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED, description = "Value received by the device in the push challenge")
-    @Nullable String pushChallenge,
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Value provided by the client as the PKCE proof")
+    @NotBlank
+    @JsonProperty
+    String codeVerifier,
 
-    @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED, description = "Captcha token returned after solving a captcha challenge")
-    @Nullable String captcha,
-
-    @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED, description = "Mobile country code of the phone subscriber")
-    @Nullable String mcc,
-
-    @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED, description = "Mobile network code of the phone subscriber")
-    @Nullable String mnc) {
-
-  public enum PushTokenType {
-    @JsonProperty("apn")
-    APN,
-    @JsonProperty("fcm")
-    FCM;
-
-    public PushNotification.TokenType toTokenType() {
-      return switch (this) {
-
-        case APN -> PushNotification.TokenType.APN;
-        case FCM -> PushNotification.TokenType.FCM;
-      };
-    }
-  }
-
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Value provided by the client to verify authorization responses")
+    @NotBlank
+    @JsonProperty
+    String state) {
 }

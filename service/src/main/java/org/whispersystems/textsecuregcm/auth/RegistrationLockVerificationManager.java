@@ -20,6 +20,7 @@ import java.util.List;
 import javax.annotation.Nullable;
 import org.apache.commons.lang3.StringUtils;
 import org.whispersystems.textsecuregcm.controllers.RateLimitExceededException;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.entities.PrincipalVerificationRequest;
 import org.whispersystems.textsecuregcm.entities.RegistrationLockFailure;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
@@ -85,7 +86,7 @@ public class RegistrationLockVerificationManager {
   public void verifyRegistrationLock(final Account account, @Nullable final String clientRegistrationLock,
       final String userAgent,
       final Flow flow,
-      final PrincipalVerificationRequest.VerificationType principalVerificationType
+      final PrincipalVerificationDetails.VerificationType principalVerificationType
   ) throws RateLimitExceededException, WebApplicationException {
 
     final Tags expiredTags = Tags.of(UserAgentTagUtil.getPlatformTag(userAgent),
@@ -152,7 +153,7 @@ public class RegistrationLockVerificationManager {
       // if the user verified correctly via registration recovery password and sent an empty token.
       // This allows users to re-register via registration recovery password
       // instead of always being forced to fall back to SMS verification.
-      if (!principalVerificationType.equals(PrincipalVerificationRequest.VerificationType.RECOVERY_PASSWORD) || clientRegistrationLock != null) {
+      if (!principalVerificationType.equals(PrincipalVerificationDetails.VerificationType.RECOVERY_PASSWORD) || clientRegistrationLock != null) {
         registrationRecoveryPasswordsManager.remove(updatedAccount.getIdentifier(IdentityType.PNI));
       }
 

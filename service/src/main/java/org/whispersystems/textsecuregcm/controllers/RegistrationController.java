@@ -1,5 +1,6 @@
 /*
  * Copyright 2023 Signal Messenger, LLC
+ * Copyright 2025 Molly Instant Messenger
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
@@ -38,7 +39,7 @@ import org.whispersystems.textsecuregcm.auth.PrincipalVerificationTokenManager;
 import org.whispersystems.textsecuregcm.auth.RegistrationLockVerificationManager;
 import org.whispersystems.textsecuregcm.entities.AccountCreationResponse;
 import org.whispersystems.textsecuregcm.entities.AccountIdentityResponse;
-import org.whispersystems.textsecuregcm.entities.PrincipalVerificationRequest;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.entities.RegistrationLockFailure;
 import org.whispersystems.textsecuregcm.entities.RegistrationRequest;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
@@ -47,8 +48,8 @@ import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.DeviceCapability;
 import org.whispersystems.textsecuregcm.storage.DeviceSpec;
+import org.whispersystems.textsecuregcm.storage.Subject;
 import org.whispersystems.textsecuregcm.util.HeaderUtils;
-import org.whispersystems.textsecuregcm.util.Util;
 
 @Path("/v1/registration")
 @io.swagger.v3.oas.annotations.tags.Tag(name = "Registration")
@@ -61,8 +62,6 @@ public class RegistrationController {
       .register(Metrics.globalRegistry);
 
   private static final String ACCOUNT_CREATED_COUNTER_NAME = name(RegistrationController.class, "accountCreated");
-  private static final String COUNTRY_CODE_TAG_NAME = "countryCode";
-  private static final String REGION_CODE_TAG_NAME = "regionCode";
   private static final String VERIFICATION_TYPE_TAG_NAME = "verification";
 
   private final AccountsManager accounts;
@@ -116,7 +115,7 @@ public class RegistrationController {
 
     rateLimiters.getRegistrationLimiter().validate(principal);
 
-    final PrincipalVerificationRequest.VerificationType verificationType = principalVerificationTokenManager.verify(
+    final PrincipalVerificationDetails verificationDetails = principalVerificationTokenManager.verify(
         requestContext, principal, registrationRequest);
 
     final Optional<Account> existingAccount = accounts.getByPrincipal(principal);
@@ -136,10 +135,25 @@ public class RegistrationController {
     if (existingAccount.isPresent()) {
       registrationLockVerificationManager.verifyRegistrationLock(existingAccount.get(),
           registrationRequest.accountAttributes().getRegistrationLock(),
-          userAgent, RegistrationLockVerificationManager.Flow.REGISTRATION, verificationType);
+          userAgent, RegistrationLockVerificationManager.Flow.REGISTRATION, verificationDetails.verificationType());
+      // FLT(uoemai): Re-registration is currently only allowed in Flatline if the provider used to verify the original
+      //              account is the same being used to verify it for re-registration. Additionally, the subject
+      //              returned by that provider must also remain constant for the same account.
+      Optional<Subject> subject = accounts.getSubjectByAccountIdentifier(existingAccount.get().getUuid());
+      if(subject.isPresent()){
+        if(!verificationDetails.providerId().equals(subject.get().providerId()) ||
+            !verificationDetails.subject().equals(subject.get().subject())) {
+          throw new WebApplicationException(Response.status(501,
+              "account migration across verification providers not implemented").build());
+        }
+      } else {
+        throw new WebApplicationException(Response.status(500,
+            "account found without verification subject").build());
+      }
     }
 
     final Account account = accounts.create(principal,
+        verificationDetails,
         registrationRequest.accountAttributes(),
         existingAccount.map(Account::getBadges).orElseGet(ArrayList::new),
         registrationRequest.aciIdentityKey(),
@@ -161,7 +175,7 @@ public class RegistrationController {
         userAgent);
 
     Metrics.counter(ACCOUNT_CREATED_COUNTER_NAME, Tags.of(UserAgentTagUtil.getPlatformTag(userAgent),
-            Tag.of(VERIFICATION_TYPE_TAG_NAME, verificationType.name())))
+            Tag.of(VERIFICATION_TYPE_TAG_NAME, verificationDetails.verificationType().name())))
         .increment();
 
     final AccountIdentityResponse identityResponse = new AccountIdentityResponseBuilder(account)

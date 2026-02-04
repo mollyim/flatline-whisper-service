@@ -176,6 +176,8 @@ dynamoDbTables:
     tableName: Example_ClientPublicKeys
   verificationSessions:
     tableName: Example_VerificationSessions
+  verificationTokenKeys:
+    tableName: Example_VerificationTokenKeys
 
 pagedSingleUseKEMPreKeyStore:
   bucket: preKeyBucket # S3 Bucket name
@@ -547,3 +549,16 @@ externalRequestFilter:
 
 idlePrimaryDeviceReminder:
   minIdleDuration: P30D
+
+verification:
+  providers:
+      - id: example
+        name: Example
+        issuer: https://auth.example.com
+        authorizationEndpoint: https://auth.example.com/api/oidc/authorization
+        tokenEndpoint: https://auth.example.com/api/oidc/token
+        parEndpoint: https://auth.example.com/api/oidc/pushed-authorization-request
+        jwksUri: https://auth.example.com/.well-known/jwks.json
+        clientId: 43a6f570-c778-4bbb-a3d6-81f95b77ee98
+        scopes: "openid email profile"
+        principalClaim: email

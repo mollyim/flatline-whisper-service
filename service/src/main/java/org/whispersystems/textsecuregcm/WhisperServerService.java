@@ -97,7 +97,6 @@ import org.whispersystems.textsecuregcm.backup.SecureValueRecoveryBCredentialsGe
 import org.whispersystems.textsecuregcm.badges.ConfiguredProfileBadgeConverter;
 import org.whispersystems.textsecuregcm.captcha.CaptchaChecker;
 import org.whispersystems.textsecuregcm.captcha.CaptchaClient;
-import org.whispersystems.textsecuregcm.captcha.RegistrationCaptchaManager;
 import org.whispersystems.textsecuregcm.captcha.ShortCodeExpander;
 import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicConfiguration;
 import org.whispersystems.textsecuregcm.configuration.secrets.SecretStore;
@@ -242,6 +241,8 @@ import org.whispersystems.textsecuregcm.storage.SingleUseKEMPreKeyStore;
 import org.whispersystems.textsecuregcm.storage.Subscriptions;
 import org.whispersystems.textsecuregcm.storage.VerificationSessionManager;
 import org.whispersystems.textsecuregcm.storage.VerificationSessions;
+import org.whispersystems.textsecuregcm.storage.VerificationTokenKeys;
+import org.whispersystems.textsecuregcm.storage.VerificationTokenKeysManager;
 import org.whispersystems.textsecuregcm.storage.devicecheck.AppleDeviceCheckManager;
 import org.whispersystems.textsecuregcm.storage.devicecheck.AppleDeviceCheckTrustAnchor;
 import org.whispersystems.textsecuregcm.storage.devicecheck.AppleDeviceChecks;
@@ -263,6 +264,7 @@ import org.whispersystems.textsecuregcm.workers.BackupUsageRecalculationCommand;
 import org.whispersystems.textsecuregcm.workers.CertificateCommand;
 import org.whispersystems.textsecuregcm.workers.CheckDynamicConfigurationCommand;
 import org.whispersystems.textsecuregcm.workers.ClearIssuedReceiptRedemptionsCommand;
+import org.whispersystems.textsecuregcm.workers.ClearVerificationTokenKeysCommand;
 import org.whispersystems.textsecuregcm.workers.DeleteUserCommand;
 import org.whispersystems.textsecuregcm.workers.IdleDeviceNotificationSchedulerFactory;
 import org.whispersystems.textsecuregcm.workers.MessagePersisterServiceCommand;
@@ -334,6 +336,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     bootstrap.addCommand(new RemoveExpiredLinkedDevicesCommand());
     bootstrap.addCommand(new NotifyIdleDevicesCommand());
     bootstrap.addCommand(new ClearIssuedReceiptRedemptionsCommand());
+    bootstrap.addCommand(new ClearVerificationTokenKeysCommand());
 
     bootstrap.addCommand(new ProcessScheduledJobsServiceCommand("process-idle-device-notification-jobs",
         "Processes scheduled jobs to send notifications to idle devices",
@@ -434,7 +437,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         config.getDynamoDbTables().getAccounts().getPrincipalTableName(),
         config.getDynamoDbTables().getAccounts().getPrincipalNameIdentifierTableName(),
         config.getDynamoDbTables().getAccounts().getUsernamesTableName(),
-        // FLT(uoemai): TODO: Consider if subjects table is required here.
+        config.getDynamoDbTables().getAccounts().getSubjectsTableName(),
         config.getDynamoDbTables().getDeletedAccounts().getTableName(),
         config.getDynamoDbTables().getAccounts().getUsedLinkDeviceTokensTableName());
     ClientReleases clientReleases = new ClientReleases(dynamoDbAsyncClient,
@@ -482,6 +485,8 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
 
     final VerificationSessions verificationSessions = new VerificationSessions(dynamoDbAsyncClient,
         config.getDynamoDbTables().getVerificationSessions().getTableName(), clock);
+    final VerificationTokenKeys verificationTokenKeys = new VerificationTokenKeys(dynamoDbAsyncClient,
+        config.getDynamoDbTables().getVerificationTokenKeys().getTableName(), clock);
 
     final ClientResources sharedClientResources = ClientResources.builder()
         .commandLatencyRecorder(
@@ -1109,8 +1114,6 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     final ShortCodeExpander shortCodeRetriever = new ShortCodeExpander(shortCodeRetrieverHttpClient, config.getShortCodeRetrieverConfiguration().baseUrl());
     final CaptchaChecker captchaChecker = new CaptchaChecker(shortCodeRetriever, captchaClientSupplier);
 
-    final RegistrationCaptchaManager registrationCaptchaManager = new RegistrationCaptchaManager(captchaChecker);
-
     final RateLimitChallengeManager rateLimitChallengeManager = new RateLimitChallengeManager(pushChallengeManager,
         captchaChecker, rateLimiters, spamFilter.map(SpamFilter::getRateLimitChallengeListener).stream().toList());
 
@@ -1120,9 +1123,11 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     });
 
     final PersistentTimer persistentTimer = new PersistentTimer(rateLimitersCluster, clock);
+    final VerificationSessionManager verificationSessionManager = new VerificationSessionManager(verificationSessions);
+    final VerificationTokenKeysManager verificationTokenKeysManager = new VerificationTokenKeysManager(verificationTokenKeys);
 
     final PrincipalVerificationTokenManager principalVerificationTokenManager = new PrincipalVerificationTokenManager(
-        principalNameIdentifiers, registrationServiceClient, registrationRecoveryPasswordsManager, registrationRecoveryChecker);
+        principalNameIdentifiers, verificationSessionManager, registrationRecoveryPasswordsManager, registrationRecoveryChecker);
     final List<Object> commonControllers = Lists.newArrayList(
         new AccountController(accountsManager, rateLimiters, registrationRecoveryPasswordsManager,
             usernameHashZkProofVerifier),
@@ -1170,10 +1175,9 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         new StickerController(rateLimiters, config.getCdnConfiguration().credentials().accessKeyId().value(),
             config.getCdnConfiguration().credentials().secretAccessKey().value(), config.getCdnConfiguration().region(),
             config.getCdnConfiguration().bucket()),
-        new VerificationController(registrationServiceClient, new VerificationSessionManager(verificationSessions),
-            pushNotificationManager, registrationCaptchaManager, registrationRecoveryPasswordsManager,
-            principalNameIdentifiers, rateLimiters, accountsManager, registrationFraudChecker,
-            dynamicConfigurationManager, clock)
+        new VerificationController(verificationSessionManager, verificationTokenKeysManager,
+            registrationRecoveryPasswordsManager, principalNameIdentifiers, rateLimiters,
+             config.getVerificationConfiguration(), clock)
     );
     // FLT(uoemai): All forms of payment are disabled in the prototype.
     // if (config.getSubscription() != null && config.getOneTimeDonations() != null) {

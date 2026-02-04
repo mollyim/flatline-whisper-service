@@ -53,7 +53,8 @@ class RegenerateSecondaryDynamoDbTableDataCommandTest {
           null,
           null,
           null,
-          dynamoDbRecoveryManager);
+          dynamoDbRecoveryManager,
+          null);
 
       namespace = new Namespace(Map.of(
           RegenerateSecondaryDynamoDbTableDataCommand.DRY_RUN_ARGUMENT, dryRun,

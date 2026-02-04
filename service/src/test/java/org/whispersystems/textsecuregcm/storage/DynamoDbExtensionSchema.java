@@ -115,6 +115,30 @@ public final class DynamoDbExtensionSchema {
             .build()),
         List.of(), List.of()),
 
+    SUBJECTS("subjects_test",
+        Accounts.KEY_VERIFICATION_PROVIDER_SUBJECT,
+        null,
+        List.of(
+            AttributeDefinition.builder()
+                .attributeName(Accounts.KEY_VERIFICATION_PROVIDER_SUBJECT)
+                .attributeType(ScalarAttributeType.S)
+                .build(),
+            AttributeDefinition.builder()
+                .attributeName(Accounts.KEY_ACCOUNT_UUID)
+                .attributeType(ScalarAttributeType.B)
+                .build()
+        ),
+        List.of(
+            GlobalSecondaryIndex.builder()
+                .indexName(Accounts.ACCOUNT_UUID_TO_VERIFICATION_PROVIDER_SUBJECT_INDEX)
+                .keySchema(
+                    KeySchemaElement.builder().attributeName(Accounts.KEY_ACCOUNT_UUID).keyType(KeyType.HASH).build()
+                )
+                .projection(Projection.builder().projectionType(ProjectionType.ALL).build())
+                .provisionedThroughput(ProvisionedThroughput.builder().readCapacityUnits(10L).writeCapacityUnits(10L).build())
+                .build()),
+        List.of()),
+
     EC_KEYS("keys_test",
         SingleUsePreKeyStore.KEY_ACCOUNT_UUID,
         SingleUsePreKeyStore.KEY_DEVICE_ID_KEY_ID,
@@ -407,6 +431,15 @@ public final class DynamoDbExtensionSchema {
         List.of(), List.of()),
 
     VERIFICATION_SESSIONS("verification_sessions_test",
+        VerificationSessions.KEY_KEY,
+        null,
+        List.of(AttributeDefinition.builder()
+            .attributeName(VerificationSessions.KEY_KEY)
+            .attributeType(ScalarAttributeType.S)
+            .build()),
+        List.of(), List.of()),
+
+    VERIFICATION_TOKEN_KEYS("verification_token_keys_test",
         VerificationSessions.KEY_KEY,
         null,
         List.of(AttributeDefinition.builder()

@@ -63,9 +63,4 @@ public class IntegrationTools {
         .getPrincipalNameIdentifier(principal)
         .thenCompose(pni -> registrationRecoveryPasswordsManager.store(pni, password));
   }
-
-  public CompletableFuture<Optional<String>> peekVerificationSessionPushChallenge(final String sessionId) {
-    return verificationSessionManager.findForId(sessionId)
-        .thenApply(maybeSession -> maybeSession.map(VerificationSession::pushChallenge));
-  }
 }

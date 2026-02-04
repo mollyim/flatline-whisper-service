@@ -1,5 +1,6 @@
 /*
  * Copyright 2023 Signal Messenger, LLC
+ * Copyright 2025 Molly Instant Messenger
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
@@ -46,7 +47,7 @@ import org.whispersystems.textsecuregcm.entities.ChangePrincipalRequest;
 import org.whispersystems.textsecuregcm.entities.MismatchedDevicesResponse;
 import org.whispersystems.textsecuregcm.entities.PrincipalDiscoverabilityRequest;
 import org.whispersystems.textsecuregcm.entities.PrincipalNameIdentityKeyDistributionRequest;
-import org.whispersystems.textsecuregcm.entities.PrincipalVerificationRequest;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.entities.RegistrationLockFailure;
 import org.whispersystems.textsecuregcm.entities.StaleDevicesResponse;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
@@ -56,6 +57,7 @@ import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.ChangePrincipalManager;
 import org.whispersystems.textsecuregcm.storage.Device;
+import org.whispersystems.textsecuregcm.storage.Subject;
 
 @Path("/v2/accounts")
 @io.swagger.v3.oas.annotations.tags.Tag(name = "Account")
@@ -123,18 +125,32 @@ public class AccountControllerV2 {
 
       rateLimiters.getRegistrationLimiter().validate(principal);
 
-      final PrincipalVerificationRequest.VerificationType verificationType = principalVerificationTokenManager.verify(
+      final PrincipalVerificationDetails verificationDetails = principalVerificationTokenManager.verify(
           requestContext, principal, request);
 
       final Optional<Account> existingAccount = accountsManager.getByPrincipal(principal);
 
       if (existingAccount.isPresent()) {
         registrationLockVerificationManager.verifyRegistrationLock(existingAccount.get(), request.registrationLock(),
-            userAgentString, RegistrationLockVerificationManager.Flow.CHANGE_PRINCIPAL, verificationType);
+            userAgentString, RegistrationLockVerificationManager.Flow.CHANGE_PRINCIPAL, verificationDetails.verificationType());
+        // FLT(uoemai): Changing principal is currently only allowed in Flatline if the provider used to verify the
+        //              original account is the same being used to verify the new principal. Additionally, the subject
+        //              returned by that provider must also remain constant for the same account.
+        Optional<Subject> subject = accountsManager.getSubjectByAccountIdentifier(existingAccount.get().getUuid());
+        if(subject.isPresent()){
+          if(!verificationDetails.providerId().equals(subject.get().providerId()) ||
+              !verificationDetails.subject().equals(subject.get().subject())) {
+            throw new WebApplicationException(Response.status(501,
+                "account migration across verification providers not implemented").build());
+          }
+        } else {
+          throw new WebApplicationException(Response.status(500,
+              "account found without verification subject").build());
+        }
       }
 
       Metrics.counter(CHANGE_PRINCIPAL_COUNTER_NAME, Tags.of(UserAgentTagUtil.getPlatformTag(userAgentString),
-              Tag.of(VERIFICATION_TYPE_TAG_NAME, verificationType.name())))
+              Tag.of(VERIFICATION_TYPE_TAG_NAME, verificationDetails.verificationType().name())))
           .increment();
     }
 

@@ -1,5 +1,6 @@
 /*
  * Copyright 2013 Signal Messenger, LLC
+ * Copyright 2025 Molly Instant Messenger
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
@@ -58,6 +59,7 @@ class AccountsManagerChangePrincipalIntegrationTest {
       Tables.PRINCIPALS,
       Tables.PNI,
       Tables.PNI_ASSIGNMENTS,
+      Tables.SUBJECTS,
       Tables.USERNAMES,
       Tables.EC_KEYS,
       Tables.PQ_KEYS,
@@ -110,6 +112,7 @@ class AccountsManagerChangePrincipalIntegrationTest {
           Tables.ACCOUNTS.tableName(),
           Tables.PRINCIPALS.tableName(),
           Tables.PNI_ASSIGNMENTS.tableName(),
+          Tables.SUBJECTS.tableName(),
           Tables.USERNAMES.tableName(),
           Tables.DELETED_ACCOUNTS.tableName(),
           Tables.USED_LINK_DEVICE_TOKENS.tableName());

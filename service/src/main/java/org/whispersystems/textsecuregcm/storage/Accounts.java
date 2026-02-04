@@ -1,5 +1,6 @@
 /*
  * Copyright 2013 Signal Messenger, LLC
+ * Copyright 2025 Molly Instant Messenger
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 package org.whispersystems.textsecuregcm.storage;
@@ -40,6 +41,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.signal.libsignal.zkgroup.backups.BackupCredentialType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationDetails;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
 import org.whispersystems.textsecuregcm.util.AsyncTimerUtil;
 import org.whispersystems.textsecuregcm.util.AttributeValues;
@@ -107,6 +109,7 @@ public class Accounts {
   private static final Timer GET_BY_USERNAME_LINK_HANDLE_TIMER = Metrics.timer(name(Accounts.class, "getByUsernameLinkHandle"));
   private static final Timer GET_BY_PNI_TIMER = Metrics.timer(name(Accounts.class, "getByPni"));
   private static final Timer GET_BY_UUID_TIMER = Metrics.timer(name(Accounts.class, "getByUuid"));
+  private static final Timer GET_SUBJECT_TIMER = Metrics.timer(name(Accounts.class, "getSubject"));
   private static final Timer DELETE_TIMER = Metrics.timer(name(Accounts.class, "delete"));
   private static final String USERNAME_HOLD_ADDED_COUNTER_NAME = name(Accounts.class, "usernameHoldAdded");
 
@@ -131,6 +134,9 @@ public class Accounts {
   // username hash; byte[] or null
   static final String ATTR_USERNAME_HASH = "N";
 
+  // verification provider and subject used to verify the account, primary key
+  static final String KEY_VERIFICATION_PROVIDER_SUBJECT = "VPS";
+
   // bytes, primary key
   static final String KEY_LINK_DEVICE_TOKEN_HASH = "H";
 
@@ -149,6 +155,8 @@ public class Accounts {
   static final String DELETED_ACCOUNTS_UUID_TO_PNI_INDEX_NAME = "u_to_p";
 
   static final String USERNAME_LINK_TO_UUID_INDEX = "ul_to_u";
+
+  static final String ACCOUNT_UUID_TO_VERIFICATION_PROVIDER_SUBJECT_INDEX = "u_to_vps";
 
   static final Duration DELETED_ACCOUNTS_TIME_TO_LIVE = Duration.ofDays(30);
 
@@ -171,6 +179,7 @@ public class Accounts {
 
   private final String principalConstraintTableName;
   private final String principalNameIdentifierConstraintTableName;
+  private final String subjectConstraintTableName;
   private final String usernamesConstraintTableName;
   private final String deletedAccountsTableName;
   private final String usedLinkDeviceTokenTableName;
@@ -183,6 +192,7 @@ public class Accounts {
       final String accountsTableName,
       final String principalConstraintTableName,
       final String principalNameIdentifierConstraintTableName,
+      final String subjectConstraintTableName,
       final String usernamesConstraintTableName,
       final String deletedAccountsTableName,
       final String usedLinkDeviceTokenTableName) {
@@ -192,6 +202,7 @@ public class Accounts {
     this.dynamoDbAsyncClient = dynamoDbAsyncClient;
     this.principalConstraintTableName = principalConstraintTableName;
     this.principalNameIdentifierConstraintTableName = principalNameIdentifierConstraintTableName;
+    this.subjectConstraintTableName = subjectConstraintTableName;
     this.accountsTableName = accountsTableName;
     this.usernamesConstraintTableName = usernamesConstraintTableName;
     this.deletedAccountsTableName = deletedAccountsTableName;
@@ -211,8 +222,16 @@ public class Accounts {
     static final String ATTR_TTL = "TTL";
   }
 
-  boolean create(final Account account, final List<TransactWriteItem> additionalWriteItems)
+  boolean create(final Account account,
+      final PrincipalVerificationDetails verificationDetails,
+      final List<TransactWriteItem> additionalWriteItems)
       throws AccountAlreadyExistsException {
+
+    // FLT(uoemai): Flatline does not support recovery passwords (i.e. PIN) due to the lack of SVR component.
+    //              Currently, account registration is only supported with the verification session method.
+    if (verificationDetails.verificationType().equals(PrincipalVerificationDetails.VerificationType.RECOVERY_PASSWORD)) {
+      throw new IllegalArgumentException("account creation with unsupported recovery password verification");
+    }
 
     final Timer.Sample sample = Timer.start();
 
@@ -227,6 +246,18 @@ public class Accounts {
       final TransactWriteItem principalNameIdentifierConstraintPut = buildConstraintTablePutIfAbsent(
           principalNameIdentifierConstraintTableName, uuidAttr, ATTR_PNI_UUID, pniUuidAttr);
 
+      // FLT(uoemai): The subjects table acts as a constraint to ensure the following:
+      //              - The provider used to verify each account is recorded.
+      //              - The original subject from the verification provider used to verify the account is recorded.
+      //              - The same subject from the same verification provider is only associated with a single account.
+      //              This is done by using the joint verification provider identifier and subject as PK for the table.
+      //              The ACI of the account is the PK of a GSI used to look up the subject based on the ACI.
+      //              Uniqueness of both attributes is enforced by the buildConstraintTablePutIfAbsent function.
+      //              Entries from this table are currently only used during account creation and deletion.
+      final TransactWriteItem subjectConstraintPut = buildConstraintTablePutIfAbsent(
+          subjectConstraintTableName, uuidAttr, KEY_VERIFICATION_PROVIDER_SUBJECT,
+          AttributeValues.fromString(new Subject(verificationDetails.providerId(), verificationDetails.subject()).toString()));
+
       final TransactWriteItem accountPut = buildAccountPut(account, uuidAttr, principalAttr, pniUuidAttr);
 
       // Clear any "recently deleted account" record for this principal since, if it existed, we've used its old ACI for
@@ -234,7 +265,8 @@ public class Accounts {
       final TransactWriteItem deletedAccountDelete = buildRemoveDeletedAccount(account.getPrincipalNameIdentifier());
 
       final Collection<TransactWriteItem> writeItems = new ArrayList<>(
-          List.of(principalConstraintPut, principalNameIdentifierConstraintPut, accountPut, deletedAccountDelete));
+          List.of(principalConstraintPut, principalNameIdentifierConstraintPut, subjectConstraintPut,
+              accountPut, deletedAccountDelete));
 
       writeItems.addAll(additionalWriteItems);
 
@@ -246,7 +278,7 @@ public class Accounts {
         dynamoDbClient.transactWriteItems(request);
       } catch (final TransactionCanceledException e) {
 
-        final CancellationReason accountCancellationReason = e.cancellationReasons().get(2);
+        final CancellationReason accountCancellationReason = e.cancellationReasons().get(3);
 
         if (conditionalCheckFailed(accountCancellationReason)) {
           throw new IllegalArgumentException("account identifier present with different principal");
@@ -259,8 +291,8 @@ public class Accounts {
             || conditionalCheckFailed(principalNameIdentifierConstraintCancellationReason)) {
 
           // Both reasons should trip in tandem and either should give us the information we need. However, principal
-          // canonicalization can cause multiple principals to have the same PNI, so we make sure we're choosing a condition
-          // check that really failed.
+          // canonicalization could cause multiple principals to have the same PNI, so we make sure we're choosing a
+          // condition check that really failed.
           final CancellationReason reason = conditionalCheckFailed(principalConstraintCancellationReason)
               ? principalConstraintCancellationReason
               : principalNameIdentifierConstraintCancellationReason;
@@ -275,6 +307,13 @@ public class Accounts {
               .orElseThrow(ContestedOptimisticLockException::new);
 
           throw new AccountAlreadyExistsException(existingAccount);
+        }
+
+        // FLT(uoemai): At this point, this can no longer be a case of re-registration.
+        //              The new account is not allowed to share the provider/subject pair with an existing account.
+        final CancellationReason subjectConstraintCancellationReason = e.cancellationReasons().get(2);
+        if (conditionalCheckFailed(subjectConstraintCancellationReason)) {
+          throw new IllegalArgumentException("verification provider/subject present with different account identifier");
         }
 
         if (TRANSACTION_CONFLICT.equals(accountCancellationReason.code())) {
@@ -431,6 +470,8 @@ public class Accounts {
           writeItems.add(buildConstraintTablePut(principalConstraintTableName, uuidAttr, ATTR_ACCOUNT_PRINCIPAL, principalAttr));
           writeItems.add(buildDelete(principalNameIdentifierConstraintTableName, ATTR_PNI_UUID, originalPni));
           writeItems.add(buildConstraintTablePut(principalNameIdentifierConstraintTableName, uuidAttr, ATTR_PNI_UUID, pniAttr));
+          // FLT(uoemai): Since a change of principal currently is only allowed with the same provider and subject,
+          //              no changes to the subject constraint table are required at this point.
           writeItems.add(buildRemoveDeletedAccount(principalNameIdentifier));
         }
 
@@ -1210,6 +1251,14 @@ public class Accounts {
         .map(UUID::fromString);
   }
 
+  @Nonnull
+  public Optional<Subject> getSubjectByAccountIdentifier(final UUID uuid) {
+    return requireNonNull(GET_SUBJECT_TIMER.record(() ->
+        itemByGsiKey(subjectConstraintTableName, KEY_VERIFICATION_PROVIDER_SUBJECT,
+            ACCOUNT_UUID_TO_VERIFICATION_PROVIDER_SUBJECT_INDEX, KEY_ACCOUNT_UUID, AttributeValues.fromUUID(uuid))
+            .map(Accounts::subjectFromItem)));
+  }
+
   public CompletableFuture<Void> delete(final UUID uuid, final List<TransactWriteItem> additionalWriteItems) {
     final Timer.Sample sample = Timer.start();
 
@@ -1222,8 +1271,14 @@ public class Accounts {
                   buildPutDeletedAccount(uuid, account.getPrincipalNameIdentifier())
               ));
 
+
               account.getUsernameHash().ifPresent(usernameHash -> transactWriteItems.add(
                   buildDelete(usernamesConstraintTableName, UsernameTable.KEY_USERNAME_HASH, usernameHash)));
+
+              // FLT(uoemai): If the account is assigned a verification subject, as expected, it should be deleted.
+              getSubjectByAccountIdentifier(account.getUuid()).ifPresent(subject ->
+                  transactWriteItems.add(buildDelete(subjectConstraintTableName, KEY_VERIFICATION_PROVIDER_SUBJECT, subject.toString()))
+              );
 
               transactWriteItems.addAll(additionalWriteItems);
 
@@ -1285,6 +1340,17 @@ public class Accounts {
   }
 
   @Nonnull
+  private Optional<Account> getByIndirectLookup(
+      final Timer timer,
+      final String tableName,
+      final String partitionKeyName,
+      final AttributeValue partitionKeyValue,
+      final String sortKeyName,
+      final AttributeValue sortKeyValue) {
+    return getByIndirectLookup(timer, tableName, partitionKeyName, partitionKeyValue, sortKeyName, sortKeyValue, i -> true);
+  }
+
+  @Nonnull
   private CompletableFuture<Optional<Account>> getByIndirectLookupAsync(
       final Timer timer,
       final String tableName,
@@ -1303,6 +1369,24 @@ public class Accounts {
       final Predicate<? super Map<String, AttributeValue>> predicate) {
 
     return requireNonNull(timer.record(() -> itemByKey(tableName, keyName, keyValue)
+        .filter(predicate)
+        .map(item -> item.get(KEY_ACCOUNT_UUID))
+        .flatMap(uuid -> itemByKey(accountsTableName, KEY_ACCOUNT_UUID, uuid))
+        .map(Accounts::fromItem)));
+  }
+
+  @Nonnull
+  private Optional<Account> getByIndirectLookup(
+      final Timer timer,
+      final String tableName,
+      final String partitionKeyName,
+      final AttributeValue partitionKeyValue,
+      final String sortKeyName,
+      final AttributeValue sortKeyValue,
+      final Predicate<? super Map<String, AttributeValue>> predicate) {
+
+    return requireNonNull(timer.record(() ->
+        itemByKeys(tableName, partitionKeyName, partitionKeyValue, sortKeyName, sortKeyValue)
         .filter(predicate)
         .map(item -> item.get(KEY_ACCOUNT_UUID))
         .flatMap(uuid -> itemByKey(accountsTableName, KEY_ACCOUNT_UUID, uuid))
@@ -1345,6 +1429,46 @@ public class Accounts {
             .consistentRead(true)
             .build())
         .thenApply(response -> Optional.ofNullable(response.item()).filter(item -> !item.isEmpty()));
+  }
+
+  @Nonnull
+  private Optional<Map<String, AttributeValue>> itemByKeys(final String table,
+      final String partitionKeyName, final AttributeValue partitionKeyValue,
+      final String sortKeyName, final AttributeValue sortKeyValue) {
+    final GetItemResponse response = dynamoDbClient.getItem(GetItemRequest.builder()
+        .tableName(table)
+        .key(Map.of(partitionKeyName, partitionKeyValue, sortKeyName, sortKeyValue))
+        .consistentRead(true)
+        .build());
+    return Optional.ofNullable(response.item()).filter(m -> !m.isEmpty());
+  }
+
+  @Nonnull
+  private Optional<Map<String, AttributeValue>> itemByGsiKey(final String table, final String primaryKey, final String indexName, final String keyName, final AttributeValue keyValue) {
+    final QueryResponse response = dynamoDbClient.query(QueryRequest.builder()
+        .tableName(table)
+        .indexName(indexName)
+        .keyConditionExpression("#gsiKey = :gsiValue")
+        .projectionExpression("#pk")
+        .expressionAttributeNames(Map.of(
+            "#gsiKey", keyName,
+            "#pk", primaryKey))
+        .expressionAttributeValues(Map.of(
+            ":gsiValue", keyValue))
+        .build());
+
+    if (response.count() == 0) {
+      return Optional.empty();
+    }
+
+    if (response.count() > 1) {
+      throw new IllegalStateException(
+          "More than one row located for GSI [%s], key-value pair [%s, %s]"
+              .formatted(indexName, keyName, keyValue));
+    }
+
+    final AttributeValue primaryKeyValue = response.items().get(0).get(primaryKey);
+    return itemByKey(table, primaryKey, primaryKeyValue);
   }
 
   @Nonnull
@@ -1432,6 +1556,34 @@ public class Accounts {
   }
 
   @Nonnull
+  private static TransactWriteItem buildConstraintTablePutIfAbsent(
+      final String tableName,
+      final AttributeValue uuidAttr,
+      final String partitionKeyName,
+      final AttributeValue partitionKeyValue,
+      final String sortKeyName,
+      final AttributeValue sortKeyValue) {
+    return TransactWriteItem.builder()
+        .put(Put.builder()
+            .tableName(tableName)
+            .item(Map.of(
+                partitionKeyName, partitionKeyValue,
+                sortKeyName, sortKeyValue,
+                KEY_ACCOUNT_UUID, uuidAttr))
+            .conditionExpression(
+                "(attribute_not_exists(#pk) AND attribute_not_exists(#sk)) OR #uuid = :uuid")
+            .expressionAttributeNames(Map.of(
+                "#pk", partitionKeyName,
+                "#sk", sortKeyName,
+                "#uuid", KEY_ACCOUNT_UUID))
+            .expressionAttributeValues(Map.of(
+                ":uuid", uuidAttr))
+            .returnValuesOnConditionCheckFailure(ReturnValuesOnConditionCheckFailure.ALL_OLD)
+            .build())
+        .build();
+  }
+
+  @Nonnull
   private static TransactWriteItem buildConstraintTablePut(
       final String tableName,
       final AttributeValue uuidAttr,
@@ -1458,6 +1610,15 @@ public class Accounts {
   }
 
   @Nonnull
+  private static TransactWriteItem buildDelete(final String tableName,
+      final String partitionKeyName, final String partitionKeyValue,
+      final String sortKeyName, final String sortKeyValue) {
+    return buildDelete(tableName,
+        partitionKeyName, AttributeValues.fromString(partitionKeyValue),
+        sortKeyName, AttributeValues.fromString(sortKeyValue));
+  }
+
+  @Nonnull
   private static TransactWriteItem buildDelete(final String tableName, final String keyName, final byte[] keyValue) {
     return buildDelete(tableName, keyName, AttributeValues.fromByteArray(keyValue));
   }
@@ -1477,6 +1638,18 @@ public class Accounts {
         .build();
   }
 
+  @Nonnull
+  private static TransactWriteItem buildDelete(final String tableName,
+      final String partitionKeyName, final AttributeValue partitionKeyValue,
+      final String sortKeyName, final AttributeValue sortKeyValue) {
+    return TransactWriteItem.builder()
+        .delete(Delete.builder()
+            .tableName(tableName)
+            .key(Map.of(partitionKeyName, partitionKeyValue, sortKeyName, sortKeyValue))
+            .build())
+        .build();
+  }
+
   CompletableFuture<Void> regenerateConstraints(final Account account) {
     final List<CompletableFuture<?>> constraintFutures = new ArrayList<>();
 
@@ -1489,6 +1662,10 @@ public class Accounts {
         account.getIdentifier(IdentityType.ACI),
         ATTR_PNI_UUID,
         AttributeValues.fromUUID(account.getPrincipalNameIdentifier())));
+
+    // FLT(uoemai): The subject constraint table cannot be regenerated like the others.
+    //              Unlike the principal and PNI, verification data is not part of the Account class.
+    //              TODO: Look into tackling this recovery scenario in Flatline.
 
     account.getUsernameHash().ifPresent(usernameHash ->
         constraintFutures.add(writeUsernameConstraint(account.getIdentifier(IdentityType.ACI),
@@ -1515,6 +1692,24 @@ public class Accounts {
                 keyName, keyValue,
                 KEY_ACCOUNT_UUID, AttributeValues.fromUUID(accountIdentifier)))
         .build())
+        .thenRun(Util.NOOP);
+  }
+
+  private CompletableFuture<Void> writeConstraint(
+      final String tableName,
+      final UUID accountIdentifier,
+      final String partitionKeyName,
+      final AttributeValue partitionKeyValue,
+      final String sortKeyName,
+      final AttributeValue sortKeyValue) {
+
+    return dynamoDbAsyncClient.putItem(PutItemRequest.builder()
+            .tableName(tableName)
+            .item(Map.of(
+                partitionKeyName, partitionKeyValue,
+                sortKeyName, sortKeyValue,
+                KEY_ACCOUNT_UUID, AttributeValues.fromUUID(accountIdentifier)))
+            .build())
         .thenRun(Util.NOOP);
   }
 
@@ -1579,6 +1774,18 @@ public class Accounts {
     } catch (final IOException e) {
       throw new RuntimeException("Could not read stored account data", e);
     }
+  }
+
+  @VisibleForTesting
+  @Nonnull
+  static Subject subjectFromItem(final Map<String, AttributeValue> item) {
+    if (!item.containsKey(KEY_VERIFICATION_PROVIDER_SUBJECT) ||
+        !item.containsKey(KEY_ACCOUNT_UUID)) {
+      throw new RuntimeException("item missing values");
+    }
+
+    final String providerSubject = item.get(KEY_VERIFICATION_PROVIDER_SUBJECT).s();
+    return Subject.fromString(providerSubject);
   }
 
   private static AttributeValue accountDataAttributeValue(final Account account) {

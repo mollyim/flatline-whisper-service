@@ -52,6 +52,7 @@ import org.whispersystems.textsecuregcm.identity.ServiceIdentifier;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
+import org.whispersystems.textsecuregcm.storage.Subject;
 import org.whispersystems.textsecuregcm.util.HeaderUtils;
 
 public class AuthHelper {
@@ -95,6 +96,9 @@ public class AuthHelper {
   public static Account         VALID_ACCOUNT_TWO      = mock(Account.class        );
   public static Account         UNDISCOVERABLE_ACCOUNT = mock(Account.class        );
   public static Account         VALID_ACCOUNT_3        = mock(Account.class        );
+  public static Subject         VALID_SUBJECT          = mock(Subject.class        );
+  public static Subject         VALID_SUBJECT_2        = mock(Subject.class        );
+  public static Subject         VALID_SUBJECT_3        = mock(Subject.class        );
 
   public static Device VALID_DEVICE           = mock(Device.class);
   public static Device VALID_DEVICE_TWO       = mock(Device.class);
