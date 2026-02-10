@@ -104,7 +104,7 @@ class MessagePersisterIntegrationTest {
 
     final UUID accountUuid = UUID.randomUUID();
 
-    when(account.getNumber()).thenReturn("+18005551234");
+    when(account.getPrincipal()).thenReturn("user.account@example.com");
     when(account.getUuid()).thenReturn(accountUuid);
     when(accountsManager.getByAccountIdentifier(accountUuid)).thenReturn(Optional.of(account));
     when(account.getDevice(Device.PRIMARY_ID)).thenReturn(Optional.of(DevicesHelper.createDevice(Device.PRIMARY_ID)));

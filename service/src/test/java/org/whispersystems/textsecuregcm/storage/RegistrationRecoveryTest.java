@@ -138,10 +138,10 @@ public class RegistrationRecoveryTest {
     assertFalse(manager.verify(PNI, wrongPassword).get());
   }
 
-  private static long fetchTimestamp(final UUID phoneNumberIdentifier) throws ExecutionException, InterruptedException {
+  private static long fetchTimestamp(final UUID principalNameIdentifier) throws ExecutionException, InterruptedException {
     return DYNAMO_DB_EXTENSION.getDynamoDbAsyncClient().getItem(GetItemRequest.builder()
             .tableName(Tables.REGISTRATION_RECOVERY_PASSWORDS.tableName())
-            .key(Map.of(RegistrationRecoveryPasswords.KEY_PNI, AttributeValues.fromString(phoneNumberIdentifier.toString())))
+            .key(Map.of(RegistrationRecoveryPasswords.KEY_PNI, AttributeValues.fromString(principalNameIdentifier.toString())))
             .build())
         .thenApply(getItemResponse -> {
           final Map<String, AttributeValue> item = getItemResponse.item();

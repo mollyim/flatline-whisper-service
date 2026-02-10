@@ -61,14 +61,14 @@ public class StubRegistrationServiceClientFactory implements RegistrationService
 
     @Override
     public CompletableFuture<RegistrationServiceSession> createRegistrationSession(
-        final Phonenumber.PhoneNumber phoneNumber, final String sourceHost, final boolean accountExistsWithPhoneNumber, final Duration timeout) {
+        final Phonenumber.PhoneNumber principal, final String sourceHost, final boolean accountExistsWithPhoneNumber, final Duration timeout) {
 
-      final String e164 = PhoneNumberUtil.getInstance()
-          .format(phoneNumber, PhoneNumberUtil.PhoneNumberFormat.E164);
+      final String p = PhoneNumberUtil.getInstance()
+          .format(principal, PhoneNumberUtil.PhoneNumberFormat.E164);
 
       final byte[] id = new byte[32];
       new SecureRandom().nextBytes(id);
-      final RegistrationServiceSession session = new RegistrationServiceSession(id, e164, false, 0L, 0L, null,
+      final RegistrationServiceSession session = new RegistrationServiceSession(id, p, false, 0L, 0L, null,
           Instant.now().plus(Duration.ofMinutes(10)).toEpochMilli());
       SESSIONS.put(Base64.getEncoder().encodeToString(id), session);
 
@@ -87,7 +87,7 @@ public class StubRegistrationServiceClientFactory implements RegistrationService
         final String verificationCode, final Duration timeout) {
       final RegistrationServiceSession session = SESSIONS.get(Base64.getEncoder().encodeToString(sessionId));
 
-      final RegistrationServiceSession updatedSession = new RegistrationServiceSession(sessionId, session.number(),
+      final RegistrationServiceSession updatedSession = new RegistrationServiceSession(sessionId, session.principal(),
           true, 0L, 0L, 0L,
           Instant.now().plus(Duration.ofMinutes(10)).toEpochMilli());
 

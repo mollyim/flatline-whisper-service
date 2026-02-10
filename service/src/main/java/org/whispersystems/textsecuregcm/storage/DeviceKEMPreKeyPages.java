@@ -13,7 +13,7 @@ import java.util.UUID;
 /**
  * The prekey pages stored for a particular device
  *
- * @param identifier           The account identifier or phone number identifier that the keys belong to
+ * @param identifier           The account identifier or principal name identifier that the keys belong to
  * @param deviceId             The device identifier
  * @param currentPage          If present, the active stored page prekeys are being distributed from
  * @param pageIdToLastModified The last modified time for all the device's stored pages, keyed by the pageId

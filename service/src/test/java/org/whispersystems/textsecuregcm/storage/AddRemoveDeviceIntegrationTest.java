@@ -13,7 +13,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -57,7 +56,7 @@ public class AddRemoveDeviceIntegrationTest {
       DynamoDbExtensionSchema.Tables.DELETED_ACCOUNTS,
       DynamoDbExtensionSchema.Tables.DELETED_ACCOUNTS_LOCK,
       DynamoDbExtensionSchema.Tables.USED_LINK_DEVICE_TOKENS,
-      DynamoDbExtensionSchema.Tables.NUMBERS,
+      DynamoDbExtensionSchema.Tables.PRINCIPALS,
       DynamoDbExtensionSchema.Tables.PNI,
       DynamoDbExtensionSchema.Tables.PNI_ASSIGNMENTS,
       DynamoDbExtensionSchema.Tables.USERNAMES,
@@ -116,7 +115,7 @@ public class AddRemoveDeviceIntegrationTest {
         DYNAMO_DB_EXTENSION.getDynamoDbClient(),
         DYNAMO_DB_EXTENSION.getDynamoDbAsyncClient(),
         DynamoDbExtensionSchema.Tables.ACCOUNTS.tableName(),
-        DynamoDbExtensionSchema.Tables.NUMBERS.tableName(),
+        DynamoDbExtensionSchema.Tables.PRINCIPALS.tableName(),
         DynamoDbExtensionSchema.Tables.PNI_ASSIGNMENTS.tableName(),
         DynamoDbExtensionSchema.Tables.USERNAMES.tableName(),
         DynamoDbExtensionSchema.Tables.DELETED_ACCOUNTS.tableName(),
@@ -136,8 +135,8 @@ public class AddRemoveDeviceIntegrationTest {
     final SecureValueRecoveryClient svr2Client = mock(SecureValueRecoveryClient.class);
     when(svr2Client.removeData(any(UUID.class))).thenReturn(CompletableFuture.completedFuture(null));
 
-    final PhoneNumberIdentifiers phoneNumberIdentifiers =
-        new PhoneNumberIdentifiers(DYNAMO_DB_EXTENSION.getDynamoDbAsyncClient(),
+    final PrincipalNameIdentifiers principalNameIdentifiers =
+        new PrincipalNameIdentifiers(DYNAMO_DB_EXTENSION.getDynamoDbAsyncClient(),
             DynamoDbExtensionSchema.Tables.PNI.tableName());
 
     messagesManager = mock(MessagesManager.class);
@@ -159,7 +158,7 @@ public class AddRemoveDeviceIntegrationTest {
 
     accountsManager = new AccountsManager(
         accounts,
-        phoneNumberIdentifiers,
+        principalNameIdentifiers,
         CACHE_CLUSTER_EXTENSION.getRedisCluster(),
         PUBSUB_SERVER_EXTENSION.getRedisClient(),
         accountLockManager,
@@ -193,14 +192,12 @@ public class AddRemoveDeviceIntegrationTest {
 
   @Test
   void addDevice() throws InterruptedException {
-    final String number = PhoneNumberUtil.getInstance().format(
-        PhoneNumberUtil.getInstance().getExampleNumber("US"),
-        PhoneNumberUtil.PhoneNumberFormat.E164);
+    final String principal = "user.account@example.com";
 
     final ECKeyPair aciKeyPair = ECKeyPair.generate();
     final ECKeyPair pniKeyPair = ECKeyPair.generate();
 
-    final Account account = AccountsHelper.createAccount(accountsManager, number);
+    final Account account = AccountsHelper.createAccount(accountsManager, principal);
     assertEquals(1, accountsManager.getByAccountIdentifier(account.getUuid()).orElseThrow().getDevices().size());
 
     final Pair<Account, Device> updatedAccountAndDevice =
@@ -232,24 +229,22 @@ public class AddRemoveDeviceIntegrationTest {
     assertTrue(
         keysManager.getEcSignedPreKey(updatedAccountAndDevice.first().getUuid(), addedDeviceId).join().isPresent());
     assertTrue(
-        keysManager.getEcSignedPreKey(updatedAccountAndDevice.first().getPhoneNumberIdentifier(), addedDeviceId).join()
+        keysManager.getEcSignedPreKey(updatedAccountAndDevice.first().getPrincipalNameIdentifier(), addedDeviceId).join()
             .isPresent());
     assertTrue(keysManager.getLastResort(updatedAccountAndDevice.first().getUuid(), addedDeviceId).join().isPresent());
     assertTrue(
-        keysManager.getLastResort(updatedAccountAndDevice.first().getPhoneNumberIdentifier(), addedDeviceId).join()
+        keysManager.getLastResort(updatedAccountAndDevice.first().getPrincipalNameIdentifier(), addedDeviceId).join()
             .isPresent());
   }
 
   @Test
   void addDeviceReusedToken() throws InterruptedException {
-    final String number = PhoneNumberUtil.getInstance().format(
-        PhoneNumberUtil.getInstance().getExampleNumber("US"),
-        PhoneNumberUtil.PhoneNumberFormat.E164);
+    final String principal = "user.account@example.com";
 
     final ECKeyPair aciKeyPair = ECKeyPair.generate();
     final ECKeyPair pniKeyPair = ECKeyPair.generate();
 
-    final Account account = AccountsHelper.createAccount(accountsManager, number);
+    final Account account = AccountsHelper.createAccount(accountsManager, principal);
     assertEquals(1, accountsManager.getByAccountIdentifier(account.getUuid()).orElseThrow().getDevices().size());
 
     final String linkDeviceToken = accountsManager.generateLinkDeviceToken(account.getIdentifier(IdentityType.ACI));
@@ -303,14 +298,12 @@ public class AddRemoveDeviceIntegrationTest {
 
   @Test
   void removeDevice() throws InterruptedException {
-    final String number = PhoneNumberUtil.getInstance().format(
-        PhoneNumberUtil.getInstance().getExampleNumber("US"),
-        PhoneNumberUtil.PhoneNumberFormat.E164);
+    final String principal = "user.account@example.com";
 
     final ECKeyPair aciKeyPair = ECKeyPair.generate();
     final ECKeyPair pniKeyPair = ECKeyPair.generate();
 
-    final Account account = AccountsHelper.createAccount(accountsManager, number);
+    final Account account = AccountsHelper.createAccount(accountsManager, principal);
     assertEquals(1, accountsManager.getByAccountIdentifier(account.getUuid()).orElseThrow().getDevices().size());
 
     final Pair<Account, Device> updatedAccountAndDevice =
@@ -342,30 +335,28 @@ public class AddRemoveDeviceIntegrationTest {
 
     assertFalse(keysManager.getEcSignedPreKey(updatedAccount.getUuid(), addedDeviceId).join().isPresent());
     assertFalse(
-        keysManager.getEcSignedPreKey(updatedAccount.getPhoneNumberIdentifier(), addedDeviceId).join().isPresent());
+        keysManager.getEcSignedPreKey(updatedAccount.getPrincipalNameIdentifier(), addedDeviceId).join().isPresent());
     assertFalse(keysManager.getLastResort(updatedAccount.getUuid(), addedDeviceId).join().isPresent());
-    assertFalse(keysManager.getLastResort(updatedAccount.getPhoneNumberIdentifier(), addedDeviceId).join().isPresent());
+    assertFalse(keysManager.getLastResort(updatedAccount.getPrincipalNameIdentifier(), addedDeviceId).join().isPresent());
     assertFalse(clientPublicKeysManager.findPublicKey(updatedAccount.getUuid(), addedDeviceId).join().isPresent());
 
     assertTrue(keysManager.getEcSignedPreKey(updatedAccount.getUuid(), Device.PRIMARY_ID).join().isPresent());
     assertTrue(
-        keysManager.getEcSignedPreKey(updatedAccount.getPhoneNumberIdentifier(), Device.PRIMARY_ID).join().isPresent());
+        keysManager.getEcSignedPreKey(updatedAccount.getPrincipalNameIdentifier(), Device.PRIMARY_ID).join().isPresent());
     assertTrue(keysManager.getLastResort(updatedAccount.getUuid(), Device.PRIMARY_ID).join().isPresent());
     assertTrue(
-        keysManager.getLastResort(updatedAccount.getPhoneNumberIdentifier(), Device.PRIMARY_ID).join().isPresent());
+        keysManager.getLastResort(updatedAccount.getPrincipalNameIdentifier(), Device.PRIMARY_ID).join().isPresent());
     assertTrue(clientPublicKeysManager.findPublicKey(updatedAccount.getUuid(), Device.PRIMARY_ID).join().isPresent());
   }
 
   @Test
   void removeDevicePartialFailure() throws InterruptedException {
-    final String number = PhoneNumberUtil.getInstance().format(
-        PhoneNumberUtil.getInstance().getExampleNumber("US"),
-        PhoneNumberUtil.PhoneNumberFormat.E164);
+    final String principal = "user.account@example.com";
 
     final ECKeyPair aciKeyPair = ECKeyPair.generate();
     final ECKeyPair pniKeyPair = ECKeyPair.generate();
 
-    final Account account = AccountsHelper.createAccount(accountsManager, number);
+    final Account account = AccountsHelper.createAccount(accountsManager, principal);
     assertEquals(1, accountsManager.getByAccountIdentifier(account.getUuid()).orElseThrow().getDevices().size());
 
     final UUID aci = account.getIdentifier(IdentityType.ACI);
@@ -407,31 +398,29 @@ public class AddRemoveDeviceIntegrationTest {
 
     assertTrue(keysManager.getEcSignedPreKey(retrievedAccount.getUuid(), addedDeviceId).join().isPresent());
     assertTrue(
-        keysManager.getEcSignedPreKey(retrievedAccount.getPhoneNumberIdentifier(), addedDeviceId).join().isPresent());
+        keysManager.getEcSignedPreKey(retrievedAccount.getPrincipalNameIdentifier(), addedDeviceId).join().isPresent());
     assertTrue(keysManager.getLastResort(retrievedAccount.getUuid(), addedDeviceId).join().isPresent());
     assertTrue(
-        keysManager.getLastResort(retrievedAccount.getPhoneNumberIdentifier(), addedDeviceId).join().isPresent());
+        keysManager.getLastResort(retrievedAccount.getPrincipalNameIdentifier(), addedDeviceId).join().isPresent());
     assertTrue(clientPublicKeysManager.findPublicKey(retrievedAccount.getUuid(), addedDeviceId).join().isPresent());
 
     assertTrue(keysManager.getEcSignedPreKey(retrievedAccount.getUuid(), Device.PRIMARY_ID).join().isPresent());
-    assertTrue(keysManager.getEcSignedPreKey(retrievedAccount.getPhoneNumberIdentifier(), Device.PRIMARY_ID).join()
+    assertTrue(keysManager.getEcSignedPreKey(retrievedAccount.getPrincipalNameIdentifier(), Device.PRIMARY_ID).join()
         .isPresent());
     assertTrue(keysManager.getLastResort(retrievedAccount.getUuid(), Device.PRIMARY_ID).join().isPresent());
     assertTrue(
-        keysManager.getLastResort(retrievedAccount.getPhoneNumberIdentifier(), Device.PRIMARY_ID).join().isPresent());
+        keysManager.getLastResort(retrievedAccount.getPrincipalNameIdentifier(), Device.PRIMARY_ID).join().isPresent());
     assertTrue(clientPublicKeysManager.findPublicKey(retrievedAccount.getUuid(), Device.PRIMARY_ID).join().isPresent());
   }
 
   @Test
   void waitForNewLinkedDevice() throws InterruptedException {
-    final String number = PhoneNumberUtil.getInstance().format(
-        PhoneNumberUtil.getInstance().getExampleNumber("US"),
-        PhoneNumberUtil.PhoneNumberFormat.E164);
+    final String principal = "user.account@example.com";
 
     final ECKeyPair aciKeyPair = ECKeyPair.generate();
     final ECKeyPair pniKeyPair = ECKeyPair.generate();
 
-    final Account account = AccountsHelper.createAccount(accountsManager, number);
+    final Account account = AccountsHelper.createAccount(accountsManager, principal);
 
     final String linkDeviceToken = accountsManager.generateLinkDeviceToken(account.getIdentifier(IdentityType.ACI));
     final String linkDeviceTokenIdentifier = AccountsManager.getLinkDeviceTokenIdentifier(linkDeviceToken);
@@ -479,14 +468,12 @@ public class AddRemoveDeviceIntegrationTest {
 
   @Test
   void waitForNewLinkedDeviceAlreadyAdded() throws InterruptedException {
-    final String number = PhoneNumberUtil.getInstance().format(
-        PhoneNumberUtil.getInstance().getExampleNumber("US"),
-        PhoneNumberUtil.PhoneNumberFormat.E164);
+    final String principal = "user.account@example.com";
 
     final ECKeyPair aciKeyPair = ECKeyPair.generate();
     final ECKeyPair pniKeyPair = ECKeyPair.generate();
 
-    final Account account = AccountsHelper.createAccount(accountsManager, number);
+    final Account account = AccountsHelper.createAccount(accountsManager, principal);
 
     final String linkDeviceToken = accountsManager.generateLinkDeviceToken(account.getIdentifier(IdentityType.ACI));
     final String linkDeviceTokenIdentifier = AccountsManager.getLinkDeviceTokenIdentifier(linkDeviceToken);
@@ -528,10 +515,8 @@ public class AddRemoveDeviceIntegrationTest {
 
   @Test
   void waitForNewLinkedDeviceTimeout() throws InterruptedException {
-    final String number = PhoneNumberUtil.getInstance().format(
-        PhoneNumberUtil.getInstance().getExampleNumber("US"),
-        PhoneNumberUtil.PhoneNumberFormat.E164);
-    final Account account = AccountsHelper.createAccount(accountsManager, number);
+    final String principal = "user.account@example.com";
+    final Account account = AccountsHelper.createAccount(accountsManager, principal);
 
     final String linkDeviceToken = accountsManager.generateLinkDeviceToken(UUID.randomUUID());
     final String linkDeviceTokenIdentifier = AccountsManager.getLinkDeviceTokenIdentifier(linkDeviceToken);
@@ -554,12 +539,10 @@ public class AddRemoveDeviceIntegrationTest {
   })
   void waitForMessageFetch(long currentTime, long deviceCreation, Long oldestMessage, boolean shouldWait)
       throws InterruptedException {
-    final String number = PhoneNumberUtil.getInstance().format(
-        PhoneNumberUtil.getInstance().getExampleNumber("US"),
-        PhoneNumberUtil.PhoneNumberFormat.E164);
+    final String principal = "user.account@example.com";
     final ECKeyPair aciKeyPair = ECKeyPair.generate();
     final ECKeyPair pniKeyPair = ECKeyPair.generate();
-    final Account account = AccountsHelper.createAccount(accountsManager, number);
+    final Account account = AccountsHelper.createAccount(accountsManager, principal);
 
     final String linkDeviceToken = accountsManager.generateLinkDeviceToken(UUID.randomUUID());
     final String linkDeviceTokenIdentifier = AccountsManager.getLinkDeviceTokenIdentifier(linkDeviceToken);
@@ -601,12 +584,10 @@ public class AddRemoveDeviceIntegrationTest {
   @Test
   void waitForMessageFetchRetries()
       throws InterruptedException {
-    final String number = PhoneNumberUtil.getInstance().format(
-        PhoneNumberUtil.getInstance().getExampleNumber("US"),
-        PhoneNumberUtil.PhoneNumberFormat.E164);
+    final String principal = "user.account@example.com";
     final ECKeyPair aciKeyPair = ECKeyPair.generate();
     final ECKeyPair pniKeyPair = ECKeyPair.generate();
-    final Account account = AccountsHelper.createAccount(accountsManager, number);
+    final Account account = AccountsHelper.createAccount(accountsManager, principal);
 
     final String linkDeviceToken = accountsManager.generateLinkDeviceToken(UUID.randomUUID());
     final String linkDeviceTokenIdentifier = AccountsManager.getLinkDeviceTokenIdentifier(linkDeviceToken);

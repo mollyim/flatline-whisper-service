@@ -71,7 +71,7 @@ public class IdentityTokenCallCredentials extends CallCredentials implements Man
       // final ExternalAccountCredentials credentials = ExternalAccountCredentials.fromStream(configInputStream);
       // final ImpersonatedCredentials impersonatedCredentials = ImpersonatedCredentials.create(credentials,
       //    credentials.getServiceAccountEmail(), null, List.of(), (int) IDENTITY_TOKEN_LIFETIME.toSeconds());
-      AccessToken fakeToken = new AccessToken("fake-token",
+      AccessToken fakeToken = new AccessToken("fake-identity-token",
           new Date(System.currentTimeMillis() + 3600_000));
       GoogleCredentials impersonatedCredentials = GoogleCredentials.newBuilder()
           .setAccessToken(fakeToken)

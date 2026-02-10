@@ -82,7 +82,7 @@ class RateLimitChallengeManagerTest {
   void answerCaptchaChallenge(Optional<Float> scoreThreshold, float actualScore, boolean expectSuccess)
     throws RateLimitExceededException, IOException {
     final Account account = mock(Account.class);
-    when(account.getNumber()).thenReturn("+18005551234");
+    when(account.getPrincipal()).thenReturn("user.account@example.com");
     when(account.getUuid()).thenReturn(UUID.randomUUID());
 
     when(captchaChecker.verify(any(), eq(Action.CHALLENGE), any(), any(), any()))

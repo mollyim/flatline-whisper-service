@@ -18,7 +18,7 @@ public interface RegistrationFraudChecker {
    *
    * @param requestContext      The request context for an update verification session attempt
    * @param verificationSession The target verification session
-   * @param e164                The target phone number
+   * @param principal           The target principal
    * @param request             The information to add to the verification session
    * @return A SessionUpdate including updates to the verification session that should be persisted to the caller along
    * with other constraints to enforce when evaluating the UpdateVerificationSessionRequest.
@@ -26,11 +26,11 @@ public interface RegistrationFraudChecker {
   VerificationCheck checkVerificationAttempt(
       final ContainerRequestContext requestContext,
       final VerificationSession verificationSession,
-      final String e164,
+      final String principal,
       final UpdateVerificationSessionRequest request);
 
   static RegistrationFraudChecker noop() {
-    return (ignoredContext, ignoredSession, ignoredE164, ignoredRequest) -> new VerificationCheck(
+    return (ignoredContext, ignoredSession, ignoredPrincipal, ignoredRequest) -> new VerificationCheck(
         Optional.empty(),
         Optional.empty());
   }

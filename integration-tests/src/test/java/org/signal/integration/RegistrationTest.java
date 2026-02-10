@@ -21,8 +21,8 @@ public class RegistrationTest {
     final UpdateVerificationSessionRequest originalRequest = new UpdateVerificationSessionRequest(
         "test", UpdateVerificationSessionRequest.PushTokenType.FCM, null, null, null, null);
 
-    final Operations.PrescribedVerificationNumber params = Operations.prescribedVerificationNumber();
-    final CreateVerificationSessionRequest input = new CreateVerificationSessionRequest(params.number(),
+    final Operations.PrescribedVerificationPrincipal params = Operations.prescribedVerificationPrincipal();
+    final CreateVerificationSessionRequest input = new CreateVerificationSessionRequest(params.principal(),
         originalRequest);
 
     final VerificationSessionResponse verificationSessionResponse = Operations

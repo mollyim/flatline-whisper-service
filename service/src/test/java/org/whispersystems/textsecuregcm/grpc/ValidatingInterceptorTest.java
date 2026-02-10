@@ -92,11 +92,11 @@ public class ValidatingInterceptorTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"15551234567", "", "123", "+1 555 1234567", "asdf"})
-  public void testE164ValidationFailure(final String invalidNumber) throws Exception {
+  @ValueSource(strings = {"", " ", "   ", "invalid.principal.¥€Š", "invalid.principal.\uD83D\uDE45"})
+  public void testPrincipalValidationFailure(final String invalidPrincipal) throws Exception {
     assertStatusException(Status.INVALID_ARGUMENT, () -> stub.validationsEndpoint(
         builderWithValidDefaults()
-            .setNumber(invalidNumber)
+            .setPrincipal(invalidPrincipal)
             .build()
     ));
   }
@@ -377,7 +377,7 @@ public class ValidatingInterceptorTest {
   @Nonnull
   private static ValidationsRequest.Builder builderWithValidDefaults() {
     return ValidationsRequest.newBuilder()
-        .setNumber("+15551234567")
+        .setPrincipal("user.account@example.com")
         .setFixedSizeString("12345")
         .setFixedSizeBytes(ByteString.copyFrom(new byte[5]))
         .setWithMinBytes(ByteString.copyFrom(new byte[5]))

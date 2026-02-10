@@ -143,7 +143,7 @@ public class KeysController {
       @Schema(
           allowableValues={"aci", "pni"},
           defaultValue="aci",
-          description="whether this operation applies to the account (aci) or phone-number (pni) identity")
+          description="whether this operation applies to the account (aci) or principal-name (pni) identity")
       @QueryParam("identity") @DefaultValue("aci") final IdentityType identityType,
       @HeaderParam(HttpHeaders.USER_AGENT) final String userAgent) {
 
@@ -322,7 +322,7 @@ public class KeysController {
   @Path("/{identifier}/{device_id}")
   @Produces(MediaType.APPLICATION_JSON)
   @Operation(summary = "Fetch public keys for another user",
-      description = "Retrieves the public identity key and available device prekeys for a specified account or phone-number identity")
+      description = "Retrieves the public identity key and available device prekeys for a specified account or principal-name identity")
   @ApiResponse(responseCode = "200", description = "Indicates at least one prekey was available for at least one requested device.", useReturnTypeSchema = true)
   @ApiResponse(responseCode = "400", description = "A group send endorsement and other authorization (account authentication or unidentified-access key) were both provided.")
   @ApiResponse(responseCode = "401", description = "Account authentication check failed and unidentified-access key or group send endorsement token was not supplied or invalid.")
@@ -335,7 +335,7 @@ public class KeysController {
       @HeaderParam(HeaderUtils.UNIDENTIFIED_ACCESS_KEY) Optional<Anonymous> accessKey,
       @HeaderParam(HeaderUtils.GROUP_SEND_TOKEN) Optional<GroupSendTokenHeader> groupSendToken,
 
-      @Parameter(description="the account or phone-number identifier to retrieve keys for")
+      @Parameter(description="the account or principal-name identifier to retrieve keys for")
       @PathParam("identifier") ServiceIdentifier targetIdentifier,
 
       @Parameter(description="the device id of a single device to retrieve prekeys for, or `*` for all enabled devices")

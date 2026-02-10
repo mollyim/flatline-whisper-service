@@ -95,14 +95,14 @@ public class Accounts {
       .writer(SystemMapper.excludingField(Account.class, ACCOUNT_FIELDS_TO_EXCLUDE_FROM_SERIALIZATION));
 
   private static final Timer CREATE_TIMER = Metrics.timer(name(Accounts.class, "create"));
-  private static final Timer CHANGE_NUMBER_TIMER = Metrics.timer(name(Accounts.class, "changeNumber"));
+  private static final Timer CHANGE_PRINCIPAL_TIMER = Metrics.timer(name(Accounts.class, "changePrincipal"));
   private static final Timer SET_USERNAME_TIMER = Metrics.timer(name(Accounts.class, "setUsername"));
   private static final Timer RESERVE_USERNAME_TIMER = Metrics.timer(name(Accounts.class, "reserveUsername"));
   private static final Timer CLEAR_USERNAME_HASH_TIMER = Metrics.timer(name(Accounts.class, "clearUsernameHash"));
   private static final Timer UPDATE_TIMER = Metrics.timer(name(Accounts.class, "update"));
   private static final Timer UPDATE_TRANSACTIONALLY_TIMER = Metrics.timer(name(Accounts.class, "updateTransactionally"));
   private static final Timer RECLAIM_TIMER = Metrics.timer(name(Accounts.class, "reclaim"));
-  private static final Timer GET_BY_NUMBER_TIMER = Metrics.timer(name(Accounts.class, "getByNumber"));
+  private static final Timer GET_BY_PRINCIPAL_TIMER = Metrics.timer(name(Accounts.class, "getByPrincipal"));
   private static final Timer GET_BY_USERNAME_HASH_TIMER = Metrics.timer(name(Accounts.class, "getByUsernameHash"));
   private static final Timer GET_BY_USERNAME_LINK_HANDLE_TIMER = Metrics.timer(name(Accounts.class, "getByUsernameLinkHandle"));
   private static final Timer GET_BY_PNI_TIMER = Metrics.timer(name(Accounts.class, "getByPni"));
@@ -120,8 +120,8 @@ public class Accounts {
   static final String ATTR_PNI_UUID = "PNI";
   // uuid of the current username link or null
   static final String ATTR_USERNAME_LINK_UUID = "UL";
-  // phone number
-  static final String ATTR_ACCOUNT_E164 = "P";
+  // principal
+  static final String ATTR_ACCOUNT_PRINCIPAL = "P";
   // account, serialized to JSON
   static final String ATTR_ACCOUNT_DATA = "D";
   // internal version for optimistic locking
@@ -169,8 +169,8 @@ public class Accounts {
   private final DynamoDbClient dynamoDbClient;
   private final DynamoDbAsyncClient dynamoDbAsyncClient;
 
-  private final String phoneNumberConstraintTableName;
-  private final String phoneNumberIdentifierConstraintTableName;
+  private final String principalConstraintTableName;
+  private final String principalNameIdentifierConstraintTableName;
   private final String usernamesConstraintTableName;
   private final String deletedAccountsTableName;
   private final String usedLinkDeviceTokenTableName;
@@ -181,8 +181,8 @@ public class Accounts {
       final DynamoDbClient dynamoDbClient,
       final DynamoDbAsyncClient dynamoDbAsyncClient,
       final String accountsTableName,
-      final String phoneNumberConstraintTableName,
-      final String phoneNumberIdentifierConstraintTableName,
+      final String principalConstraintTableName,
+      final String principalNameIdentifierConstraintTableName,
       final String usernamesConstraintTableName,
       final String deletedAccountsTableName,
       final String usedLinkDeviceTokenTableName) {
@@ -190,8 +190,8 @@ public class Accounts {
     this.clock = clock;
     this.dynamoDbClient = dynamoDbClient;
     this.dynamoDbAsyncClient = dynamoDbAsyncClient;
-    this.phoneNumberConstraintTableName = phoneNumberConstraintTableName;
-    this.phoneNumberIdentifierConstraintTableName = phoneNumberIdentifierConstraintTableName;
+    this.principalConstraintTableName = principalConstraintTableName;
+    this.principalNameIdentifierConstraintTableName = principalNameIdentifierConstraintTableName;
     this.accountsTableName = accountsTableName;
     this.usernamesConstraintTableName = usernamesConstraintTableName;
     this.deletedAccountsTableName = deletedAccountsTableName;
@@ -218,23 +218,23 @@ public class Accounts {
 
     try {
       final AttributeValue uuidAttr = AttributeValues.fromUUID(account.getUuid());
-      final AttributeValue numberAttr = AttributeValues.fromString(account.getNumber());
-      final AttributeValue pniUuidAttr = AttributeValues.fromUUID(account.getPhoneNumberIdentifier());
+      final AttributeValue principalAttr = AttributeValues.fromString(account.getPrincipal());
+      final AttributeValue pniUuidAttr = AttributeValues.fromUUID(account.getPrincipalNameIdentifier());
 
-      final TransactWriteItem phoneNumberConstraintPut = buildConstraintTablePutIfAbsent(
-          phoneNumberConstraintTableName, uuidAttr, ATTR_ACCOUNT_E164, numberAttr);
+      final TransactWriteItem principalConstraintPut = buildConstraintTablePutIfAbsent(
+          principalConstraintTableName, uuidAttr, ATTR_ACCOUNT_PRINCIPAL, principalAttr);
 
-      final TransactWriteItem phoneNumberIdentifierConstraintPut = buildConstraintTablePutIfAbsent(
-          phoneNumberIdentifierConstraintTableName, uuidAttr, ATTR_PNI_UUID, pniUuidAttr);
+      final TransactWriteItem principalNameIdentifierConstraintPut = buildConstraintTablePutIfAbsent(
+          principalNameIdentifierConstraintTableName, uuidAttr, ATTR_PNI_UUID, pniUuidAttr);
 
-      final TransactWriteItem accountPut = buildAccountPut(account, uuidAttr, numberAttr, pniUuidAttr);
+      final TransactWriteItem accountPut = buildAccountPut(account, uuidAttr, principalAttr, pniUuidAttr);
 
-      // Clear any "recently deleted account" record for this number since, if it existed, we've used its old ACI for
+      // Clear any "recently deleted account" record for this principal since, if it existed, we've used its old ACI for
       // the newly-created account.
-      final TransactWriteItem deletedAccountDelete = buildRemoveDeletedAccount(account.getPhoneNumberIdentifier());
+      final TransactWriteItem deletedAccountDelete = buildRemoveDeletedAccount(account.getPrincipalNameIdentifier());
 
       final Collection<TransactWriteItem> writeItems = new ArrayList<>(
-          List.of(phoneNumberConstraintPut, phoneNumberIdentifierConstraintPut, accountPut, deletedAccountDelete));
+          List.of(principalConstraintPut, principalNameIdentifierConstraintPut, accountPut, deletedAccountDelete));
 
       writeItems.addAll(additionalWriteItems);
 
@@ -249,21 +249,21 @@ public class Accounts {
         final CancellationReason accountCancellationReason = e.cancellationReasons().get(2);
 
         if (conditionalCheckFailed(accountCancellationReason)) {
-          throw new IllegalArgumentException("account identifier present with different phone number");
+          throw new IllegalArgumentException("account identifier present with different principal");
         }
 
-        final CancellationReason phoneNumberConstraintCancellationReason = e.cancellationReasons().get(0);
-        final CancellationReason phoneNumberIdentifierConstraintCancellationReason = e.cancellationReasons().get(1);
+        final CancellationReason principalConstraintCancellationReason = e.cancellationReasons().get(0);
+        final CancellationReason principalNameIdentifierConstraintCancellationReason = e.cancellationReasons().get(1);
 
-        if (conditionalCheckFailed(phoneNumberConstraintCancellationReason)
-            || conditionalCheckFailed(phoneNumberIdentifierConstraintCancellationReason)) {
+        if (conditionalCheckFailed(principalConstraintCancellationReason)
+            || conditionalCheckFailed(principalNameIdentifierConstraintCancellationReason)) {
 
-          // Both reasons should trip in tandem and either should give us the information we need. However, phone number
-          // canonicalization can cause multiple e164s to have the same PNI, so we make sure we're choosing a condition
+          // Both reasons should trip in tandem and either should give us the information we need. However, principal
+          // canonicalization can cause multiple principals to have the same PNI, so we make sure we're choosing a condition
           // check that really failed.
-          final CancellationReason reason = conditionalCheckFailed(phoneNumberConstraintCancellationReason)
-              ? phoneNumberConstraintCancellationReason
-              : phoneNumberIdentifierConstraintCancellationReason;
+          final CancellationReason reason = conditionalCheckFailed(principalConstraintCancellationReason)
+              ? principalConstraintCancellationReason
+              : principalNameIdentifierConstraintCancellationReason;
 
           final UUID existingAccountUuid =
               UUIDUtil.fromByteBuffer(reason.item().get(KEY_ACCOUNT_UUID).b().asByteBuffer());
@@ -296,18 +296,18 @@ public class Accounts {
    * Copies over any account attributes that should be preserved when a new account reclaims an account identifier.
    *
    * @param existingAccount the existing account in the accounts table
-   * @param accountToCreate a new account, with the same number and identifier as existingAccount
+   * @param accountToCreate a new account, with the same principal and identifier as existingAccount
    */
   CompletionStage<Void> reclaimAccount(final Account existingAccount,
       final Account accountToCreate,
       final Collection<TransactWriteItem> additionalWriteItems) {
 
     if (!existingAccount.getUuid().equals(accountToCreate.getUuid()) ||
-        !existingAccount.getPhoneNumberIdentifier().equals(accountToCreate.getPhoneNumberIdentifier())) {
+        !existingAccount.getPrincipalNameIdentifier().equals(accountToCreate.getPrincipalNameIdentifier())) {
 
       log.error("Reclaimed accounts must match. Old account {}:{}:{}, New account {}:{}:{}",
-          existingAccount.getUuid(), redactPhoneNumber(existingAccount.getNumber()), existingAccount.getPhoneNumberIdentifier(),
-          accountToCreate.getUuid(), redactPhoneNumber(accountToCreate.getNumber()), accountToCreate.getPhoneNumberIdentifier());
+          existingAccount.getUuid(), redactPrincipal(existingAccount.getPrincipal()), existingAccount.getPrincipalNameIdentifier(),
+          accountToCreate.getUuid(), redactPrincipal(accountToCreate.getPrincipal()), accountToCreate.getPrincipalNameIdentifier());
       throw new IllegalArgumentException("reclaimed accounts must match");
     }
 
@@ -393,45 +393,45 @@ public class Accounts {
   }
 
   /**
-   * Changes the phone number for the given account. The given account's number should be its current, pre-change
-   * number. If this method succeeds, the account's number will be changed to the new number and its phone number
-   * identifier will be changed to the given phone number identifier. If the update fails for any reason, the account's
-   * number and PNI will be unchanged.
+   * Changes the principal for the given account. The given account's principal should be its current, pre-change
+   * principal. If this method succeeds, the account's principal will be changed to the new principal and its principal
+   * name identifier will be changed to the given principal name identifier. If the update fails for any reason, the
+   * account's principal and PNI will be unchanged.
    * <p/>
-   * This method expects that any accounts with conflicting numbers will have been removed by the time this method is
-   * called. This method may fail with an unspecified {@link RuntimeException} if another account with the same number
-   * exists in the data store.
+   * This method expects that any accounts with conflicting principals will have been removed by the time this method is
+   * called. This method may fail with an unspecified {@link RuntimeException} if another account with the same
+   * principal exists in the data store.
    *
-   * @param account the account for which to change the phone number
-   * @param number the new phone number
+   * @param account the account for which to change the principal
+   * @param principal the new principal
    */
-  public void changeNumber(final Account account,
-      final String number,
-      final UUID phoneNumberIdentifier,
+  public void changePrincipal(final Account account,
+      final String principal,
+      final UUID principalNameIdentifier,
       final Optional<UUID> maybeDisplacedAccountIdentifier,
       final Collection<TransactWriteItem> additionalWriteItems) {
 
-    CHANGE_NUMBER_TIMER.record(() -> {
-      final String originalNumber = account.getNumber();
-      final UUID originalPni = account.getPhoneNumberIdentifier();
+    CHANGE_PRINCIPAL_TIMER.record(() -> {
+      final String originalPrincipal = account.getPrincipal();
+      final UUID originalPni = account.getPrincipalNameIdentifier();
 
       boolean succeeded = false;
 
-      account.setNumber(number, phoneNumberIdentifier);
+      account.setPrincipal(principal, principalNameIdentifier);
 
       int accountUpdateIndex = -1;
       try {
         final List<TransactWriteItem> writeItems = new ArrayList<>();
         final AttributeValue uuidAttr = AttributeValues.fromUUID(account.getUuid());
-        final AttributeValue numberAttr = AttributeValues.fromString(number);
-        final AttributeValue pniAttr = AttributeValues.fromUUID(phoneNumberIdentifier);
+        final AttributeValue principalAttr = AttributeValues.fromString(principal);
+        final AttributeValue pniAttr = AttributeValues.fromUUID(principalNameIdentifier);
 
-        if (!originalNumber.equals(number)) {
-          writeItems.add(buildDelete(phoneNumberConstraintTableName, ATTR_ACCOUNT_E164, originalNumber));
-          writeItems.add(buildConstraintTablePut(phoneNumberConstraintTableName, uuidAttr, ATTR_ACCOUNT_E164, numberAttr));
-          writeItems.add(buildDelete(phoneNumberIdentifierConstraintTableName, ATTR_PNI_UUID, originalPni));
-          writeItems.add(buildConstraintTablePut(phoneNumberIdentifierConstraintTableName, uuidAttr, ATTR_PNI_UUID, pniAttr));
-          writeItems.add(buildRemoveDeletedAccount(phoneNumberIdentifier));
+        if (!originalPrincipal.equals(principal)) {
+          writeItems.add(buildDelete(principalConstraintTableName, ATTR_ACCOUNT_PRINCIPAL, originalPrincipal));
+          writeItems.add(buildConstraintTablePut(principalConstraintTableName, uuidAttr, ATTR_ACCOUNT_PRINCIPAL, principalAttr));
+          writeItems.add(buildDelete(principalNameIdentifierConstraintTableName, ATTR_PNI_UUID, originalPni));
+          writeItems.add(buildConstraintTablePut(principalNameIdentifierConstraintTableName, uuidAttr, ATTR_PNI_UUID, pniAttr));
+          writeItems.add(buildRemoveDeletedAccount(principalNameIdentifier));
         }
 
         maybeDisplacedAccountIdentifier.ifPresent(displacedAccountIdentifier ->
@@ -446,19 +446,19 @@ public class Accounts {
                     .tableName(accountsTableName)
                     .key(Map.of(KEY_ACCOUNT_UUID, uuidAttr))
                     .updateExpression(
-                        "SET #data = :data, #number = :number, #pni = :pni, #cds = :cds ADD #version :version_increment")
+                        "SET #data = :data, #principal = :principal, #pni = :pni, #cds = :cds ADD #version :version_increment")
                     .conditionExpression(
-                        "attribute_exists(#number) AND #version = :version")
+                        "attribute_exists(#principal) AND #version = :version")
                     .expressionAttributeNames(Map.of(
-                        "#number", ATTR_ACCOUNT_E164,
+                        "#principal", ATTR_ACCOUNT_PRINCIPAL,
                         "#data", ATTR_ACCOUNT_DATA,
                         "#cds", ATTR_CANONICALLY_DISCOVERABLE,
                         "#pni", ATTR_PNI_UUID,
                         "#version", ATTR_VERSION))
                     .expressionAttributeValues(Map.of(
-                        ":number", numberAttr,
+                        ":principal", principalAttr,
                         ":data", accountDataAttributeValue(account),
-                        ":cds", AttributeValues.fromBool(account.isDiscoverableByPhoneNumber()),
+                        ":cds", AttributeValues.fromBool(account.isDiscoverableByPrincipal()),
                         ":pni", pniAttr,
                         ":version", AttributeValues.fromInt(account.getVersion()),
                         ":version_increment", AttributeValues.fromInt(1)))
@@ -488,7 +488,7 @@ public class Accounts {
         throw e;
       } finally {
         if (!succeeded) {
-          account.setNumber(originalNumber, originalPni);
+          account.setPrincipal(originalPrincipal, originalPni);
         }
       }
     });
@@ -930,16 +930,16 @@ public class Accounts {
     static UpdateAccountSpec forAccount(
         final String accountTableName,
         final Account account) {
-      // username, e164, and pni cannot be modified through this method
+      // username, principal, and pni cannot be modified through this method
       final Map<String, String> attrNames = new HashMap<>(Map.of(
-          "#number", ATTR_ACCOUNT_E164,
+          "#principal", ATTR_ACCOUNT_PRINCIPAL,
           "#data", ATTR_ACCOUNT_DATA,
           "#cds", ATTR_CANONICALLY_DISCOVERABLE,
           "#version", ATTR_VERSION));
 
       final Map<String, AttributeValue> attrValues = new HashMap<>(Map.of(
           ":data", accountDataAttributeValue(account),
-          ":cds", AttributeValues.fromBool(account.isDiscoverableByPhoneNumber()),
+          ":cds", AttributeValues.fromBool(account.isDiscoverableByPrincipal()),
           ":version", AttributeValues.fromInt(account.getVersion()),
           ":version_increment", AttributeValues.fromInt(1)));
 
@@ -991,7 +991,7 @@ public class Accounts {
           attrNames,
           attrValues,
           updateExpressionBuilder.toString(),
-          "attribute_exists(#number) AND #version = :version");
+          "attribute_exists(#principal) AND #version = :version");
     }
   }
 
@@ -1103,26 +1103,26 @@ public class Accounts {
   }
 
   @Nonnull
-  public Optional<Account> getByE164(final String number) {
+  public Optional<Account> getByPrincipal(final String principal) {
     return getByIndirectLookup(
-        GET_BY_NUMBER_TIMER, phoneNumberConstraintTableName, ATTR_ACCOUNT_E164, AttributeValues.fromString(number));
+        GET_BY_PRINCIPAL_TIMER, principalConstraintTableName, ATTR_ACCOUNT_PRINCIPAL, AttributeValues.fromString(principal));
   }
 
   @Nonnull
-  public CompletableFuture<Optional<Account>> getByE164Async(final String number) {
+  public CompletableFuture<Optional<Account>> getByPrincipalAsync(final String principal) {
     return getByIndirectLookupAsync(
-        GET_BY_NUMBER_TIMER, phoneNumberConstraintTableName, ATTR_ACCOUNT_E164, AttributeValues.fromString(number));
+        GET_BY_PRINCIPAL_TIMER, principalConstraintTableName, ATTR_ACCOUNT_PRINCIPAL, AttributeValues.fromString(principal));
   }
 
   @Nonnull
-  public Optional<Account> getByPhoneNumberIdentifier(final UUID phoneNumberIdentifier) {
+  public Optional<Account> getByPrincipalNameIdentifier(final UUID principalNameIdentifier) {
     return getByIndirectLookup(
-        GET_BY_PNI_TIMER, phoneNumberIdentifierConstraintTableName, ATTR_PNI_UUID, AttributeValues.fromUUID(phoneNumberIdentifier));
+        GET_BY_PNI_TIMER, principalNameIdentifierConstraintTableName, ATTR_PNI_UUID, AttributeValues.fromUUID(principalNameIdentifier));
   }
 
   @Nonnull
-  public CompletableFuture<Optional<Account>> getByPhoneNumberIdentifierAsync(final UUID phoneNumberIdentifier) {
-    return getByIndirectLookupAsync(GET_BY_PNI_TIMER, phoneNumberIdentifierConstraintTableName, ATTR_PNI_UUID, AttributeValues.fromUUID(phoneNumberIdentifier));
+  public CompletableFuture<Optional<Account>> getByPrincipalNameIdentifierAsync(final UUID principalNameIdentifier) {
+    return getByIndirectLookupAsync(GET_BY_PNI_TIMER, principalNameIdentifierConstraintTableName, ATTR_PNI_UUID, AttributeValues.fromUUID(principalNameIdentifier));
   }
 
   @Nonnull
@@ -1179,17 +1179,17 @@ public class Accounts {
         .toCompletableFuture();
   }
 
-  public Optional<UUID> findRecentlyDeletedAccountIdentifier(final UUID phoneNumberIdentifier) {
+  public Optional<UUID> findRecentlyDeletedAccountIdentifier(final UUID principalNameIdentifier) {
     final GetItemResponse response = dynamoDbClient.getItem(GetItemRequest.builder()
         .tableName(deletedAccountsTableName)
         .consistentRead(true)
-        .key(Map.of(DELETED_ACCOUNTS_KEY_ACCOUNT_PNI, AttributeValues.fromString(phoneNumberIdentifier.toString())))
+        .key(Map.of(DELETED_ACCOUNTS_KEY_ACCOUNT_PNI, AttributeValues.fromString(principalNameIdentifier.toString())))
         .build());
 
     return Optional.ofNullable(AttributeValues.getUUID(response.item(), DELETED_ACCOUNTS_ATTR_ACCOUNT_UUID, null));
   }
 
-  public Optional<UUID> findRecentlyDeletedPhoneNumberIdentifier(final UUID uuid) {
+  public Optional<UUID> findRecentlyDeletedPrincipalNameIdentifier(final UUID uuid) {
     final QueryResponse response = dynamoDbClient.query(QueryRequest.builder()
         .tableName(deletedAccountsTableName)
         .indexName(DELETED_ACCOUNTS_UUID_TO_PNI_INDEX_NAME)
@@ -1205,7 +1205,7 @@ public class Accounts {
 
     return response.items().stream()
         .map(item -> item.get(DELETED_ACCOUNTS_KEY_ACCOUNT_PNI).s())
-        .filter(e164OrPni -> !e164OrPni.startsWith("+"))
+        .filter(principalOrPni -> !principalOrPni.startsWith("+"))
         .findFirst()
         .map(UUID::fromString);
   }
@@ -1216,10 +1216,10 @@ public class Accounts {
     return getByAccountIdentifierAsync(uuid)
         .thenCompose(maybeAccount -> maybeAccount.map(account -> {
               final List<TransactWriteItem> transactWriteItems = new ArrayList<>(List.of(
-                  buildDelete(phoneNumberConstraintTableName, ATTR_ACCOUNT_E164, account.getNumber()),
+                  buildDelete(principalConstraintTableName, ATTR_ACCOUNT_PRINCIPAL, account.getPrincipal()),
                   buildDelete(accountsTableName, KEY_ACCOUNT_UUID, uuid),
-                  buildDelete(phoneNumberIdentifierConstraintTableName, ATTR_PNI_UUID, account.getPhoneNumberIdentifier()),
-                  buildPutDeletedAccount(uuid, account.getPhoneNumberIdentifier())
+                  buildDelete(principalNameIdentifierConstraintTableName, ATTR_PNI_UUID, account.getPrincipalNameIdentifier()),
+                  buildPutDeletedAccount(uuid, account.getPrincipalNameIdentifier())
               ));
 
               account.getUsernameHash().ifPresent(usernameHash -> transactWriteItems.add(
@@ -1380,16 +1380,16 @@ public class Accounts {
   private TransactWriteItem buildAccountPut(
       final Account account,
       final AttributeValue uuidAttr,
-      final AttributeValue numberAttr,
+      final AttributeValue principalAttr,
       final AttributeValue pniUuidAttr) {
 
     final Map<String, AttributeValue> item = new HashMap<>(Map.of(
         KEY_ACCOUNT_UUID, uuidAttr,
-        ATTR_ACCOUNT_E164, numberAttr,
+        ATTR_ACCOUNT_PRINCIPAL, principalAttr,
         ATTR_PNI_UUID, pniUuidAttr,
         ATTR_ACCOUNT_DATA, accountDataAttributeValue(account),
         ATTR_VERSION, AttributeValues.fromInt(account.getVersion()),
-        ATTR_CANONICALLY_DISCOVERABLE, AttributeValues.fromBool(account.isDiscoverableByPhoneNumber())));
+        ATTR_CANONICALLY_DISCOVERABLE, AttributeValues.fromBool(account.isDiscoverableByPrincipal())));
 
     // Add the UAK if it's in the account
     account.getUnidentifiedAccessKey()
@@ -1480,15 +1480,15 @@ public class Accounts {
   CompletableFuture<Void> regenerateConstraints(final Account account) {
     final List<CompletableFuture<?>> constraintFutures = new ArrayList<>();
 
-    constraintFutures.add(writeConstraint(phoneNumberConstraintTableName,
+    constraintFutures.add(writeConstraint(principalConstraintTableName,
         account.getIdentifier(IdentityType.ACI),
-        ATTR_ACCOUNT_E164,
-        AttributeValues.fromString(account.getNumber())));
+        ATTR_ACCOUNT_PRINCIPAL,
+        AttributeValues.fromString(account.getPrincipal())));
 
-    constraintFutures.add(writeConstraint(phoneNumberIdentifierConstraintTableName,
+    constraintFutures.add(writeConstraint(principalNameIdentifierConstraintTableName,
         account.getIdentifier(IdentityType.ACI),
         ATTR_PNI_UUID,
-        AttributeValues.fromUUID(account.getPhoneNumberIdentifier())));
+        AttributeValues.fromUUID(account.getPrincipalNameIdentifier())));
 
     account.getUsernameHash().ifPresent(usernameHash ->
         constraintFutures.add(writeUsernameConstraint(account.getIdentifier(IdentityType.ACI),
@@ -1550,7 +1550,7 @@ public class Accounts {
   @Nonnull
   static Account fromItem(final Map<String, AttributeValue> item) {
     if (!item.containsKey(ATTR_ACCOUNT_DATA)
-        || !item.containsKey(ATTR_ACCOUNT_E164)
+        || !item.containsKey(ATTR_ACCOUNT_PRINCIPAL)
         || !item.containsKey(KEY_ACCOUNT_UUID)
         || !item.containsKey(ATTR_CANONICALLY_DISCOVERABLE)) {
       throw new RuntimeException("item missing values");
@@ -1559,16 +1559,16 @@ public class Accounts {
       final Account account = SystemMapper.jsonMapper().readValue(item.get(ATTR_ACCOUNT_DATA).b().asByteArray(), Account.class);
 
       final UUID accountIdentifier = UUIDUtil.fromByteBuffer(item.get(KEY_ACCOUNT_UUID).b().asByteBuffer());
-      final UUID phoneNumberIdentifierFromAttribute = AttributeValues.getUUID(item, ATTR_PNI_UUID, null);
+      final UUID principalNameIdentifierFromAttribute = AttributeValues.getUUID(item, ATTR_PNI_UUID, null);
 
-      if (account.getPhoneNumberIdentifier() == null || phoneNumberIdentifierFromAttribute == null ||
-          !Objects.equals(account.getPhoneNumberIdentifier(), phoneNumberIdentifierFromAttribute)) {
+      if (account.getPrincipalNameIdentifier() == null || principalNameIdentifierFromAttribute == null ||
+          !Objects.equals(account.getPrincipalNameIdentifier(), principalNameIdentifierFromAttribute)) {
 
         log.warn("Missing or mismatched PNIs for account {}. From JSON: {}; from attribute: {}",
-            accountIdentifier, account.getPhoneNumberIdentifier(), phoneNumberIdentifierFromAttribute);
+            accountIdentifier, account.getPrincipalNameIdentifier(), principalNameIdentifierFromAttribute);
       }
 
-      account.setNumber(item.get(ATTR_ACCOUNT_E164).s(), phoneNumberIdentifierFromAttribute);
+      account.setPrincipal(item.get(ATTR_ACCOUNT_PRINCIPAL).s(), principalNameIdentifierFromAttribute);
       account.setUuid(accountIdentifier);
       account.setUsernameHash(AttributeValues.getByteArray(item, ATTR_USERNAME_HASH, null));
       account.setUsernameLinkHandle(AttributeValues.getUUID(item, ATTR_USERNAME_LINK_UUID, null));
@@ -1597,14 +1597,17 @@ public class Accounts {
     return TRANSACTION_CONFLICT.equals(reason.code());
   }
 
-  private static String redactPhoneNumber(final String phoneNumber) {
+  private static String redactPrincipal(final String principal) {
+    // FLT(uoemai): TODO: Allow configuring specific redaction for principals.
+    //              Currently, a rudimentary redaction method is implemented for text strings.
     final StringBuilder sb = new StringBuilder();
-    sb.append("+");
-    sb.append(Util.getCountryCode(phoneNumber));
-    sb.append("???");
-    sb.append(StringUtils.length(phoneNumber) < 3
+    sb.append(StringUtils.length(principal) < 3
         ? ""
-        : phoneNumber.substring(phoneNumber.length() - 2, phoneNumber.length()));
+        : principal.substring(0, 2));
+    sb.append("???");
+    sb.append(StringUtils.length(principal) < 9
+        ? ""
+        : principal.substring(principal.length() - 2, principal.length()));
     return sb.toString();
   }
 }

@@ -144,9 +144,9 @@ class DeviceControllerTest {
     when(primaryDevice.getId()).thenReturn(Device.PRIMARY_ID);
 
     when(account.getNextDeviceId()).thenReturn(NEXT_DEVICE_ID);
-    when(account.getNumber()).thenReturn(AuthHelper.VALID_NUMBER);
+    when(account.getPrincipal()).thenReturn(AuthHelper.VALID_PRINCIPAL);
     when(account.getUuid()).thenReturn(AuthHelper.VALID_UUID);
-    when(account.getPhoneNumberIdentifier()).thenReturn(AuthHelper.VALID_PNI);
+    when(account.getPrincipalNameIdentifier()).thenReturn(AuthHelper.VALID_PNI);
     when(account.getPrimaryDevice()).thenReturn(primaryDevice);
     when(account.getDevice(anyByte())).thenReturn(Optional.empty());
     when(account.getDevice(Device.PRIMARY_ID)).thenReturn(Optional.of(primaryDevice));
@@ -156,8 +156,8 @@ class DeviceControllerTest {
     when(accountsManager.getByAccountIdentifierAsync(AuthHelper.VALID_UUID))
         .thenReturn(CompletableFuture.completedFuture(Optional.of(account)));
 
-    when(accountsManager.getByE164(AuthHelper.VALID_NUMBER)).thenReturn(Optional.of(account));
-    when(accountsManager.getByE164(AuthHelper.VALID_NUMBER_TWO)).thenReturn(Optional.of(maxedAccount));
+    when(accountsManager.getByPrincipal(AuthHelper.VALID_PRINCIPAL)).thenReturn(Optional.of(account));
+    when(accountsManager.getByPrincipal(AuthHelper.VALID_PRINCIPAL_TWO)).thenReturn(Optional.of(maxedAccount));
 
     when(clientPublicKeysManager.setPublicKey(any(), anyByte(), any()))
         .thenReturn(CompletableFuture.completedFuture(null));
@@ -272,7 +272,7 @@ class DeviceControllerTest {
     final LinkDeviceResponse response = resources.getJerseyTest()
         .target("/v1/devices/link")
         .request()
-        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_NUMBER, "password1"))
+        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_PRINCIPAL, AuthHelper.VALID_PASSWORD))
         .put(Entity.entity(request, MediaType.APPLICATION_JSON_TYPE), LinkDeviceResponse.class);
 
     assertThat(response.deviceId()).isEqualTo(NEXT_DEVICE_ID);
@@ -354,7 +354,7 @@ class DeviceControllerTest {
     try (final Response response = resources.getJerseyTest()
         .target("/v1/devices/link")
         .request()
-        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_NUMBER, "password1"))
+        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_PRINCIPAL, AuthHelper.VALID_PASSWORD))
         .put(Entity.entity(request, MediaType.APPLICATION_JSON_TYPE))) {
 
       assertEquals(expectedStatus, response.getStatus());
@@ -438,7 +438,7 @@ class DeviceControllerTest {
     try (final Response response = resources.getJerseyTest()
         .target("/v1/devices/link")
         .request()
-        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_NUMBER, "password1"))
+        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_PRINCIPAL, AuthHelper.VALID_PASSWORD))
         .put(Entity.entity(request, MediaType.APPLICATION_JSON_TYPE))) {
 
       assertEquals(403, response.getStatus());
@@ -479,7 +479,7 @@ class DeviceControllerTest {
     try (final Response response = resources.getJerseyTest()
             .target("/v1/devices/link")
             .request()
-            .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_NUMBER, "password1"))
+            .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_PRINCIPAL, AuthHelper.VALID_PASSWORD))
             .put(Entity.entity(request, MediaType.APPLICATION_JSON_TYPE))) {
 
       assertEquals(Response.Status.FORBIDDEN.getStatusCode(), response.getStatus());
@@ -528,7 +528,7 @@ class DeviceControllerTest {
     try (final Response response = resources.getJerseyTest()
         .target("/v1/devices/link")
         .request()
-        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_NUMBER, "password1"))
+        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_PRINCIPAL, AuthHelper.VALID_PASSWORD))
         .put(Entity.entity(request, MediaType.APPLICATION_JSON_TYPE))) {
 
       assertEquals(422, response.getStatus());
@@ -576,7 +576,7 @@ class DeviceControllerTest {
     try (final Response response = resources.getJerseyTest()
         .target("/v1/devices/link")
         .request()
-        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_NUMBER, "password1"))
+        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_PRINCIPAL, AuthHelper.VALID_PASSWORD))
         .put(Entity.entity(request, MediaType.APPLICATION_JSON_TYPE))) {
 
       assertEquals(422, response.getStatus());
@@ -636,7 +636,7 @@ class DeviceControllerTest {
     try (final Response response = resources.getJerseyTest()
         .target("/v1/devices/link")
         .request()
-        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_NUMBER, "password1"))
+        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_PRINCIPAL, AuthHelper.VALID_PASSWORD))
         .put(Entity.entity(request, MediaType.APPLICATION_JSON_TYPE))) {
 
       assertEquals(422, response.getStatus());
@@ -669,7 +669,7 @@ class DeviceControllerTest {
     try (final Response response = resources.getJerseyTest()
         .target("/v1/devices/link")
         .request()
-        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_NUMBER, "password1"))
+        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_PRINCIPAL, AuthHelper.VALID_PASSWORD))
         .put(Entity.entity(request, MediaType.APPLICATION_JSON_TYPE))) {
 
       assertEquals(422, response.getStatus());
@@ -728,7 +728,7 @@ class DeviceControllerTest {
     try (final Response response = resources.getJerseyTest()
         .target("/v1/devices/link")
         .request()
-        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_NUMBER, "password1"))
+        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_PRINCIPAL, AuthHelper.VALID_PASSWORD))
         .put(Entity.entity(request, MediaType.APPLICATION_JSON_TYPE))) {
 
       assertEquals(422, response.getStatus());
@@ -772,7 +772,7 @@ class DeviceControllerTest {
     try (final Response response = resources.getJerseyTest()
         .target("/v1/devices/link")
         .request()
-        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_NUMBER, "password1"))
+        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_PRINCIPAL, AuthHelper.VALID_PASSWORD))
         .put(Entity.entity(request, MediaType.APPLICATION_JSON_TYPE))) {
       assertEquals(expectedStatusCode, response.getStatus());
     }
@@ -1432,7 +1432,7 @@ class DeviceControllerTest {
     try (final Response response = resources.getJerseyTest()
         .target("/v1/devices/link")
         .request()
-        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_NUMBER, "password1"))
+        .header("Authorization", AuthHelper.getProvisioningAuthHeader(AuthHelper.VALID_PRINCIPAL, AuthHelper.VALID_PASSWORD))
         .put(Entity.entity(request, MediaType.APPLICATION_JSON_TYPE))) {
       assertEquals(422, response.getStatus());
     }

@@ -7,40 +7,48 @@ import org.whispersystems.textsecuregcm.configuration.DynamoDbTables.Table;
 
 public class AccountsTableConfiguration extends Table {
 
-  private final String phoneNumberTableName;
-  private final String phoneNumberIdentifierTableName;
+  private final String principalTableName;
+  private final String principalNameIdentifierTableName;
   private final String usernamesTableName;
+  private final String subjectsTableName;
   private final String usedLinkDeviceTokensTableName;
 
   @JsonCreator
   public AccountsTableConfiguration(
       @JsonProperty("tableName") final String tableName,
-      @JsonProperty("phoneNumberTableName") final String phoneNumberTableName,
-      @JsonProperty("phoneNumberIdentifierTableName") final String phoneNumberIdentifierTableName,
+      @JsonProperty("principalTableName") final String principalTableName,
+      @JsonProperty("principalNameIdentifierTableName") final String principalNameIdentifierTableName,
       @JsonProperty("usernamesTableName") final String usernamesTableName,
+      @JsonProperty("subjectsTableName") final String subjectsTableName,
       @JsonProperty("usedLinkDeviceTokensTableName") final String usedLinkDeviceTokensTableName) {
 
     super(tableName);
 
-    this.phoneNumberTableName = phoneNumberTableName;
-    this.phoneNumberIdentifierTableName = phoneNumberIdentifierTableName;
+    this.principalTableName = principalTableName;
+    this.principalNameIdentifierTableName = principalNameIdentifierTableName;
     this.usernamesTableName = usernamesTableName;
+    this.subjectsTableName = subjectsTableName;
     this.usedLinkDeviceTokensTableName = usedLinkDeviceTokensTableName;
   }
 
   @NotBlank
-  public String getPhoneNumberTableName() {
-    return phoneNumberTableName;
+  public String getPrincipalTableName() {
+    return principalTableName;
   }
 
   @NotBlank
-  public String getPhoneNumberIdentifierTableName() {
-    return phoneNumberIdentifierTableName;
+  public String getPrincipalNameIdentifierTableName() {
+    return principalNameIdentifierTableName;
   }
 
   @NotBlank
   public String getUsernamesTableName() {
     return usernamesTableName;
+  }
+
+  @NotBlank
+  public String getSubjectsTableName() {
+    return subjectsTableName;
   }
 
   @NotBlank

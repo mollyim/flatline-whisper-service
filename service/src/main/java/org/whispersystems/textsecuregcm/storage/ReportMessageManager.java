@@ -61,7 +61,7 @@ public class ReportMessageManager {
     }
   }
 
-  public void report(final Optional<String> sourceNumber,
+  public void report(final Optional<String> sourcePrincipal,
       final Optional<UUID> sourceAci,
       final Optional<UUID> sourcePni,
       final UUID messageGuid,
@@ -93,10 +93,10 @@ public class ReportMessageManager {
         });
       });
 
-      sourceNumber.ifPresent(number ->
+      sourcePrincipal.ifPresent(principal ->
           reportedMessageListeners.forEach(listener -> {
             try {
-              listener.handleMessageReported(number, messageGuid, reporterUuid, reportSpamToken);
+              listener.handleMessageReported(principal, messageGuid, reporterUuid, reportSpamToken);
             } catch (final Exception e) {
               logger.error("Failed to notify listener of reported message", e);
             }
@@ -117,7 +117,7 @@ public class ReportMessageManager {
       return rateLimitCluster.withCluster(
           connection ->
               Math.max(
-                  connection.sync().pfcount(getReportedSenderPniKey(account.getPhoneNumberIdentifier())).intValue(),
+                  connection.sync().pfcount(getReportedSenderPniKey(account.getPrincipalNameIdentifier())).intValue(),
                   connection.sync().pfcount(getReportedSenderAciKey(account.getUuid())).intValue()));
     } catch (final RedisException e) {
       return 0;

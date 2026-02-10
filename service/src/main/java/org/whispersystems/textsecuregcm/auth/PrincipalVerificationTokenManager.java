@@ -21,71 +21,71 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.whispersystems.textsecuregcm.entities.PhoneVerificationRequest;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationRequest;
 import org.whispersystems.textsecuregcm.entities.RegistrationServiceSession;
 import org.whispersystems.textsecuregcm.registration.RegistrationServiceClient;
 import org.whispersystems.textsecuregcm.spam.RegistrationRecoveryChecker;
-import org.whispersystems.textsecuregcm.storage.PhoneNumberIdentifiers;
+import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
 
-public class PhoneVerificationTokenManager {
+public class PrincipalVerificationTokenManager {
 
-  private static final Logger logger = LoggerFactory.getLogger(PhoneVerificationTokenManager.class);
+  private static final Logger logger = LoggerFactory.getLogger(PrincipalVerificationTokenManager.class);
   private static final Duration REGISTRATION_RPC_TIMEOUT = Duration.ofSeconds(15);
   private static final long VERIFICATION_TIMEOUT_SECONDS = REGISTRATION_RPC_TIMEOUT.plusSeconds(1).getSeconds();
 
-  private final PhoneNumberIdentifiers phoneNumberIdentifiers;
+  private final PrincipalNameIdentifiers principalNameIdentifiers;
 
   private final RegistrationServiceClient registrationServiceClient;
   private final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager;
   private final RegistrationRecoveryChecker registrationRecoveryChecker;
 
-  public PhoneVerificationTokenManager(final PhoneNumberIdentifiers phoneNumberIdentifiers,
-      final RegistrationServiceClient registrationServiceClient,
-      final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager,
-      final RegistrationRecoveryChecker registrationRecoveryChecker) {
-    this.phoneNumberIdentifiers = phoneNumberIdentifiers;
+  public PrincipalVerificationTokenManager(final PrincipalNameIdentifiers principalNameIdentifiers,
+                                           final RegistrationServiceClient registrationServiceClient,
+                                           final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager,
+                                           final RegistrationRecoveryChecker registrationRecoveryChecker) {
+    this.principalNameIdentifiers = principalNameIdentifiers;
     this.registrationServiceClient = registrationServiceClient;
     this.registrationRecoveryPasswordsManager = registrationRecoveryPasswordsManager;
     this.registrationRecoveryChecker = registrationRecoveryChecker;
   }
 
   /**
-   * Checks if a {@link PhoneVerificationRequest} has a token that verifies the caller has confirmed access to the e164
-   * number
+   * Checks if a {@link PrincipalVerificationRequest} has a token that verifies the caller has confirmed access to the
+   * principal
    *
    * @param requestContext the container request context
-   * @param number  the e164 presented for verification
+   * @param principal the principal presented for verification
    * @param request the request with exactly one verification token (RegistrationService sessionId or registration
    *                recovery password)
    * @return if verification was successful, returns the verification type
-   * @throws BadRequestException    if the number does not match the sessionId’s number, or the remote service rejects
-   *                                the session ID as invalid
+   * @throws BadRequestException    if the principal does not match the sessionId’s principal, or the remote service
+   *                                rejects the session ID as invalid
    * @throws NotAuthorizedException if the session is not verified
    * @throws ForbiddenException     if the recovery password is not valid
    * @throws InterruptedException   if verification did not complete before a timeout
    */
-  public PhoneVerificationRequest.VerificationType verify(final ContainerRequestContext requestContext, final String number, final PhoneVerificationRequest request)
+  public PrincipalVerificationRequest.VerificationType verify(final ContainerRequestContext requestContext, final String principal, final PrincipalVerificationRequest request)
       throws InterruptedException {
 
-    final PhoneVerificationRequest.VerificationType verificationType = request.verificationType();
+    final PrincipalVerificationRequest.VerificationType verificationType = request.verificationType();
     switch (verificationType) {
-      case SESSION -> verifyBySessionId(number, request.decodeSessionId());
-      case RECOVERY_PASSWORD -> verifyByRecoveryPassword(requestContext, number, request.recoveryPassword());
+      case SESSION -> verifyBySessionId(principal, request.decodeSessionId());
+      case RECOVERY_PASSWORD -> verifyByRecoveryPassword(requestContext, principal, request.recoveryPassword());
     }
 
     return verificationType;
   }
 
-  private void verifyBySessionId(final String number, final byte[] sessionId) throws InterruptedException {
+  private void verifyBySessionId(final String principal, final byte[] sessionId) throws InterruptedException {
     try {
       final RegistrationServiceSession session = registrationServiceClient
           .getSession(sessionId, REGISTRATION_RPC_TIMEOUT)
           .get(VERIFICATION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
           .orElseThrow(() -> new NotAuthorizedException("session not verified"));
 
-      if (!MessageDigest.isEqual(number.getBytes(), session.number().getBytes())) {
-        throw new BadRequestException("number does not match session");
+      if (!MessageDigest.isEqual(principal.getBytes(), session.principal().getBytes())) {
+        throw new BadRequestException("principal does not match session");
       }
       if (!session.verified()) {
         throw new NotAuthorizedException("session not verified");
@@ -108,13 +108,14 @@ public class PhoneVerificationTokenManager {
     }
   }
 
-  private void verifyByRecoveryPassword(final ContainerRequestContext requestContext, final String number, final byte[] recoveryPassword)
+  private void verifyByRecoveryPassword(final ContainerRequestContext requestContext, final String principal, final byte[] recoveryPassword)
       throws InterruptedException {
-    if (!registrationRecoveryChecker.checkRegistrationRecoveryAttempt(requestContext, number)) {
+    if (!registrationRecoveryChecker.checkRegistrationRecoveryAttempt(requestContext, principal)) {
       throw new ForbiddenException("recoveryPassword couldn't be verified");
     }
     try {
-      final boolean verified = registrationRecoveryPasswordsManager.verify(phoneNumberIdentifiers.getPhoneNumberIdentifier(number).join(), recoveryPassword)
+      final boolean verified = registrationRecoveryPasswordsManager.verify(
+              principalNameIdentifiers.getPrincipalNameIdentifier(principal).join(), recoveryPassword)
           .get(VERIFICATION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
       if (!verified) {
         throw new ForbiddenException("recoveryPassword couldn't be verified");

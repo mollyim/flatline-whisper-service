@@ -41,10 +41,10 @@ public class Account {
   private UUID uuid;
 
   @JsonProperty("pni")
-  private UUID phoneNumberIdentifier;
+  private UUID principalNameIdentifier;
 
   @JsonProperty
-  private String number;
+  private String principal;
 
   @JsonProperty
   @JsonSerialize(using = ByteArrayBase64UrlAdapter.Serializing.class)
@@ -77,7 +77,7 @@ public class Account {
   @JsonProperty("pniIdentityKey")
   @JsonSerialize(using = IdentityKeyAdapter.Serializer.class)
   @JsonDeserialize(using = IdentityKeyAdapter.Deserializer.class)
-  private IdentityKey phoneNumberIdentityKey;
+  private IdentityKey principalIdentityKey;
 
   @JsonProperty("cpv")
   private String currentProfileVersion;
@@ -98,7 +98,7 @@ public class Account {
   private boolean unrestrictedUnidentifiedAccess;
 
   @JsonProperty("inCds")
-  private boolean discoverableByPhoneNumber = true;
+  private boolean discoverableByPrincipal = true;
 
   @JsonProperty("bcr")
   @Nullable
@@ -128,7 +128,7 @@ public class Account {
   public UUID getIdentifier(final IdentityType identityType) {
     return switch (identityType) {
       case ACI -> getUuid();
-      case PNI -> getPhoneNumberIdentifier();
+      case PNI -> getPrincipalNameIdentifier();
     };
   }
 
@@ -143,37 +143,37 @@ public class Account {
     this.uuid = uuid;
   }
 
-  public UUID getPhoneNumberIdentifier() {
+  public UUID getPrincipalNameIdentifier() {
     requireNotStale();
 
-    return phoneNumberIdentifier;
+    return principalNameIdentifier;
   }
 
   /**
-   * Tests whether this account's account identifier or phone number identifier (depending on the given service
+   * Tests whether this account's account identifier or principal name identifier (depending on the given service
    * identifier's identity type) matches the given service identifier.
    *
    * @param serviceIdentifier the identifier to test
-   * @return {@code true} if this account's identifier or phone number identifier matches
+   * @return {@code true} if this account's identifier or principal name identifier matches
    */
   public boolean isIdentifiedBy(final ServiceIdentifier serviceIdentifier) {
     return switch (serviceIdentifier.identityType()) {
       case ACI -> serviceIdentifier.uuid().equals(uuid);
-      case PNI -> serviceIdentifier.uuid().equals(phoneNumberIdentifier);
+      case PNI -> serviceIdentifier.uuid().equals(principalNameIdentifier);
     };
   }
 
-  public String getNumber() {
+  public String getPrincipal() {
     requireNotStale();
 
-    return number;
+    return principal;
   }
 
-  public void setNumber(final String number, final UUID phoneNumberIdentifier) {
+  public void setPrincipal(final String principal, final UUID principalNameIdentifier) {
     requireNotStale();
 
-    this.number = number;
-    this.phoneNumberIdentifier = phoneNumberIdentifier;
+    this.principal = principal;
+    this.principalNameIdentifier = principalNameIdentifier;
   }
 
   public Optional<byte[]> getUsernameHash() {
@@ -302,12 +302,12 @@ public class Account {
 
     return switch (identityType) {
       case ACI -> identityKey;
-      case PNI -> phoneNumberIdentityKey;
+      case PNI -> principalIdentityKey;
     };
   }
 
-  public void setPhoneNumberIdentityKey(final IdentityKey phoneNumberIdentityKey) {
-    this.phoneNumberIdentityKey = phoneNumberIdentityKey;
+  public void setPrincipalIdentityKey(final IdentityKey principalIdentityKey) {
+    this.principalIdentityKey = principalIdentityKey;
   }
 
   public long getLastSeen() {
@@ -449,16 +449,16 @@ public class Account {
     this.unrestrictedUnidentifiedAccess = unrestrictedUnidentifiedAccess;
   }
 
-  public boolean isDiscoverableByPhoneNumber() {
+  public boolean isDiscoverableByPrincipal() {
     requireNotStale();
 
-    return this.discoverableByPhoneNumber;
+    return this.discoverableByPrincipal;
   }
 
-  public void setDiscoverableByPhoneNumber(final boolean discoverableByPhoneNumber) {
+  public void setDiscoverableByPrincipal(final boolean discoverableByPrincipal) {
     requireNotStale();
 
-    this.discoverableByPhoneNumber = discoverableByPhoneNumber;
+    this.discoverableByPrincipal = discoverableByPrincipal;
   }
 
   public int getVersion() {
@@ -518,9 +518,9 @@ public class Account {
    * Lock account by invalidating authentication tokens.
    *
    * We only want to do this in cases where there is a potential conflict between the
-   * phone number holder and the registration lock holder. In that case, locking the
+   * principal holder and the registration lock holder. In that case, locking the
    * account will ensure that either the registration lock holder proves ownership
-   * of the phone number, or after 7 days the phone number holder can register a new
+   * of the principal, or after 7 days the principal holder can register a new
    * account.
    */
   public void lockAuthTokenHash() {

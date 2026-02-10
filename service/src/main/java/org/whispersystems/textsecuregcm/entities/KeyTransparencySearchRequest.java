@@ -16,7 +16,7 @@ import org.signal.libsignal.protocol.IdentityKey;
 import org.whispersystems.textsecuregcm.identity.AciServiceIdentifier;
 import org.whispersystems.textsecuregcm.util.ByteArrayBase64UrlAdapter;
 import org.whispersystems.textsecuregcm.util.ByteArrayBase64WithPaddingAdapter;
-import org.whispersystems.textsecuregcm.util.E164;
+import org.whispersystems.textsecuregcm.util.Principal;
 import org.whispersystems.textsecuregcm.util.IdentityKeyAdapter;
 import org.whispersystems.textsecuregcm.util.ServiceIdentifierAdapter;
 
@@ -27,9 +27,9 @@ public record KeyTransparencySearchRequest(
     @Schema(description = "The ACI to look up")
     AciServiceIdentifier aci,
 
-    @E164
-    @Schema(description = "The E164-formatted phone number to look up")
-    Optional<String> e164,
+    @Principal
+    @Schema(description = "The principal to look up")
+    Optional<String> principal,
 
     @JsonSerialize(contentUsing = ByteArrayBase64UrlAdapter.Serializing.class)
     @JsonDeserialize(contentUsing = ByteArrayBase64UrlAdapter.Deserializing.class)
@@ -55,7 +55,7 @@ public record KeyTransparencySearchRequest(
 ) {
     @AssertTrue
     @Schema(hidden = true)
-    public boolean isUnidentifiedAccessKeyProvidedWithE164() {
-      return unidentifiedAccessKey.isPresent() == e164.isPresent();
+    public boolean isUnidentifiedAccessKeyProvidedWithPrincipal() {
+      return unidentifiedAccessKey.isPresent() == principal.isPresent();
     }
 }

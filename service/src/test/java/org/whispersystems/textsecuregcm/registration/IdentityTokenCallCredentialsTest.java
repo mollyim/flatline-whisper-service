@@ -43,7 +43,9 @@ public class IdentityTokenCallCredentialsTest {
         Executors.newSingleThreadScheduledExecutor());
 
     final IdToken idToken = mock(IdToken.class);
-    when(idToken.getTokenValue()).thenReturn("testtoken");
+    // FLT(uoemai): In the Flatline prototype, the registration service does not require authentication.
+    //              For this reason, the provided identity token is irrelevant.
+    when(idToken.getTokenValue()).thenReturn("irrelevant-token");
 
     // throw exception first two calls, then succeed
     when(impersonatedCredentials.idTokenWithAudience(anyString(), any()))
@@ -56,6 +58,8 @@ public class IdentityTokenCallCredentialsTest {
     CallCredentials.MetadataApplier metadataApplier = mock(CallCredentials.MetadataApplier.class);
     creds.applyRequestMetadata(null, null, metadataApplier);
     verify(metadataApplier, times(1))
-        .apply(argThat(metadata -> "Bearer testtoken".equals(metadata.get(IdentityTokenCallCredentials.AUTHORIZATION_METADATA_KEY))));
+        // FLT(uoemai): In the Flatline prototype, the registration service does not require authentication.
+        //              For this reason, a fake identity token is always returned instead of a valid GCP IAM token.
+        .apply(argThat(metadata -> "Bearer fake-identity-token".equals(metadata.get(IdentityTokenCallCredentials.AUTHORIZATION_METADATA_KEY))));
   }
 }

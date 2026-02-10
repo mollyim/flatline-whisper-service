@@ -10,15 +10,15 @@ import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import org.whispersystems.textsecuregcm.util.E164;
+import org.whispersystems.textsecuregcm.util.Principal;
 
 public record CreateVerificationSessionRequest(
 
-    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "The e164-formatted phone number to be verified")
-    @E164
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "The principal to be verified")
+    @Principal
     @NotBlank
     @JsonProperty
-    String number,
+    String principal,
 
 
     @Valid

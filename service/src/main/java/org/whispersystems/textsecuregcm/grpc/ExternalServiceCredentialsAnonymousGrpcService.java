@@ -61,8 +61,8 @@ public class ExternalServiceCredentialsAnonymousGrpcService extends
         svrCredentialsGenerator,
         MAX_SVR_PASSWORD_AGE_SECONDS);
 
-    return Mono.fromFuture(() -> accountsManager.getByE164Async(request.getNumber()))
-        // the username associated with the provided number
+    return Mono.fromFuture(() -> accountsManager.getByPrincipalAsync(request.getPrincipal()))
+        // the username associated with the provided principal
         .map(maybeAccount -> maybeAccount.map(Account::getUuid)
             .map(svrCredentialsGenerator::generateForUuid)
             .map(ExternalServiceCredentials::username))
@@ -77,7 +77,7 @@ public class ExternalServiceCredentialsAnonymousGrpcService extends
             authCheckResult = AuthCheckResult.AUTH_CHECK_RESULT_INVALID;
           } else {
             final String username = credentialInfo.credentials().username();
-            // does this credential match the account id for the e164 provided in the request?
+            // does this credential match the account id for the principal provided in the request?
             authCheckResult = matchingUsername.map(username::equals).orElse(false)
                 ? AuthCheckResult.AUTH_CHECK_RESULT_MATCH
                 : AuthCheckResult.AUTH_CHECK_RESULT_NO_MATCH;

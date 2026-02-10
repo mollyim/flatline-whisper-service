@@ -10,14 +10,14 @@ import static org.whispersystems.textsecuregcm.grpc.validators.ValidatorUtils.in
 import com.google.protobuf.Descriptors;
 import io.grpc.StatusException;
 import java.util.Set;
-import org.whispersystems.textsecuregcm.util.ImpossiblePhoneNumberException;
-import org.whispersystems.textsecuregcm.util.NonNormalizedPhoneNumberException;
+import org.whispersystems.textsecuregcm.util.InvalidPrincipalException;
+import org.whispersystems.textsecuregcm.util.NonNormalizedPrincipalException;
 import org.whispersystems.textsecuregcm.util.Util;
 
-public class E164FieldValidator extends BaseFieldValidator<Boolean> {
+public class PrincipalFieldValidator extends BaseFieldValidator<Boolean> {
 
-  public E164FieldValidator() {
-    super("e164", Set.of(Descriptors.FieldDescriptor.Type.STRING), MissingOptionalAction.SUCCEED, false);
+  public PrincipalFieldValidator() {
+    super("principal", Set.of(Descriptors.FieldDescriptor.Type.STRING), MissingOptionalAction.SUCCEED, false);
   }
 
   @Override
@@ -30,9 +30,9 @@ public class E164FieldValidator extends BaseFieldValidator<Boolean> {
       final Boolean extensionValue,
       final String fieldValue) throws StatusException {
     try {
-      Util.requireNormalizedNumber(fieldValue);
-    } catch (final ImpossiblePhoneNumberException | NonNormalizedPhoneNumberException e) {
-      throw invalidArgument("value is not in E164 format");
+      Util.requireNormalizedPrincipal(fieldValue);
+    } catch (final InvalidPrincipalException | NonNormalizedPrincipalException e) {
+      throw invalidArgument("value is not in principal format");
     }
   }
 }

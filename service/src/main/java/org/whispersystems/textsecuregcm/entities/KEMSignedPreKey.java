@@ -32,7 +32,7 @@ public record KEMSignedPreKey(
     @JsonSerialize(using = ByteArrayAdapter.Serializing.class)
     @JsonDeserialize(using = ByteArrayAdapter.Deserializing.class)
     @Schema(type="string", description="""
-        The signature of the serialized `publicKey` with the account (or phone-number identity)'s identity key, base64-encoded.
+        The signature of the serialized `publicKey` with the account (or principal-name identity)'s identity key, base64-encoded.
         """)
     byte[] signature) implements SignedPreKey<KEMPublicKey> {
 

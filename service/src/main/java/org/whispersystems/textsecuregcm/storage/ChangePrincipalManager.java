@@ -22,14 +22,14 @@ import org.whispersystems.textsecuregcm.identity.IdentityType;
 import org.whispersystems.textsecuregcm.push.MessageSender;
 import org.whispersystems.textsecuregcm.push.MessageTooLargeException;
 
-public class ChangeNumberManager {
+public class ChangePrincipalManager {
 
-  private static final Logger logger = LoggerFactory.getLogger(ChangeNumberManager.class);
+  private static final Logger logger = LoggerFactory.getLogger(ChangePrincipalManager.class);
   private final MessageSender messageSender;
   private final AccountsManager accountsManager;
   private final Clock clock;
 
-  public ChangeNumberManager(
+  public ChangePrincipalManager(
       final MessageSender messageSender,
       final AccountsManager accountsManager,
       final Clock clock) {
@@ -39,8 +39,8 @@ public class ChangeNumberManager {
     this.clock = clock;
   }
 
-  public Account changeNumber(final Account account,
-      final String number,
+  public Account changePrincipal(final Account account,
+      final String principal,
       final IdentityKey pniIdentityKey,
       final Map<Byte, ECSignedPreKey> deviceSignedPreKeys,
       final Map<Byte, KEMSignedPreKey> devicePqLastResortPreKeys,
@@ -53,7 +53,7 @@ public class ChangeNumberManager {
     final AciServiceIdentifier serviceIdentifier = new AciServiceIdentifier(account.getIdentifier(IdentityType.ACI));
 
     // Note that these for-validation envelopes do NOT have the "updated PNI" field set, and we'll need to populate that
-    // after actually changing the account's number.
+    // after actually changing the account's principal.
     final Map<Byte, Envelope> messagesByDeviceId = deviceMessages.stream()
         .collect(Collectors.toMap(IncomingMessage::destinationDeviceId, message -> message.toEnvelope(serviceIdentifier,
             serviceIdentifier,
@@ -79,8 +79,8 @@ public class ChangeNumberManager {
           senderUserAgent);
     }
 
-    final Account updatedAccount = accountsManager.changeNumber(
-        account, number, pniIdentityKey, deviceSignedPreKeys, devicePqLastResortPreKeys, pniRegistrationIds);
+    final Account updatedAccount = accountsManager.changePrincipal(
+        account, principal, pniIdentityKey, deviceSignedPreKeys, devicePqLastResortPreKeys, pniRegistrationIds);
 
     try {
       // Now that we've actually updated the account, populate the "updated PNI" field on all envelopes
@@ -96,7 +96,7 @@ public class ChangeNumberManager {
           Optional.of(Device.PRIMARY_ID),
           senderUserAgent);
     } catch (final RuntimeException e) {
-      logger.warn("Changed number but could not send all device messages for {}", account.getIdentifier(IdentityType.ACI), e);
+      logger.warn("Changed principal but could not send all device messages for {}", account.getIdentifier(IdentityType.ACI), e);
       throw e;
     }
 

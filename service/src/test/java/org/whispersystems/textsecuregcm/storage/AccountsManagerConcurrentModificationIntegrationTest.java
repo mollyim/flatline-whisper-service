@@ -67,7 +67,7 @@ class AccountsManagerConcurrentModificationIntegrationTest {
   @RegisterExtension
   static final DynamoDbExtension DYNAMO_DB_EXTENSION = new DynamoDbExtension(
       Tables.ACCOUNTS,
-      Tables.NUMBERS,
+      Tables.PRINCIPALS,
       Tables.PNI_ASSIGNMENTS,
       Tables.DELETED_ACCOUNTS,
       Tables.EC_KEYS,
@@ -96,7 +96,7 @@ class AccountsManagerConcurrentModificationIntegrationTest {
         DYNAMO_DB_EXTENSION.getDynamoDbClient(),
         DYNAMO_DB_EXTENSION.getDynamoDbAsyncClient(),
         Tables.ACCOUNTS.tableName(),
-        Tables.NUMBERS.tableName(),
+        Tables.PRINCIPALS.tableName(),
         Tables.PNI_ASSIGNMENTS.tableName(),
         Tables.USERNAMES.tableName(),
         Tables.DELETED_ACCOUNTS.tableName(),
@@ -120,13 +120,13 @@ class AccountsManagerConcurrentModificationIntegrationTest {
         return CompletableFuture.completedFuture(null);
       });
 
-      final PhoneNumberIdentifiers phoneNumberIdentifiers = mock(PhoneNumberIdentifiers.class);
-      when(phoneNumberIdentifiers.getPhoneNumberIdentifier(anyString()))
+      final PrincipalNameIdentifiers principalNameIdentifiers = mock(PrincipalNameIdentifiers.class);
+      when(principalNameIdentifiers.getPrincipalNameIdentifier(anyString()))
           .thenAnswer((Answer<CompletableFuture<UUID>>) invocation -> CompletableFuture.completedFuture(UUID.randomUUID()));
 
       accountsManager = new AccountsManager(
           accounts,
-          phoneNumberIdentifiers,
+              principalNameIdentifiers,
           RedisClusterHelper.builder().stringCommands(commands).build(),
           mock(FaultTolerantRedisClient.class),
           accountLockManager,
@@ -156,7 +156,7 @@ class AccountsManagerConcurrentModificationIntegrationTest {
       final ECKeyPair pniKeyPair = ECKeyPair.generate();
 
       final Account account = accountsManager.update(
-          accountsManager.create("+14155551212",
+          accountsManager.create("user.account@example.com",
               new AccountAttributes(),
               new ArrayList<>(),
               new IdentityKey(aciKeyPair.getPublicKey()),
@@ -185,7 +185,7 @@ class AccountsManagerConcurrentModificationIntegrationTest {
       uuid = account.getUuid();
     }
 
-    final boolean discoverableByPhoneNumber = false;
+    final boolean discoverableByPrincipal = false;
     final String currentProfileVersion = "cpv";
     final IdentityKey identityKey = new IdentityKey(ECKeyPair.generate().getPublicKey());
     final byte[] unidentifiedAccessKey = new byte[]{1};
@@ -196,7 +196,7 @@ class AccountsManagerConcurrentModificationIntegrationTest {
     final long lastSeen = Instant.now().getEpochSecond();
 
     CompletableFuture.allOf(
-        modifyAccount(uuid, account -> account.setDiscoverableByPhoneNumber(discoverableByPhoneNumber)),
+        modifyAccount(uuid, account -> account.setDiscoverableByPrincipal(discoverableByPrincipal)),
         modifyAccount(uuid, account -> account.setCurrentProfileVersion(currentProfileVersion)),
         modifyAccount(uuid, account -> account.setIdentityKey(identityKey)),
         modifyAccount(uuid, account -> account.setUnidentifiedAccessKey(unidentifiedAccessKey)),
@@ -216,7 +216,7 @@ class AccountsManagerConcurrentModificationIntegrationTest {
         new Pair<>("dynamo", dynamoAccount),
         new Pair<>("redis", redisAccount)
     ).forEach(pair ->
-        verifyAccount(pair.first(), pair.second(), discoverableByPhoneNumber,
+        verifyAccount(pair.first(), pair.second(), discoverableByPrincipal,
             currentProfileVersion, identityKey, unidentifiedAccessKey, pin, registrationLock,
             unrestrictedUnidentifiedAccess, lastSeen));
   }
@@ -229,10 +229,10 @@ class AccountsManagerConcurrentModificationIntegrationTest {
     return JsonHelpers.fromJson(redisSetArgumentCapture.getValue(), Account.class);
   }
 
-  private void verifyAccount(final String name, final Account account, final boolean discoverableByPhoneNumber, final String currentProfileVersion, final IdentityKey identityKey, final byte[] unidentifiedAccessKey, final String pin, final String clientRegistrationLock, final boolean unrestrictedUnidentifiedAccess, final long lastSeen) {
+  private void verifyAccount(final String name, final Account account, final boolean discoverableByPrincipal, final String currentProfileVersion, final IdentityKey identityKey, final byte[] unidentifiedAccessKey, final String pin, final String clientRegistrationLock, final boolean unrestrictedUnidentifiedAccess, final long lastSeen) {
 
     assertAll(name,
-        () -> assertEquals(discoverableByPhoneNumber, account.isDiscoverableByPhoneNumber()),
+        () -> assertEquals(discoverableByPrincipal, account.isDiscoverableByPrincipal()),
         () -> assertEquals(currentProfileVersion, account.getCurrentProfileVersion().orElseThrow()),
         () -> assertEquals(identityKey, account.getIdentityKey(IdentityType.ACI)),
         () -> assertArrayEquals(unidentifiedAccessKey, account.getUnidentifiedAccessKey().orElseThrow()),

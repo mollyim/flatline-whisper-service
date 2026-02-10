@@ -55,7 +55,7 @@ class PushNotificationSchedulerTest {
   private PushNotificationScheduler pushNotificationScheduler;
 
   private static final UUID ACCOUNT_UUID = UUID.randomUUID();
-  private static final String ACCOUNT_NUMBER = "+18005551234";
+  private static final String ACCOUNT_PRINCIPAL = "user.account@example.com";
   private static final byte DEVICE_ID = 1;
   private static final String APN_ID = RandomStringUtils.secure().nextAlphanumeric(32);
   private static final String GCM_ID = RandomStringUtils.secure().nextAlphanumeric(32);
@@ -72,11 +72,11 @@ class PushNotificationSchedulerTest {
     account = mock(Account.class);
     when(account.getUuid()).thenReturn(ACCOUNT_UUID);
     when(account.getIdentifier(IdentityType.ACI)).thenReturn(ACCOUNT_UUID);
-    when(account.getNumber()).thenReturn(ACCOUNT_NUMBER);
+    when(account.getPrincipal()).thenReturn(ACCOUNT_PRINCIPAL);
     when(account.getDevice(DEVICE_ID)).thenReturn(Optional.of(device));
 
     final AccountsManager accountsManager = mock(AccountsManager.class);
-    when(accountsManager.getByE164(ACCOUNT_NUMBER)).thenReturn(Optional.of(account));
+    when(accountsManager.getByPrincipal(ACCOUNT_PRINCIPAL)).thenReturn(Optional.of(account));
     when(accountsManager.getByAccountIdentifierAsync(ACCOUNT_UUID))
         .thenReturn(CompletableFuture.completedFuture(Optional.of(account)));
 

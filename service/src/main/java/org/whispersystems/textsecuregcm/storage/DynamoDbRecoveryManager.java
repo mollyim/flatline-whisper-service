@@ -15,11 +15,11 @@ import java.util.concurrent.CompletableFuture;
 public class DynamoDbRecoveryManager {
 
   private final Accounts accounts;
-  private final PhoneNumberIdentifiers phoneNumberIdentifiers;
+  private final PrincipalNameIdentifiers principalNameIdentifiers;
 
-  public DynamoDbRecoveryManager(final Accounts accounts, final PhoneNumberIdentifiers phoneNumberIdentifiers) {
+  public DynamoDbRecoveryManager(final Accounts accounts, final PrincipalNameIdentifiers principalNameIdentifiers) {
     this.accounts = accounts;
-    this.phoneNumberIdentifiers = phoneNumberIdentifiers;
+    this.principalNameIdentifiers = principalNameIdentifiers;
   }
 
   /**
@@ -32,6 +32,6 @@ public class DynamoDbRecoveryManager {
   public CompletableFuture<Void> regenerateData(final Account account) {
     return CompletableFuture.allOf(
         accounts.regenerateConstraints(account),
-        phoneNumberIdentifiers.regeneratePhoneNumberIdentifierMappings(account));
+        principalNameIdentifiers.regeneratePrincipalNameIdentifierMappings(account));
   }
 }

@@ -217,8 +217,8 @@ public class DeviceController {
 
     int maxDeviceLimit = MAX_DEVICES;
 
-    if (maxDeviceConfiguration.containsKey(account.getNumber())) {
-      maxDeviceLimit = maxDeviceConfiguration.get(account.getNumber());
+    if (maxDeviceConfiguration.containsKey(account.getPrincipal())) {
+      maxDeviceLimit = maxDeviceConfiguration.get(account.getPrincipal());
     }
 
     if (account.getDevices().size() >= maxDeviceLimit) {
@@ -241,7 +241,7 @@ public class DeviceController {
   @ChangesLinkedDevices
   @Operation(summary = "Link a device to an account",
       description = """
-          Links a device to an account identified by a given phone number.
+          Links a device to an account identified by a given principal.
           """)
   @ApiResponse(responseCode = "200", description = "The new device was linked to the calling account", useReturnTypeSchema = true)
   @ApiResponse(responseCode = "403", description = "The given account was not found or the given verification code was incorrect")
@@ -279,7 +279,7 @@ public class DeviceController {
       throw new WebApplicationException(Response.status(422).build());
     }
 
-    final int maxDeviceLimit = maxDeviceConfiguration.getOrDefault(account.getNumber(), MAX_DEVICES);
+    final int maxDeviceLimit = maxDeviceConfiguration.getOrDefault(account.getPrincipal(), MAX_DEVICES);
 
     if (account.getDevices().size() >= maxDeviceLimit) {
       throw new DeviceLimitExceededException(account.getDevices().size(), maxDeviceLimit);
@@ -309,7 +309,7 @@ public class DeviceController {
                   signalAgent,
                   capabilities,
                   accountAttributes.getRegistrationId(),
-                  accountAttributes.getPhoneNumberIdentityRegistrationId(),
+                  accountAttributes.getPrincipalNameIdentityRegistrationId(),
                   accountAttributes.getFetchesMessages(),
                   deviceActivationRequest.apnToken(),
                   deviceActivationRequest.gcmToken(),

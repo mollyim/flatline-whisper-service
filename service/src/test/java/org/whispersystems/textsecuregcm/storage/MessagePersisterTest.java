@@ -79,7 +79,7 @@ class MessagePersisterTest {
   private Account destinationAccount;
 
   private static final UUID DESTINATION_ACCOUNT_UUID = UUID.randomUUID();
-  private static final String DESTINATION_ACCOUNT_NUMBER = "+18005551234";
+  private static final String DESTINATION_ACCOUNT_PRINCIPAL = "user.account@example.com";
   private static final byte DESTINATION_DEVICE_ID = 7;
   private static final Device DESTINATION_DEVICE = DevicesHelper.createDevice(DESTINATION_DEVICE_ID);
 
@@ -104,7 +104,7 @@ class MessagePersisterTest {
 
     when(destinationAccount.getUuid()).thenReturn(DESTINATION_ACCOUNT_UUID);
     when(destinationAccount.getIdentifier(IdentityType.ACI)).thenReturn(DESTINATION_ACCOUNT_UUID);
-    when(destinationAccount.getNumber()).thenReturn(DESTINATION_ACCOUNT_NUMBER);
+    when(destinationAccount.getPrincipal()).thenReturn(DESTINATION_ACCOUNT_PRINCIPAL);
     when(destinationAccount.getDevice(DESTINATION_DEVICE_ID)).thenReturn(Optional.of(DESTINATION_DEVICE));
 
     final DynamicConfiguration dynamicConfiguration = mock(DynamicConfiguration.class);
@@ -205,7 +205,7 @@ class MessagePersisterTest {
 
       when(accountsManager.getByAccountIdentifier(accountUuid)).thenReturn(Optional.of(account));
       when(account.getUuid()).thenReturn(accountUuid);
-      when(account.getNumber()).thenReturn(accountNumber);
+      when(account.getPrincipal()).thenReturn(accountNumber);
       when(account.getDevice(anyByte())).thenAnswer(invocation -> Optional.of(DevicesHelper.createDevice(invocation.getArgument(0))));
 
       insertMessages(accountUuid, deviceId, messagesPerQueue, now);

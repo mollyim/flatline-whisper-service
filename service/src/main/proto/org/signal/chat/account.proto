@@ -91,10 +91,10 @@ service Accounts {
   rpc ConfigureUnidentifiedAccess(ConfigureUnidentifiedAccessRequest) returns (ConfigureUnidentifiedAccessResponse) {}
 
   /**
-   * Sets whether the authenticated account may be discovered by phone number
+   * Sets whether the authenticated account may be discovered by principal
    * via the Contact Discovery Service (CDS).
    */
-  rpc SetDiscoverableByPhoneNumber(SetDiscoverableByPhoneNumberRequest) returns (SetDiscoverableByPhoneNumberResponse) {}
+  rpc SetDiscoverableByPrincipal(SetDiscoverableByPrincipalRequest) returns (SetDiscoverableByPrincipalResponse) {}
 
   /**
    * Sets the registration recovery password for the authenticated account.
@@ -278,16 +278,16 @@ message ConfigureUnidentifiedAccessRequest {
 message ConfigureUnidentifiedAccessResponse {
 }
 
-message SetDiscoverableByPhoneNumberRequest {
+message SetDiscoverableByPrincipalRequest {
   /**
-   * If true, the authenticated account may be discovered by phone number via
+   * If true, the authenticated account may be discovered by principal via
    * the Contact Discovery Service (CDS). Otherwise, other users must discover
    * this account by other means (i.e. by username).
    */
-  bool discoverable_by_phone_number = 1;
+  bool discoverable_by_principal = 1;
 }
 
-message SetDiscoverableByPhoneNumberResponse {
+message SetDiscoverableByPrincipalResponse {
 }
 
 message SetRegistrationRecoveryPasswordRequest {

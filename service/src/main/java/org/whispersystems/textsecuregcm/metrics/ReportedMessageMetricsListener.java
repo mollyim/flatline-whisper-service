@@ -27,8 +27,6 @@ public class ReportedMessageMetricsListener implements ReportedMessageListener {
   private static final String REPORTED_COUNTER_NAME = name(ReportMessageManager.class, "reported");
   private static final String REPORTER_COUNTER_NAME = name(ReportMessageManager.class, "reporter");
 
-  private static final String COUNTRY_CODE_TAG_NAME = "countryCode";
-
   private static final Logger logger = LoggerFactory.getLogger(ReportedMessageMetricsListener.class);
 
   public ReportedMessageMetricsListener(final AccountsManager accountsManager) {
@@ -39,19 +37,14 @@ public class ReportedMessageMetricsListener implements ReportedMessageListener {
   public void handleMessageReported(final String sourceNumber, final UUID messageGuid, final UUID reporterUuid,
       final Optional<byte[]> reportSpamToken) {
 
-    final String sourceCountryCode = Util.getCountryCode(sourceNumber);
-
-    Metrics.counter(REPORTED_COUNTER_NAME, COUNTRY_CODE_TAG_NAME, sourceCountryCode).increment();
+    // FLT(uoemai): This code used to track the country of the reporter and the reported.
+    //              After the switch to principals, it just tracks the number of reports.
+    Metrics.counter(REPORTED_COUNTER_NAME).increment();
 
     accountsManager.getByAccountIdentifier(reporterUuid).ifPresent(reporter -> {
-      final String destinationCountryCode = Util.getCountryCode(reporter.getNumber());
+      logger.info("Message reported");
 
-      logger.info(Markers.appendEntries(Map.of(
-              "sourceCountry", sourceCountryCode,
-              "destinationCountry", destinationCountryCode)),
-          "Message reported");
-
-      Metrics.counter(REPORTER_COUNTER_NAME, COUNTRY_CODE_TAG_NAME, destinationCountryCode).increment();
+      Metrics.counter(REPORTER_COUNTER_NAME).increment();
     });
   }
 }

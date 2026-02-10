@@ -56,7 +56,7 @@ public class CertificateController {
   @VisibleForTesting
   public static final Duration MAX_REDEMPTION_DURATION = Duration.ofDays(7);
   private static final String GENERATE_DELIVERY_CERTIFICATE_COUNTER_NAME = name(CertificateGenerator.class, "generateCertificate");
-  private static final String INCLUDE_E164_TAG_NAME = "includeE164";
+  private static final String INCLUDE_PRINCIPAL_TAG_NAME = "includePrincipal";
 
   public CertificateController(
       final AccountsManager accountsManager,
@@ -76,17 +76,17 @@ public class CertificateController {
   @Produces(MediaType.APPLICATION_JSON)
   @Path("/delivery")
   public DeliveryCertificate getDeliveryCertificate(@Auth AuthenticatedDevice auth,
-      @QueryParam("includeE164") @DefaultValue("true") boolean includeE164)
+      @QueryParam("includePrincipal") @DefaultValue("true") boolean includePrincipal)
       throws InvalidKeyException {
 
-    Metrics.counter(GENERATE_DELIVERY_CERTIFICATE_COUNTER_NAME, INCLUDE_E164_TAG_NAME, String.valueOf(includeE164))
+    Metrics.counter(GENERATE_DELIVERY_CERTIFICATE_COUNTER_NAME, INCLUDE_PRINCIPAL_TAG_NAME, String.valueOf(includePrincipal))
         .increment();
 
     final Account account = accountsManager.getByAccountIdentifier(auth.accountIdentifier())
         .orElseThrow(() -> new WebApplicationException(Response.Status.UNAUTHORIZED));
 
     return new DeliveryCertificate(
-        certificateGenerator.createFor(account, auth.deviceId(), includeE164));
+        certificateGenerator.createFor(account, auth.deviceId(), includePrincipal));
   }
 
   @GET

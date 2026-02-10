@@ -5,13 +5,13 @@
 
 package org.whispersystems.textsecuregcm.util;
 
-public class ImpossiblePhoneNumberException extends Exception {
+public class InvalidPrincipalException extends Exception {
 
-  public ImpossiblePhoneNumberException() {
+  public InvalidPrincipalException() {
     super();
   }
 
-  public ImpossiblePhoneNumberException(final Throwable cause) {
+  public InvalidPrincipalException(final Throwable cause) {
     super(cause);
   }
 }

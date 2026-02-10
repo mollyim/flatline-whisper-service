@@ -14,6 +14,6 @@ public record Config(@NotBlank String domain,
                      @NotBlank String rootCert,
                      @NotNull @Valid DynamoDbClientFactory dynamoDbClient,
                      @NotNull @Valid DynamoDbTables dynamoDbTables,
-                     @NotBlank String prescribedRegistrationNumber,
+                     @NotBlank String prescribedRegistrationPrincipal,
                      @NotBlank String prescribedRegistrationCode) {
 }

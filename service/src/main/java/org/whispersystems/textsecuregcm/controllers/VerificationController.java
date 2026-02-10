@@ -1,5 +1,6 @@
 /*
  * Copyright 2023 Signal Messenger, LLC
+ * Copyright 2025 Molly Instant Messenger
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
@@ -91,12 +92,14 @@ import org.whispersystems.textsecuregcm.spam.RegistrationFraudChecker;
 import org.whispersystems.textsecuregcm.spam.RegistrationFraudChecker.VerificationCheck;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
-import org.whispersystems.textsecuregcm.storage.PhoneNumberIdentifiers;
+import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
 import org.whispersystems.textsecuregcm.storage.VerificationSessionManager;
 import org.whispersystems.textsecuregcm.util.ExceptionUtils;
-import org.whispersystems.textsecuregcm.util.ObsoletePhoneNumberFormatException;
+import org.whispersystems.textsecuregcm.util.InvalidPrincipalException;
+import org.whispersystems.textsecuregcm.util.ObsoletePrincipalFormatException;
 import org.whispersystems.textsecuregcm.util.Pair;
+import org.whispersystems.textsecuregcm.entities.Principal;
 import org.whispersystems.textsecuregcm.util.Util;
 
 @Path("/v1/verification")
@@ -113,8 +116,6 @@ public class VerificationController {
   private static final String CHALLENGE_PRESENT_TAG_NAME = "present";
   private static final String CHALLENGE_MATCH_TAG_NAME = "matches";
   private static final String CAPTCHA_ATTEMPT_COUNTER_NAME = name(VerificationController.class, "captcha");
-  private static final String COUNTRY_CODE_TAG_NAME = "countryCode";
-  private static final String REGION_CODE_TAG_NAME = "regionCode";
   private static final String SCORE_TAG_NAME = "score";
   private static final String CODE_REQUESTED_COUNTER_NAME = name(VerificationController.class, "codeRequested");
   private static final String VERIFICATION_TRANSPORT_TAG_NAME = "transport";
@@ -126,7 +127,7 @@ public class VerificationController {
   private final PushNotificationManager pushNotificationManager;
   private final RegistrationCaptchaManager registrationCaptchaManager;
   private final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager;
-  private final PhoneNumberIdentifiers phoneNumberIdentifiers;
+  private final PrincipalNameIdentifiers principalNameIdentifiers;
   private final RateLimiters rateLimiters;
   private final AccountsManager accountsManager;
   private final RegistrationFraudChecker registrationFraudChecker;
@@ -138,7 +139,7 @@ public class VerificationController {
       final PushNotificationManager pushNotificationManager,
       final RegistrationCaptchaManager registrationCaptchaManager,
       final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager,
-      final PhoneNumberIdentifiers phoneNumberIdentifiers,
+      final PrincipalNameIdentifiers principalNameIdentifiers,
       final RateLimiters rateLimiters,
       final AccountsManager accountsManager,
       final RegistrationFraudChecker registrationFraudChecker,
@@ -149,7 +150,7 @@ public class VerificationController {
     this.pushNotificationManager = pushNotificationManager;
     this.registrationCaptchaManager = registrationCaptchaManager;
     this.registrationRecoveryPasswordsManager = registrationRecoveryPasswordsManager;
-    this.phoneNumberIdentifiers = phoneNumberIdentifiers;
+    this.principalNameIdentifiers = principalNameIdentifiers;
     this.rateLimiters = rateLimiters;
     this.accountsManager = accountsManager;
     this.registrationFraudChecker = registrationFraudChecker;
@@ -162,9 +163,9 @@ public class VerificationController {
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
   @Operation(
-      summary = "Creates a new verification session for a specific phone number",
+      summary = "Creates a new verification session for a specific principal",
       description = """
-          Initiates a session to be able to verify the phone number for account registration. Check the response and 
+          Initiates a session to be able to verify the principal for account registration. Check the response and
           submit requested information at PATCH /session/{sessionId}
           """)
   @ApiResponse(responseCode = "200", description = "The verification session was created successfully", useReturnTypeSchema = true)
@@ -175,16 +176,29 @@ public class VerificationController {
       schema = @Schema(implementation = Integer.class)))
   public VerificationSessionResponse createSession(@NotNull @Valid final CreateVerificationSessionRequest request,
       @Context final ContainerRequestContext requestContext)
-      throws RateLimitExceededException, ObsoletePhoneNumberFormatException {
+      throws RateLimitExceededException, ObsoletePrincipalFormatException {
 
-    final Pair<String, PushNotification.TokenType> pushTokenAndType = validateAndExtractPushToken(
-        request.updateVerificationSessionRequest());
+    // FLT(uoemai): Use dummy verification handler during development.
+    // final Pair<String, PushNotification.TokenType> pushTokenAndType = validateAndExtractPushToken(
+    //    request.updateVerificationSessionRequest());
 
+    final Principal principal;
+    try {
+      // FLT(uoemai): Canonicalization no longer applies to phone numbers specifically, only to principals.
+      //              With principals, technically equivalent phone numbers are treated as different principals.
+      principal = Principal.parse(Util.canonicalizePrincipal(request.principal()));
+    } catch (final InvalidPrincipalException e) {
+      throw new ServerErrorException("could not parse already validated principal", Response.Status.INTERNAL_SERVER_ERROR);
+    }
+
+    // FLT(uoemai): At this point, we start assuming that the principal is a phone number.
+    //              This is only done in the interim, before registration is migrated to OIDC.
+    //              TODO: Migrate registration to use OIDC.
     final Phonenumber.PhoneNumber phoneNumber;
     try {
-      phoneNumber = Util.canonicalizePhoneNumber(PhoneNumberUtil.getInstance().parse(request.number(), null));
+      phoneNumber = PhoneNumberUtil.getInstance().parse(principal.getValue(), null);
     } catch (final NumberParseException e) {
-      throw new ServerErrorException("could not parse already validated number", Response.Status.INTERNAL_SERVER_ERROR);
+      throw new ServerErrorException("could not parse principal as phone number", Response.Status.INTERNAL_SERVER_ERROR);
     }
 
     final RegistrationServiceSession registrationServiceSession;
@@ -192,7 +206,7 @@ public class VerificationController {
       final String sourceHost = (String) requestContext.getProperty(RemoteAddressFilter.REMOTE_ADDRESS_ATTRIBUTE_NAME);
 
       registrationServiceSession = registrationServiceClient.createRegistrationSession(phoneNumber, sourceHost,
-          accountsManager.getByE164(request.number()).isPresent(),
+          accountsManager.getByPrincipal(request.principal()).isPresent(),
           REGISTRATION_RPC_TIMEOUT).join();
     } catch (final CancellationException e) {
 
@@ -253,8 +267,8 @@ public class VerificationController {
 
     final String sourceHost = (String) requestContext.getProperty(RemoteAddressFilter.REMOTE_ADDRESS_ATTRIBUTE_NAME);
 
-    final Pair<String, PushNotification.TokenType> pushTokenAndType = validateAndExtractPushToken(
-        updateVerificationSessionRequest);
+    // final Pair<String, PushNotification.TokenType> pushTokenAndType = validateAndExtractPushToken(
+    //    updateVerificationSessionRequest);
 
     final RegistrationServiceSession registrationServiceSession = retrieveRegistrationServiceSession(encodedSessionId);
     VerificationSession verificationSession = retrieveVerificationSession(registrationServiceSession);
@@ -262,7 +276,7 @@ public class VerificationController {
     final VerificationCheck verificationCheck = registrationFraudChecker.checkVerificationAttempt(
         requestContext,
         verificationSession,
-        registrationServiceSession.number(),
+        registrationServiceSession.principal(),
         updateVerificationSessionRequest);
 
     try {
@@ -270,21 +284,20 @@ public class VerificationController {
 
       // FLT(uoemai): Use dummy handler as the first verification method during development.
       verificationSession = handleDummy(verificationSession);
-
       verificationSession = verificationCheck.updatedSession().orElse(verificationSession);
 
-      verificationSession = handlePushToken(pushTokenAndType, verificationSession);
+      // FLT(uoemai): The following additional verification methods are currently ignored in the Flatline prototype.
+      // verificationSession = handlePushToken(pushTokenAndType, verificationSession);
+      // verificationSession = handlePushChallenge(updateVerificationSessionRequest, registrationServiceSession,
+      //     verificationSession);
+      // verificationSession = handleCaptcha(sourceHost, updateVerificationSessionRequest, registrationServiceSession,
+      //    verificationSession, userAgent, verificationCheck.scoreThreshold());
 
-      verificationSession = handlePushChallenge(updateVerificationSessionRequest, registrationServiceSession,
-          verificationSession);
-
-      verificationSession = handleCaptcha(sourceHost, updateVerificationSessionRequest, registrationServiceSession,
-          verificationSession, userAgent, verificationCheck.scoreThreshold());
-    } catch (final RateLimitExceededException e) {
-
-      final Response response = buildResponseForRateLimitExceeded(verificationSession, registrationServiceSession,
-          e.getRetryDuration());
-      throw new ClientErrorException(response);
+    // FLT(uoemai): There are no rate limited verification methods currently in the Flatline prototype.
+    //} catch (final RateLimitExceededException e) {
+      // final Response response = buildResponseForRateLimitExceeded(verificationSession, registrationServiceSession,
+      //     e.getRetryDuration());
+      // throw new ClientErrorException(response);
 
     } catch (final ForbiddenException e) {
 
@@ -380,8 +393,6 @@ public class VerificationController {
     }
 
     Metrics.counter(PUSH_CHALLENGE_COUNTER_NAME,
-            COUNTRY_CODE_TAG_NAME, Util.getCountryCode(registrationServiceSession.number()),
-            REGION_CODE_TAG_NAME, Util.getRegion(registrationServiceSession.number()),
             CHALLENGE_PRESENT_TAG_NAME, Boolean.toString(pushChallengePresent),
             CHALLENGE_MATCH_TAG_NAME, Boolean.toString(pushChallengeMatches))
         .increment();
@@ -443,8 +454,6 @@ public class VerificationController {
       Metrics.counter(CAPTCHA_ATTEMPT_COUNTER_NAME, Tags.of(
               Tag.of(SUCCESS_TAG_NAME, String.valueOf(assessmentResult.isValid(captchaScoreThreshold))),
               UserAgentTagUtil.getPlatformTag(userAgent),
-              Tag.of(COUNTRY_CODE_TAG_NAME, Util.getCountryCode(registrationServiceSession.number())),
-              Tag.of(REGION_CODE_TAG_NAME, Util.getRegion(registrationServiceSession.number())),
               Tag.of(SCORE_TAG_NAME, assessmentResult.getScoreString())))
           .increment();
 
@@ -480,10 +489,7 @@ public class VerificationController {
   // FLT(uoemai): Dummy handler that always succeeds and allows requesting a verification code.
   private VerificationSession handleDummy(VerificationSession verificationSession) {
     // FLT(uoemai): The dummy handler never requires any additional information.
-    final List<VerificationSession.Information> requestedInformation = new ArrayList<>(
-        verificationSession.requestedInformation());
-    requestedInformation.remove(VerificationSession.Information.PUSH_CHALLENGE);
-    requestedInformation.remove(VerificationSession.Information.CAPTCHA);
+    final List<VerificationSession.Information> requestedInformation = new ArrayList<>();
 
     return new VerificationSession(verificationSession.pushChallenge(), requestedInformation,
         null, verificationSession.smsSenderOverride(), verificationSession.voiceSenderOverride(),
@@ -643,8 +649,6 @@ public class VerificationController {
 
     Metrics.counter(CODE_REQUESTED_COUNTER_NAME, Tags.of(
             UserAgentTagUtil.getPlatformTag(userAgent),
-            Tag.of(COUNTRY_CODE_TAG_NAME, Util.getCountryCode(registrationServiceSession.number())),
-            Tag.of(REGION_CODE_TAG_NAME, Util.getRegion(registrationServiceSession.number())),
             Tag.of(VERIFICATION_TRANSPORT_TAG_NAME, verificationCodeRequest.transport().toString())))
         .increment();
 
@@ -730,13 +734,12 @@ public class VerificationController {
     }
 
     if (resultSession.verified()) {
-      registrationRecoveryPasswordsManager.remove(phoneNumberIdentifiers.getPhoneNumberIdentifier(registrationServiceSession.number()).join());
+      registrationRecoveryPasswordsManager.remove(
+          principalNameIdentifiers.getPrincipalNameIdentifier(registrationServiceSession.principal()).join());
     }
 
     Metrics.counter(VERIFIED_COUNTER_NAME, Tags.of(
             UserAgentTagUtil.getPlatformTag(userAgent),
-            Tag.of(COUNTRY_CODE_TAG_NAME, Util.getCountryCode(registrationServiceSession.number())),
-            Tag.of(REGION_CODE_TAG_NAME, Util.getRegion(registrationServiceSession.number())),
             Tag.of(SUCCESS_TAG_NAME, Boolean.toString(resultSession.verified()))))
         .increment();
 
@@ -776,7 +779,8 @@ public class VerificationController {
           .orElseThrow(NotFoundException::new);
 
       if (registrationServiceSession.verified()) {
-        registrationRecoveryPasswordsManager.remove(phoneNumberIdentifiers.getPhoneNumberIdentifier(registrationServiceSession.number()).join());
+        registrationRecoveryPasswordsManager.remove(
+            principalNameIdentifiers.getPrincipalNameIdentifier(registrationServiceSession.principal()).join());
       }
 
       return registrationServiceSession;

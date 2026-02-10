@@ -36,13 +36,13 @@ import org.whispersystems.textsecuregcm.util.SystemMapper;
 
 public class AccountsHelper {
 
-  public static Account generateTestAccount(String number, List<Device> devices) {
-    return generateTestAccount(number, UUID.randomUUID(), UUID.randomUUID(), devices, null);
+  public static Account generateTestAccount(String principal, List<Device> devices) {
+    return generateTestAccount(principal, UUID.randomUUID(), UUID.randomUUID(), devices, null);
   }
 
-  public static Account generateTestAccount(String number, UUID uuid, final UUID phoneNumberIdentifier, List<Device> devices, byte[] unidentifiedAccessKey) {
+  public static Account generateTestAccount(String principal, UUID uuid, final UUID principalNameIdentifier, List<Device> devices, byte[] unidentifiedAccessKey) {
     final Account account = new Account();
-    account.setNumber(number, phoneNumberIdentifier);
+    account.setPrincipal(principal, principalNameIdentifier);
     account.setUuid(uuid);
     devices.forEach(account::addDevice);
     account.setUnidentifiedAccessKey(unidentifiedAccessKey);
@@ -199,17 +199,17 @@ public class AccountsHelper {
       for (Stubbing stubbing : mockingDetails.getStubbings()) {
         switch (stubbing.getInvocation().getMethod().getName()) {
           case "getUuid" -> when(updatedAccount.getUuid()).thenAnswer(stubbing);
-          case "getPhoneNumberIdentifier" -> when(updatedAccount.getPhoneNumberIdentifier()).thenAnswer(stubbing);
+          case "getPrincipalNameIdentifier" -> when(updatedAccount.getPrincipalNameIdentifier()).thenAnswer(stubbing);
           case "getIdentifier" -> when(updatedAccount.getIdentifier(stubbing.getInvocation().getArgument(0))).thenAnswer(stubbing);
           case "isIdentifiedBy" -> when(updatedAccount.isIdentifiedBy(stubbing.getInvocation().getArgument(0))).thenAnswer(stubbing);
-          case "getNumber" -> when(updatedAccount.getNumber()).thenAnswer(stubbing);
+          case "getPrincipal" -> when(updatedAccount.getPrincipal()).thenAnswer(stubbing);
           case "getUsername" -> when(updatedAccount.getUsernameHash()).thenAnswer(stubbing);
           case "getUsernameHash" -> when(updatedAccount.getUsernameHash()).thenAnswer(stubbing);
           case "getUsernameLinkHandle" -> when(updatedAccount.getUsernameLinkHandle()).thenAnswer(stubbing);
           case "getDevices" -> when(updatedAccount.getDevices()).thenAnswer(stubbing);
           case "getDevice" -> when(updatedAccount.getDevice(stubbing.getInvocation().getArgument(0))).thenAnswer(stubbing);
           case "getPrimaryDevice" -> when(updatedAccount.getPrimaryDevice()).thenAnswer(stubbing);
-          case "isDiscoverableByPhoneNumber" -> when(updatedAccount.isDiscoverableByPhoneNumber()).thenAnswer(stubbing);
+          case "isDiscoverableByPrincipal" -> when(updatedAccount.isDiscoverableByPrincipal()).thenAnswer(stubbing);
           case "getNextDeviceId" -> when(updatedAccount.getNextDeviceId()).thenAnswer(stubbing);
           case "hasCapability" -> when(updatedAccount.hasCapability(stubbing.getInvocation().getArgument(0))).thenAnswer(stubbing);
           case "getRegistrationLock" -> when(updatedAccount.getRegistrationLock()).thenAnswer(stubbing);
@@ -228,7 +228,7 @@ public class AccountsHelper {
     } else {
       final ObjectMapper mapper = SystemMapper.jsonMapper();
       updatedAccount = mapper.readValue(mapper.writeValueAsBytes(account), Account.class);
-      updatedAccount.setNumber(account.getNumber(), account.getPhoneNumberIdentifier());
+      updatedAccount.setPrincipal(account.getPrincipal(), account.getPrincipalNameIdentifier());
       account.markStale();
     }
 
@@ -239,25 +239,25 @@ public class AccountsHelper {
     return argThat(other -> other.getUuid().equals(value.getUuid()));
   }
 
-  public static Account createAccount(final AccountsManager accountsManager, final String e164)
+  public static Account createAccount(final AccountsManager accountsManager, final String principal)
       throws InterruptedException {
 
-    return createAccount(accountsManager, e164, new AccountAttributes());
+    return createAccount(accountsManager, principal, new AccountAttributes());
   }
 
-  public static Account createAccount(final AccountsManager accountsManager, final String e164, final AccountAttributes accountAttributes)
+  public static Account createAccount(final AccountsManager accountsManager, final String principal, final AccountAttributes accountAttributes)
       throws InterruptedException {
 
-    return createAccount(accountsManager, e164, accountAttributes, ECKeyPair.generate(), ECKeyPair.generate());
+    return createAccount(accountsManager, principal, accountAttributes, ECKeyPair.generate(), ECKeyPair.generate());
   }
 
   public static Account createAccount(final AccountsManager accountsManager,
-      final String e164,
+      final String principal,
       final AccountAttributes accountAttributes,
       final ECKeyPair aciKeyPair,
       final ECKeyPair pniKeyPair) throws InterruptedException {
 
-    return accountsManager.create(e164,
+    return accountsManager.create(principal,
         accountAttributes,
         new ArrayList<>(),
         new IdentityKey(aciKeyPair.getPublicKey()),
@@ -268,7 +268,7 @@ public class AccountsHelper {
             "OWT",
             accountAttributes.getCapabilities(),
             accountAttributes.getRegistrationId(),
-            accountAttributes.getPhoneNumberIdentityRegistrationId(),
+            accountAttributes.getPrincipalNameIdentityRegistrationId(),
             accountAttributes.getFetchesMessages(),
             Optional.empty(),
             Optional.empty(),

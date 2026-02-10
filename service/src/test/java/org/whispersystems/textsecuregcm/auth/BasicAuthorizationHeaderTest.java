@@ -31,9 +31,20 @@ class BasicAuthorizationHeaderTest {
 
     {
       final BasicAuthorizationHeader header = BasicAuthorizationHeader.fromString("Basic " +
-          Base64.getEncoder().encodeToString("username.7:password".getBytes(StandardCharsets.UTF_8)));
+          Base64.getEncoder().encodeToString(("username" + "\0" + "7:password").getBytes(StandardCharsets.UTF_8)));
 
       assertEquals("username", header.getUsername());
+      assertEquals("password", header.getPassword());
+      assertEquals(7, header.getDeviceId());
+    }
+
+    // FLT(uoemai): Test that principals can safely contain colons and periods.
+    //              Before Flatline, principals were assumed to be phone numbers in E164 format.
+    {
+      final BasicAuthorizationHeader header = BasicAuthorizationHeader.fromString("Basic " +
+          Base64.getEncoder().encodeToString(("arn:based:principal/test.example" + "\0" + "7:password").getBytes(StandardCharsets.UTF_8)));
+
+      assertEquals("arn:based:principal/test.example", header.getUsername());
       assertEquals("password", header.getPassword());
       assertEquals(7, header.getDeviceId());
     }
@@ -59,9 +70,9 @@ class BasicAuthorizationHeaderTest {
         "Basic " + Base64.getEncoder().encodeToString("".getBytes(StandardCharsets.UTF_8)),
         "Basic " + Base64.getEncoder().encodeToString(":".getBytes(StandardCharsets.UTF_8)),
         "Basic " + Base64.getEncoder().encodeToString("test".getBytes(StandardCharsets.UTF_8)),
-        "Basic " + Base64.getEncoder().encodeToString("test.".getBytes(StandardCharsets.UTF_8)),
-        "Basic " + Base64.getEncoder().encodeToString("test.:".getBytes(StandardCharsets.UTF_8)),
-        "Basic " + Base64.getEncoder().encodeToString("test.:password".getBytes(StandardCharsets.UTF_8)),
+        "Basic " + Base64.getEncoder().encodeToString("test\0".getBytes(StandardCharsets.UTF_8)),
+        "Basic " + Base64.getEncoder().encodeToString("test\0:".getBytes(StandardCharsets.UTF_8)),
+        "Basic " + Base64.getEncoder().encodeToString("test\0:password".getBytes(StandardCharsets.UTF_8)),
         "Basic " + Base64.getEncoder().encodeToString(":password".getBytes(StandardCharsets.UTF_8)));
   }
 }

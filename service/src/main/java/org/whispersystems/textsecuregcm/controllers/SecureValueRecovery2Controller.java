@@ -107,9 +107,9 @@ public class SecureValueRecovery2Controller {
         backupServiceCredentialGenerator,
         MAX_AGE_SECONDS);
 
-    // the username associated with the provided number
+    // the username associated with the provided principal
     final Optional<String> matchingUsername = accountsManager
-        .getByE164(request.number())
+        .getByPrincipal(request.principal())
         .map(Account::getUuid)
         .map(backupServiceCredentialGenerator::generateForUuid)
         .map(ExternalServiceCredentials::username);
@@ -121,7 +121,7 @@ public class SecureValueRecovery2Controller {
             return AuthCheckResponseV2.Result.INVALID;
           }
           final String username = info.credentials().username();
-          // does this credential match the account id for the e164 provided in the request?
+          // does this credential match the account id for the principal provided in the request?
           boolean match = matchingUsername.filter(username::equals).isPresent();
           return match ? AuthCheckResponseV2.Result.MATCH : AuthCheckResponseV2.Result.NO_MATCH;
         }

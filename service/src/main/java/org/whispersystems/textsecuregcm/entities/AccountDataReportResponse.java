@@ -44,13 +44,13 @@ public record AccountDataReportResponse(UUID reportId,
     // account
     builder.append(String.format("""
             # Account
-            Phone number: %s
+            Principal: %s
             Allow sealed sender from anyone: %s
-            Find account by phone number: %s
+            Find account by principal: %s
             """,
-        data.account.phoneNumber(),
+        data.account.principal(),
         data.account.allowSealedSenderFromAnyone(),
-        data.account.findAccountByPhoneNumber()));
+        data.account.findAccountByPrincipal()));
 
     // badges
     builder.append("Badges:");
@@ -93,8 +93,8 @@ public record AccountDataReportResponse(UUID reportId,
 
   }
 
-  public record AccountDataReport(String phoneNumber, List<BadgeDataReport> badges, boolean allowSealedSenderFromAnyone,
-                                  boolean findAccountByPhoneNumber) {
+  public record AccountDataReport(String principal, List<BadgeDataReport> badges, boolean allowSealedSenderFromAnyone,
+                                  boolean findAccountByPrincipal) {
 
   }
 

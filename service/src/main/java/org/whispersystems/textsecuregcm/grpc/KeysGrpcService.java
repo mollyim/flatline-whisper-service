@@ -8,7 +8,6 @@ package org.whispersystems.textsecuregcm.grpc;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
@@ -81,7 +80,7 @@ public class KeysGrpcService extends ReactorKeysGrpc.KeysImplBase {
                 .orElseThrow(Status.UNAUTHENTICATED::asRuntimeException)))
         .flatMapMany(accountAndDeviceId -> Flux.just(
             Tuples.of(IdentityType.ACI, accountAndDeviceId.getT1().getUuid(), accountAndDeviceId.getT2()),
-            Tuples.of(IdentityType.PNI, accountAndDeviceId.getT1().getPhoneNumberIdentifier(), accountAndDeviceId.getT2())
+            Tuples.of(IdentityType.PNI, accountAndDeviceId.getT1().getPrincipalNameIdentifier(), accountAndDeviceId.getT2())
         ))
         .flatMap(identityTypeUuidAndDeviceId -> Flux.merge(
             Mono.fromFuture(() -> keysManager.getEcCount(identityTypeUuidAndDeviceId.getT2(), identityTypeUuidAndDeviceId.getT3()))

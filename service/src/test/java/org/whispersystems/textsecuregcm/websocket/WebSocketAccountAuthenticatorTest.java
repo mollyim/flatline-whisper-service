@@ -12,7 +12,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.google.common.net.HttpHeaders;
-import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import io.dropwizard.auth.basic.BasicCredentials;
 import java.time.Instant;
 import java.util.Optional;
@@ -32,13 +31,11 @@ import org.whispersystems.websocket.auth.InvalidCredentialsException;
 
 class WebSocketAccountAuthenticatorTest {
 
-  private static final String VALID_USER = PhoneNumberUtil.getInstance().format(
-      PhoneNumberUtil.getInstance().getExampleNumber("NZ"), PhoneNumberUtil.PhoneNumberFormat.E164);
+  private static final String VALID_USER = "valid.user.account@example.com";
 
   private static final String VALID_PASSWORD = "valid";
 
-  private static final String INVALID_USER = PhoneNumberUtil.getInstance().format(
-      PhoneNumberUtil.getInstance().getExampleNumber("AU"), PhoneNumberUtil.PhoneNumberFormat.E164);
+  private static final String INVALID_USER = "invalid.user.account@example.com";
 
   private static final String INVALID_PASSWORD = "invalid";
 

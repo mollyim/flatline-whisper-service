@@ -11,8 +11,6 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.i18n.phonenumbers.PhoneNumberUtil;
-import com.google.i18n.phonenumbers.Phonenumber;
 import io.dropwizard.auth.AuthFilter;
 import io.dropwizard.auth.PolymorphicAuthDynamicFeature;
 import io.dropwizard.auth.basic.BasicCredentialAuthFilter;
@@ -20,7 +18,6 @@ import io.dropwizard.auth.basic.BasicCredentials;
 import java.security.Principal;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.HashSet;
@@ -63,17 +60,17 @@ public class AuthHelper {
 
   public static final TestAccount[] TEST_ACCOUNTS = generateTestAccounts();
 
-  public static final String VALID_NUMBER   = "+14150000000";
-  public static final UUID   VALID_UUID     = UUID.randomUUID();
-  public static final UUID   VALID_PNI      = UUID.randomUUID();
-  public static final String VALID_PASSWORD = "foo";
+  public static final String VALID_PRINCIPAL = "valid.principal@example.com";
+  public static final UUID   VALID_UUID      = UUID.randomUUID();
+  public static final UUID   VALID_PNI       = UUID.randomUUID();
+  public static final String VALID_PASSWORD  = "foo";
 
-  public static final String VALID_NUMBER_TWO = "+201511111110";
-  public static final UUID   VALID_UUID_TWO    = UUID.randomUUID();
-  public static final UUID   VALID_PNI_TWO     = UUID.randomUUID();
-  public static final String VALID_PASSWORD_TWO = "baz";
+  public static final String VALID_PRINCIPAL_TWO = "valid.principal.two@example.com";
+  public static final UUID   VALID_UUID_TWO      = UUID.randomUUID();
+  public static final UUID   VALID_PNI_TWO       = UUID.randomUUID();
+  public static final String VALID_PASSWORD_TWO  = "baz";
 
-  public static final String VALID_NUMBER_3           = "+14445556666";
+  public static final String VALID_PRINCIPAL_3        = "valid.principal.3@example.com";
   public static final UUID   VALID_UUID_3             = UUID.randomUUID();
   public static final UUID   VALID_PNI_3              = UUID.randomUUID();
   public static final String VALID_PASSWORD_3_PRIMARY = "3primary";
@@ -82,10 +79,10 @@ public class AuthHelper {
   public static final UUID   INVALID_UUID     = UUID.randomUUID();
   public static final String INVALID_PASSWORD = "bar";
 
-  public static final String UNDISCOVERABLE_NUMBER   = "+18005551234";
-  public static final UUID   UNDISCOVERABLE_UUID     = UUID.randomUUID();
-  public static final UUID   UNDISCOVERABLE_PNI      = UUID.randomUUID();
-  public static final String UNDISCOVERABLE_PASSWORD = "IT'S A SECRET TO EVERYBODY.";
+  public static final String UNDISCOVERABLE_PRINCIPAL = "undiscoverable.principal@example.com";
+  public static final UUID   UNDISCOVERABLE_UUID      = UUID.randomUUID();
+  public static final UUID   UNDISCOVERABLE_PNI       = UUID.randomUUID();
+  public static final String UNDISCOVERABLE_PASSWORD  = "IT'S A SECRET TO EVERYBODY.";
 
   public static final ECKeyPair VALID_IDENTITY_KEY_PAIR = ECKeyPair.generate();
   public static final IdentityKey VALID_IDENTITY = new IdentityKey(VALID_IDENTITY_KEY_PAIR.getPublicKey());
@@ -113,7 +110,7 @@ public class AuthHelper {
   private static SaltedTokenHash VALID_CREDENTIALS_3_LINKED  = mock(SaltedTokenHash.class);
   private static SaltedTokenHash UNDISCOVERABLE_CREDENTIALS  = mock(SaltedTokenHash.class);
 
-  private static final Collection<TestAccount> EXTENSION_TEST_ACCOUNTS = new HashSet<>();
+  private static final Collection<TestAccount> SCOPED_TEST_ACCOUNTS = new HashSet<>();
 
   public static PolymorphicAuthDynamicFeature<? extends Principal> getAuthFilter() {
     when(VALID_CREDENTIALS.verify("foo")).thenReturn(true);
@@ -157,31 +154,31 @@ public class AuthHelper {
     when(UNDISCOVERABLE_ACCOUNT.getDevices()).thenReturn(List.of(UNDISCOVERABLE_DEVICE));
     when(VALID_ACCOUNT_3.getDevices()).thenReturn(List.of(VALID_DEVICE_3_PRIMARY, VALID_DEVICE_3_LINKED));
 
-    when(VALID_ACCOUNT.getNumber()).thenReturn(VALID_NUMBER);
+    when(VALID_ACCOUNT.getPrincipal()).thenReturn(VALID_PRINCIPAL);
     when(VALID_ACCOUNT.getUuid()).thenReturn(VALID_UUID);
-    when(VALID_ACCOUNT.getPhoneNumberIdentifier()).thenReturn(VALID_PNI);
+    when(VALID_ACCOUNT.getPrincipalNameIdentifier()).thenReturn(VALID_PNI);
     when(VALID_ACCOUNT.getIdentifier(IdentityType.ACI)).thenReturn(VALID_UUID);
     when(VALID_ACCOUNT.getIdentifier(IdentityType.PNI)).thenReturn(VALID_PNI);
-    when(VALID_ACCOUNT_TWO.getNumber()).thenReturn(VALID_NUMBER_TWO);
+    when(VALID_ACCOUNT_TWO.getPrincipal()).thenReturn(VALID_PRINCIPAL_TWO);
     when(VALID_ACCOUNT_TWO.getUuid()).thenReturn(VALID_UUID_TWO);
-    when(VALID_ACCOUNT_TWO.getPhoneNumberIdentifier()).thenReturn(VALID_PNI_TWO);
+    when(VALID_ACCOUNT_TWO.getPrincipalNameIdentifier()).thenReturn(VALID_PNI_TWO);
     when(VALID_ACCOUNT_TWO.getIdentifier(IdentityType.ACI)).thenReturn(VALID_UUID_TWO);
-    when(VALID_ACCOUNT_TWO.getPhoneNumberIdentifier()).thenReturn(VALID_PNI_TWO);
-    when(UNDISCOVERABLE_ACCOUNT.getNumber()).thenReturn(UNDISCOVERABLE_NUMBER);
+    when(VALID_ACCOUNT_TWO.getPrincipalNameIdentifier()).thenReturn(VALID_PNI_TWO);
+    when(UNDISCOVERABLE_ACCOUNT.getPrincipal()).thenReturn(UNDISCOVERABLE_PRINCIPAL);
     when(UNDISCOVERABLE_ACCOUNT.getUuid()).thenReturn(UNDISCOVERABLE_UUID);
-    when(UNDISCOVERABLE_ACCOUNT.getPhoneNumberIdentifier()).thenReturn(UNDISCOVERABLE_PNI);
+    when(UNDISCOVERABLE_ACCOUNT.getPrincipalNameIdentifier()).thenReturn(UNDISCOVERABLE_PNI);
     when(UNDISCOVERABLE_ACCOUNT.getIdentifier(IdentityType.ACI)).thenReturn(UNDISCOVERABLE_UUID);
     when(UNDISCOVERABLE_ACCOUNT.getIdentifier(IdentityType.PNI)).thenReturn(UNDISCOVERABLE_PNI);
-    when(VALID_ACCOUNT_3.getNumber()).thenReturn(VALID_NUMBER_3);
+    when(VALID_ACCOUNT_3.getPrincipal()).thenReturn(VALID_PRINCIPAL_3);
     when(VALID_ACCOUNT_3.getUuid()).thenReturn(VALID_UUID_3);
-    when(VALID_ACCOUNT_3.getPhoneNumberIdentifier()).thenReturn(VALID_PNI_3);
+    when(VALID_ACCOUNT_3.getPrincipalNameIdentifier()).thenReturn(VALID_PNI_3);
     when(VALID_ACCOUNT_3.getIdentifier(IdentityType.ACI)).thenReturn(VALID_UUID_3);
     when(VALID_ACCOUNT_3.getIdentifier(IdentityType.PNI)).thenReturn(VALID_PNI_3);
 
-    when(VALID_ACCOUNT.isDiscoverableByPhoneNumber()).thenReturn(true);
-    when(VALID_ACCOUNT_TWO.isDiscoverableByPhoneNumber()).thenReturn(true);
-    when(UNDISCOVERABLE_ACCOUNT.isDiscoverableByPhoneNumber()).thenReturn(false);
-    when(VALID_ACCOUNT_3.isDiscoverableByPhoneNumber()).thenReturn(true);
+    when(VALID_ACCOUNT.isDiscoverableByPrincipal()).thenReturn(true);
+    when(VALID_ACCOUNT_TWO.isDiscoverableByPrincipal()).thenReturn(true);
+    when(UNDISCOVERABLE_ACCOUNT.isDiscoverableByPrincipal()).thenReturn(false);
+    when(VALID_ACCOUNT_3.isDiscoverableByPrincipal()).thenReturn(true);
 
     when(VALID_ACCOUNT.isIdentifiedBy(new AciServiceIdentifier(VALID_UUID))).thenReturn(true);
     when(VALID_ACCOUNT.isIdentifiedBy(new PniServiceIdentifier(VALID_PNI))).thenReturn(true);
@@ -196,20 +193,20 @@ public class AuthHelper {
 
     reset(ACCOUNTS_MANAGER);
 
-    when(ACCOUNTS_MANAGER.getByE164(VALID_NUMBER)).thenReturn(Optional.of(VALID_ACCOUNT));
+    when(ACCOUNTS_MANAGER.getByPrincipal(VALID_PRINCIPAL)).thenReturn(Optional.of(VALID_ACCOUNT));
     when(ACCOUNTS_MANAGER.getByAccountIdentifier(VALID_UUID)).thenReturn(Optional.of(VALID_ACCOUNT));
-    when(ACCOUNTS_MANAGER.getByPhoneNumberIdentifier(VALID_PNI)).thenReturn(Optional.of(VALID_ACCOUNT));
+    when(ACCOUNTS_MANAGER.getByPrincipalNameIdentifier(VALID_PNI)).thenReturn(Optional.of(VALID_ACCOUNT));
 
-    when(ACCOUNTS_MANAGER.getByE164(VALID_NUMBER_TWO)).thenReturn(Optional.of(VALID_ACCOUNT_TWO));
+    when(ACCOUNTS_MANAGER.getByPrincipal(VALID_PRINCIPAL_TWO)).thenReturn(Optional.of(VALID_ACCOUNT_TWO));
     when(ACCOUNTS_MANAGER.getByAccountIdentifier(VALID_UUID_TWO)).thenReturn(Optional.of(VALID_ACCOUNT_TWO));
-    when(ACCOUNTS_MANAGER.getByPhoneNumberIdentifier(VALID_PNI_TWO)).thenReturn(Optional.of(VALID_ACCOUNT_TWO));
+    when(ACCOUNTS_MANAGER.getByPrincipalNameIdentifier(VALID_PNI_TWO)).thenReturn(Optional.of(VALID_ACCOUNT_TWO));
 
-    when(ACCOUNTS_MANAGER.getByE164(UNDISCOVERABLE_NUMBER)).thenReturn(Optional.of(UNDISCOVERABLE_ACCOUNT));
+    when(ACCOUNTS_MANAGER.getByPrincipal(UNDISCOVERABLE_PRINCIPAL)).thenReturn(Optional.of(UNDISCOVERABLE_ACCOUNT));
     when(ACCOUNTS_MANAGER.getByAccountIdentifier(UNDISCOVERABLE_UUID)).thenReturn(Optional.of(UNDISCOVERABLE_ACCOUNT));
 
-    when(ACCOUNTS_MANAGER.getByE164(VALID_NUMBER_3)).thenReturn(Optional.of(VALID_ACCOUNT_3));
+    when(ACCOUNTS_MANAGER.getByPrincipal(VALID_PRINCIPAL_3)).thenReturn(Optional.of(VALID_ACCOUNT_3));
     when(ACCOUNTS_MANAGER.getByAccountIdentifier(VALID_UUID_3)).thenReturn(Optional.of(VALID_ACCOUNT_3));
-    when(ACCOUNTS_MANAGER.getByPhoneNumberIdentifier(VALID_PNI_3)).thenReturn(Optional.of(VALID_ACCOUNT_3));
+    when(ACCOUNTS_MANAGER.getByPrincipalNameIdentifier(VALID_PNI_3)).thenReturn(Optional.of(VALID_ACCOUNT_3));
 
     AccountsHelper.setupMockUpdateForAuthHelper(ACCOUNTS_MANAGER);
 
@@ -224,15 +221,17 @@ public class AuthHelper {
   }
 
   public static String getAuthHeader(UUID uuid, byte deviceId, String password) {
-    return HeaderUtils.basicAuthHeader(uuid.toString() + "." + deviceId, password);
+    // FLT(uoemai): This separator used to be "." for phone numbers.
+    //              Since "." is allowed in the principal, it has been replaced with the null byte.
+    return HeaderUtils.basicAuthHeader(uuid.toString() + "\0" + deviceId, password);
   }
 
   public static String getAuthHeader(UUID uuid, String password) {
     return HeaderUtils.basicAuthHeader(uuid.toString(), password);
   }
 
-  public static String getProvisioningAuthHeader(String number, String password) {
-    return HeaderUtils.basicAuthHeader(number, password);
+  public static String getProvisioningAuthHeader(String principal, String password) {
+    return HeaderUtils.basicAuthHeader(principal, password);
   }
 
   public static String getUnidentifiedAccessHeader(byte[] key) {
@@ -250,15 +249,15 @@ public class AuthHelper {
   }
 
   public static final class TestAccount {
-    public final String                    number;
+    public final String                    principal;
     public final UUID                      uuid;
     public final String                    password;
     public final Account                   account                   = mock(Account.class);
     public final Device                    device                    = mock(Device.class);
     public final SaltedTokenHash saltedTokenHash = mock(SaltedTokenHash.class);
 
-    public TestAccount(String number, UUID uuid, String password) {
-      this.number = number;
+    public TestAccount(String principal, UUID uuid, String password) {
+      this.principal = principal;
       this.uuid = uuid;
       this.password = password;
     }
@@ -274,25 +273,24 @@ public class AuthHelper {
       when(device.getId()).thenReturn(Device.PRIMARY_ID);
       when(account.getDevice(Device.PRIMARY_ID)).thenReturn(Optional.of(device));
       when(account.getPrimaryDevice()).thenReturn(device);
-      when(account.getNumber()).thenReturn(number);
+      when(account.getPrincipal()).thenReturn(principal);
       when(account.getUuid()).thenReturn(uuid);
       when(account.getIdentifier(IdentityType.ACI)).thenReturn(uuid);
-      when(accountsManager.getByE164(number)).thenReturn(Optional.of(account));
+      when(accountsManager.getByPrincipal(principal)).thenReturn(Optional.of(account));
       when(accountsManager.getByAccountIdentifier(uuid)).thenReturn(Optional.of(account));
     }
 
     private void teardown(final AccountsManager accountsManager) {
       when(accountsManager.getByAccountIdentifier(uuid)).thenReturn(Optional.empty());
-      when(accountsManager.getByE164(number)).thenReturn(Optional.empty());
+      when(accountsManager.getByPrincipal(principal)).thenReturn(Optional.empty());
     }
   }
 
   private static TestAccount[] generateTestAccounts() {
     final TestAccount[] testAccounts = new TestAccount[20];
-    final long numberBase = 1_409_000_0000L;
     for (int i = 0; i < testAccounts.length; i++) {
-      long currentNumber = numberBase + i;
-      testAccounts[i] = new TestAccount("+" + currentNumber, getRandomUUID(random), "TestAccountPassword-" + currentNumber);
+      String currentPrincipal = "user.account." + i + "@example.com";
+      testAccounts[i] = new TestAccount(currentPrincipal, getRandomUUID(random), "test-password-" + i);
     }
     return testAccounts;
   }
@@ -303,26 +301,21 @@ public class AuthHelper {
   public static class AuthFilterExtension implements AfterEachCallback {
 
     public TestAccount createTestAccount() {
-      final UUID uuid = UUID.randomUUID();
-      final String region = new ArrayList<>((PhoneNumberUtil.getInstance().getSupportedRegions())).get(
-          EXTENSION_TEST_ACCOUNTS.size());
-      final Phonenumber.PhoneNumber phoneNumber = PhoneNumberUtil.getInstance().getExampleNumber(region);
-
       final TestAccount testAccount = new TestAccount(
-          PhoneNumberUtil.getInstance().format(phoneNumber, PhoneNumberUtil.PhoneNumberFormat.E164), uuid,
-          "extension-password-" + region);
+          "scoped.user.account." + SCOPED_TEST_ACCOUNTS.size() + "@example.com",
+          UUID.randomUUID(), "test-password-" + SCOPED_TEST_ACCOUNTS.size());
       testAccount.setup(ACCOUNTS_MANAGER);
 
-      EXTENSION_TEST_ACCOUNTS.add(testAccount);
+      SCOPED_TEST_ACCOUNTS.add(testAccount);
 
       return testAccount;
     }
 
     @Override
     public void afterEach(final ExtensionContext context) {
-      EXTENSION_TEST_ACCOUNTS.forEach(testAccount -> testAccount.teardown(ACCOUNTS_MANAGER));
+      SCOPED_TEST_ACCOUNTS.forEach(testAccount -> testAccount.teardown(ACCOUNTS_MANAGER));
 
-      EXTENSION_TEST_ACCOUNTS.clear();
+      SCOPED_TEST_ACCOUNTS.clear();
     }
   }
 

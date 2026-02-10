@@ -14,36 +14,36 @@ class AccountChangeValidator {
 
   private static final byte[] NO_HASH = new byte[32];
 
-  private final boolean allowNumberChange;
+  private final boolean allowPrincipalChange;
   private final boolean allowUsernameHashChange;
 
   static final AccountChangeValidator GENERAL_CHANGE_VALIDATOR = new AccountChangeValidator(false, false);
-  static final AccountChangeValidator NUMBER_CHANGE_VALIDATOR = new AccountChangeValidator(true, false);
+  static final AccountChangeValidator PRINCIPAL_CHANGE_VALIDATOR = new AccountChangeValidator(true, false);
   static final AccountChangeValidator USERNAME_CHANGE_VALIDATOR = new AccountChangeValidator(false, true);
 
   private static final Logger logger = LoggerFactory.getLogger(AccountChangeValidator.class);
 
-  AccountChangeValidator(final boolean allowNumberChange,
+  AccountChangeValidator(final boolean allowPrincipalChange,
       final boolean allowUsernameHashChange) {
 
-    this.allowNumberChange = allowNumberChange;
+    this.allowPrincipalChange = allowPrincipalChange;
     this.allowUsernameHashChange = allowUsernameHashChange;
   }
 
   public void validateChange(final Account originalAccount, final Account updatedAccount) {
-    if (!allowNumberChange) {
-      assert updatedAccount.getNumber().equals(originalAccount.getNumber());
+    if (!allowPrincipalChange) {
+      assert updatedAccount.getPrincipal().equals(originalAccount.getPrincipal());
 
-      if (!updatedAccount.getNumber().equals(originalAccount.getNumber())) {
-        logger.error("Account number changed via \"normal\" update; numbers must be changed via changeNumber method",
+      if (!updatedAccount.getPrincipal().equals(originalAccount.getPrincipal())) {
+        logger.error("Account principal changed via \"normal\" update; principals must be changed via changePrincipal method",
             new RuntimeException());
       }
 
-      assert updatedAccount.getPhoneNumberIdentifier().equals(originalAccount.getPhoneNumberIdentifier());
+      assert updatedAccount.getPrincipalNameIdentifier().equals(originalAccount.getPrincipalNameIdentifier());
 
-      if (!updatedAccount.getPhoneNumberIdentifier().equals(originalAccount.getPhoneNumberIdentifier())) {
+      if (!updatedAccount.getPrincipalNameIdentifier().equals(originalAccount.getPrincipalNameIdentifier())) {
         logger.error(
-            "Phone number identifier changed via \"normal\" update; PNIs must be changed via changeNumber method",
+            "Principal name identifier changed via \"normal\" update; PNIs must be changed via changePrincipal method",
             new RuntimeException());
       }
     }

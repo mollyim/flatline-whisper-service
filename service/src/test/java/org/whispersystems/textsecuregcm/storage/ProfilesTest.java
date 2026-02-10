@@ -49,9 +49,9 @@ public class ProfilesTest {
     final byte[] validAboutEmoji = TestRandomUtil.nextBytes(60);
     final byte[] validAbout = TestRandomUtil.nextBytes(156);
     final String avatar = "profiles/" + ProfileTestHelper.generateRandomBase64FromByteArray(16);
-    final byte[] phoneNumberSharing = TestRandomUtil.nextBytes(29);
+    final byte[] principalSharing = TestRandomUtil.nextBytes(29);
 
-    validProfile = new VersionedProfile(version, name, avatar, validAboutEmoji, validAbout, null, phoneNumberSharing, commitment);
+    validProfile = new VersionedProfile(version, name, avatar, validAboutEmoji, validAbout, null, principalSharing, commitment);
   }
 
   @Test
@@ -94,11 +94,11 @@ public class ProfilesTest {
     final byte[] differentEmoji = TestRandomUtil.nextBytes(60);
     final byte[] differentAbout = TestRandomUtil.nextBytes(156);
     final byte[] paymentAddress = TestRandomUtil.nextBytes(582);
-    final byte[] phoneNumberSharing = TestRandomUtil.nextBytes(29);
+    final byte[] principalSharing = TestRandomUtil.nextBytes(29);
     final byte[] commitment = new ProfileKey(TestRandomUtil.nextBytes(32)).getCommitment(new ServiceId.Aci(ACI)).serialize();
 
     VersionedProfile updatedProfile = new VersionedProfile(version, name, differentAvatar,
-        differentEmoji, differentAbout, paymentAddress, phoneNumberSharing, commitment);
+        differentEmoji, differentAbout, paymentAddress, principalSharing, commitment);
 
     profiles.set(ACI, updatedProfile);
 
@@ -150,11 +150,11 @@ public class ProfilesTest {
     final byte[] differentEmoji = TestRandomUtil.nextBytes(60);
     final byte[] differentAbout = TestRandomUtil.nextBytes(156);
     final String differentAvatar = "profiles/" + ProfileTestHelper.generateRandomBase64FromByteArray(16);
-    final byte[] differentPhoneNumberSharing = TestRandomUtil.nextBytes(29);
+    final byte[] differentPrincipalSharing = TestRandomUtil.nextBytes(29);
     final byte[] differentCommitment = new ProfileKey(TestRandomUtil.nextBytes(32)).getCommitment(new ServiceId.Aci(ACI)).serialize();
 
     VersionedProfile updated = new VersionedProfile(validProfile.version(), differentName, differentAvatar, differentEmoji, differentAbout, null,
-        differentPhoneNumberSharing, differentCommitment);
+        differentPrincipalSharing, differentCommitment);
     profiles.set(ACI, updated);
 
     retrieved = profiles.get(ACI, updated.version());
@@ -164,7 +164,7 @@ public class ProfilesTest {
     assertThat(retrieved.get().about()).isEqualTo(updated.about());
     assertThat(retrieved.get().aboutEmoji()).isEqualTo(updated.aboutEmoji());
     assertThat(retrieved.get().avatar()).isEqualTo(updated.avatar());
-    assertThat(retrieved.get().phoneNumberSharing()).isEqualTo(updated.phoneNumberSharing());
+    assertThat(retrieved.get().principalSharing()).isEqualTo(updated.principalSharing());
 
     // Commitment should be unchanged after an overwrite
     assertThat(retrieved.get().commitment()).isEqualTo(validProfile.commitment());
@@ -276,37 +276,37 @@ public class ProfilesTest {
     final byte[] emoji = TestRandomUtil.nextBytes(60);
     final byte[] about = TestRandomUtil.nextBytes(156);
     final byte[] paymentAddress = TestRandomUtil.nextBytes(582);
-    final byte[] phoneNumberSharing = TestRandomUtil.nextBytes(29);
+    final byte[] principalSharing = TestRandomUtil.nextBytes(29);
     final byte[] commitment = new ProfileKey(TestRandomUtil.nextBytes(32)).getCommitment(new ServiceId.Aci(ACI)).serialize();
 
     return Stream.of(
         Arguments.of(
-            new VersionedProfile(version, name, avatar, emoji, about, paymentAddress, phoneNumberSharing, commitment),
-            "SET #commitment = if_not_exists(#commitment, :commitment), #name = :name, #avatar = :avatar, #about = :about, #aboutEmoji = :aboutEmoji, #paymentAddress = :paymentAddress, #phoneNumberSharing = :phoneNumberSharing"),
+            new VersionedProfile(version, name, avatar, emoji, about, paymentAddress, principalSharing, commitment),
+            "SET #commitment = if_not_exists(#commitment, :commitment), #name = :name, #avatar = :avatar, #about = :about, #aboutEmoji = :aboutEmoji, #paymentAddress = :paymentAddress, #principalSharing = :principalSharing"),
 
         Arguments.of(
             new VersionedProfile(version, name, avatar, emoji, about, paymentAddress, null, commitment),
-            "SET #commitment = if_not_exists(#commitment, :commitment), #name = :name, #avatar = :avatar, #about = :about, #aboutEmoji = :aboutEmoji, #paymentAddress = :paymentAddress REMOVE #phoneNumberSharing"),
+            "SET #commitment = if_not_exists(#commitment, :commitment), #name = :name, #avatar = :avatar, #about = :about, #aboutEmoji = :aboutEmoji, #paymentAddress = :paymentAddress REMOVE #principalSharing"),
 
         Arguments.of(
             new VersionedProfile(version, name, avatar, emoji, about, null, null, commitment),
-            "SET #commitment = if_not_exists(#commitment, :commitment), #name = :name, #avatar = :avatar, #about = :about, #aboutEmoji = :aboutEmoji REMOVE #paymentAddress, #phoneNumberSharing"),
+            "SET #commitment = if_not_exists(#commitment, :commitment), #name = :name, #avatar = :avatar, #about = :about, #aboutEmoji = :aboutEmoji REMOVE #paymentAddress, #principalSharing"),
 
         Arguments.of(
             new VersionedProfile(version, name, avatar, emoji, null, null, null, commitment),
-            "SET #commitment = if_not_exists(#commitment, :commitment), #name = :name, #avatar = :avatar, #aboutEmoji = :aboutEmoji REMOVE #about, #paymentAddress, #phoneNumberSharing"),
+            "SET #commitment = if_not_exists(#commitment, :commitment), #name = :name, #avatar = :avatar, #aboutEmoji = :aboutEmoji REMOVE #about, #paymentAddress, #principalSharing"),
 
         Arguments.of(
             new VersionedProfile(version, name, avatar, null, null, null, null, commitment),
-            "SET #commitment = if_not_exists(#commitment, :commitment), #name = :name, #avatar = :avatar REMOVE #about, #aboutEmoji, #paymentAddress, #phoneNumberSharing"),
+            "SET #commitment = if_not_exists(#commitment, :commitment), #name = :name, #avatar = :avatar REMOVE #about, #aboutEmoji, #paymentAddress, #principalSharing"),
 
         Arguments.of(
             new VersionedProfile(version, name, null, null, null, null, null, commitment),
-            "SET #commitment = if_not_exists(#commitment, :commitment), #name = :name REMOVE #avatar, #about, #aboutEmoji, #paymentAddress, #phoneNumberSharing"),
+            "SET #commitment = if_not_exists(#commitment, :commitment), #name = :name REMOVE #avatar, #about, #aboutEmoji, #paymentAddress, #principalSharing"),
 
         Arguments.of(
             new VersionedProfile(version, null, null, null, null, null, null, commitment),
-            "SET #commitment = if_not_exists(#commitment, :commitment) REMOVE #name, #avatar, #about, #aboutEmoji, #paymentAddress, #phoneNumberSharing")
+            "SET #commitment = if_not_exists(#commitment, :commitment) REMOVE #name, #avatar, #about, #aboutEmoji, #paymentAddress, #principalSharing")
     );
   }
 
@@ -323,12 +323,12 @@ public class ProfilesTest {
     final byte[] emoji = TestRandomUtil.nextBytes(60);
     final byte[] about = TestRandomUtil.nextBytes(156);
     final byte[] paymentAddress = TestRandomUtil.nextBytes(582);
-    final byte[] phoneNumberSharing = TestRandomUtil.nextBytes(29);
+    final byte[] principalSharing = TestRandomUtil.nextBytes(29);
     final byte[] commitment = new ProfileKey(TestRandomUtil.nextBytes(32)).getCommitment(new ServiceId.Aci(ACI)).serialize();
 
     return Stream.of(
         Arguments.of(
-            new VersionedProfile(version, name, avatar, emoji, about, paymentAddress, phoneNumberSharing, commitment),
+            new VersionedProfile(version, name, avatar, emoji, about, paymentAddress, principalSharing, commitment),
             Map.of(
                 ":commitment", AttributeValues.fromByteArray(commitment),
                 ":name", AttributeValues.fromByteArray(name),
@@ -336,7 +336,7 @@ public class ProfilesTest {
                 ":aboutEmoji", AttributeValues.fromByteArray(emoji),
                 ":about", AttributeValues.fromByteArray(about),
                 ":paymentAddress", AttributeValues.fromByteArray(paymentAddress),
-                ":phoneNumberSharing", AttributeValues.fromByteArray(phoneNumberSharing))),
+                ":principalSharing", AttributeValues.fromByteArray(principalSharing))),
 
         Arguments.of(
             new VersionedProfile(version, name, avatar, emoji, about, paymentAddress, null, commitment),

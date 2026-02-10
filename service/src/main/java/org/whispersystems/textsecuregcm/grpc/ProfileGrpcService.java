@@ -105,7 +105,7 @@ public class ProfileGrpcService extends SimpleProfileGrpc.ProfileImplBase {
     if (!request.getPaymentAddress().isEmpty()) {
       final boolean hasDisallowedPrefix =
           dynamicConfigurationManager.getConfiguration().getPaymentsConfiguration().getDisallowedPrefixes().stream()
-              .anyMatch(prefix -> account.getNumber().startsWith(prefix));
+              .anyMatch(prefix -> account.getPrincipal().startsWith(prefix));
       if (hasDisallowedPrefix && maybeProfile.map(VersionedProfile::paymentAddress).isEmpty()) {
         throw Status.PERMISSION_DENIED.asException();
       }
@@ -132,7 +132,7 @@ public class ProfileGrpcService extends SimpleProfileGrpc.ProfileImplBase {
             request.getAboutEmoji().toByteArray(),
             request.getAbout().toByteArray(),
             request.getPaymentAddress().toByteArray(),
-            request.getPhoneNumberSharing().toByteArray(),
+            request.getPrincipalSharing().toByteArray(),
             request.getCommitment().toByteArray()));
 
     accountsManager.update(account, a -> {

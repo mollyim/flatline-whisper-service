@@ -37,7 +37,7 @@ public record DeviceSpec(
     device.setAuthTokenHash(SaltedTokenHash.generateFor(password()));
     device.setFetchesMessages(fetchesMessages());
     device.setRegistrationId(aciRegistrationId());
-    device.setPhoneNumberIdentityRegistrationId(pniRegistrationId());
+    device.setPrincipalNameIdentityRegistrationId(pniRegistrationId());
     device.setName(deviceNameCiphertext());
     device.setCapabilities(capabilities());
     device.setCreated(created);

@@ -162,7 +162,7 @@ public class ProfileController {
     if (request.paymentAddress() != null && request.paymentAddress().length != 0) {
       final boolean hasDisallowedPrefix =
           dynamicConfigurationManager.getConfiguration().getPaymentsConfiguration().getDisallowedPrefixes().stream()
-              .anyMatch(prefix -> account.getNumber().startsWith(prefix));
+              .anyMatch(prefix -> account.getPrincipal().startsWith(prefix));
 
       if (hasDisallowedPrefix && currentProfile.map(VersionedProfile::paymentAddress).isEmpty()) {
         return Response.status(Response.Status.FORBIDDEN).build();
@@ -189,7 +189,7 @@ public class ProfileController {
             request.aboutEmoji(),
             request.about(),
             request.paymentAddress(),
-            request.phoneNumberSharing(),
+            request.principalSharing(),
             request.commitment().serialize()));
 
     if (request.getAvatarChange() != CreateProfileRequest.AvatarChange.UNCHANGED) {
@@ -313,7 +313,7 @@ public class ProfileController {
       case ACI -> buildBaseProfileResponseForAccountIdentity(targetAccount,
           maybeRequester.map(requester -> ProfileHelper.isSelfProfileRequest(requester.getUuid(), identifier)).orElse(false),
           containerRequestContext);
-      case PNI -> buildBaseProfileResponseForPhoneNumberIdentity(targetAccount);
+      case PNI -> buildBaseProfileResponseForPrincipalNameIdentity(targetAccount);
     };
   }
 
@@ -424,7 +424,7 @@ public class ProfileController {
     final byte[] about = maybeProfile.map(VersionedProfile::about).orElse(null);
     final byte[] aboutEmoji = maybeProfile.map(VersionedProfile::aboutEmoji).orElse(null);
     final String avatar = maybeProfile.map(VersionedProfile::avatar).orElse(null);
-    final byte[] phoneNumberSharing = maybeProfile.map(VersionedProfile::phoneNumberSharing).orElse(null);
+    final byte[] principalSharing = maybeProfile.map(VersionedProfile::principalSharing).orElse(null);
 
     // Allow requests where either the version matches the latest version on Account or the latest version on Account
     // is empty to read the payment address.
@@ -435,7 +435,7 @@ public class ProfileController {
 
     return new VersionedProfileResponse(
         buildBaseProfileResponseForAccountIdentity(account, isSelf, containerRequestContext),
-        name, about, aboutEmoji, avatar, paymentAddress, phoneNumberSharing);
+        name, about, aboutEmoji, avatar, paymentAddress, principalSharing);
   }
 
   private BaseProfileResponse buildBaseProfileResponseForAccountIdentity(final Account account,
@@ -453,13 +453,13 @@ public class ProfileController {
         new AciServiceIdentifier(account.getUuid()));
   }
 
-  private BaseProfileResponse buildBaseProfileResponseForPhoneNumberIdentity(final Account account) {
+  private BaseProfileResponse buildBaseProfileResponseForPrincipalNameIdentity(final Account account) {
     return new BaseProfileResponse(account.getIdentityKey(IdentityType.PNI),
         null,
         false,
         getAccountCapabilities(account),
         Collections.emptyList(),
-        new PniServiceIdentifier(account.getPhoneNumberIdentifier()));
+        new PniServiceIdentifier(account.getPrincipalNameIdentifier()));
   }
 
   /**

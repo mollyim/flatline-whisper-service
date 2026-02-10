@@ -16,7 +16,7 @@ import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.StatusException;
 import java.util.Map;
-import org.whispersystems.textsecuregcm.grpc.validators.E164FieldValidator;
+import org.whispersystems.textsecuregcm.grpc.validators.PrincipalFieldValidator;
 import org.whispersystems.textsecuregcm.grpc.validators.EnumSpecifiedFieldValidator;
 import org.whispersystems.textsecuregcm.grpc.validators.ExactlySizeFieldValidator;
 import org.whispersystems.textsecuregcm.grpc.validators.FieldValidator;
@@ -31,7 +31,7 @@ public class ValidatingInterceptor implements ServerInterceptor {
       "org.signal.chat.require.nonEmpty", new NonEmptyFieldValidator(),
       "org.signal.chat.require.present", new PresentFieldValidator(),
       "org.signal.chat.require.specified", new EnumSpecifiedFieldValidator(),
-      "org.signal.chat.require.e164", new E164FieldValidator(),
+      "org.signal.chat.require.principal", new PrincipalFieldValidator(),
       "org.signal.chat.require.exactlySize", new ExactlySizeFieldValidator(),
       "org.signal.chat.require.range", new RangeFieldValidator(),
       "org.signal.chat.require.size", new SizeFieldValidator()

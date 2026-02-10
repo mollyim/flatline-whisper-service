@@ -20,7 +20,7 @@ import java.util.List;
 import javax.annotation.Nullable;
 import org.apache.commons.lang3.StringUtils;
 import org.whispersystems.textsecuregcm.controllers.RateLimitExceededException;
-import org.whispersystems.textsecuregcm.entities.PhoneVerificationRequest;
+import org.whispersystems.textsecuregcm.entities.PrincipalVerificationRequest;
 import org.whispersystems.textsecuregcm.entities.RegistrationLockFailure;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
@@ -35,7 +35,7 @@ import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsMan
 public class RegistrationLockVerificationManager {
   public enum Flow {
     REGISTRATION,
-    CHANGE_NUMBER
+    CHANGE_PRINCIPAL
   }
 
   @VisibleForTesting
@@ -50,7 +50,7 @@ public class RegistrationLockVerificationManager {
   private static final String ALREADY_LOCKED_TAG_NAME = "alreadyLocked";
   private static final String REGISTRATION_LOCK_VERIFICATION_FLOW_TAG_NAME = "flow";
   private static final String REGISTRATION_LOCK_MATCHES_TAG_NAME = "registrationLockMatches";
-  private static final String PHONE_VERIFICATION_TYPE_TAG_NAME = "phoneVerificationType";
+  private static final String PRINCIPAL_VERIFICATION_TYPE_TAG_NAME = "principalVerificationType";
 
   private final AccountsManager accounts;
   private final DisconnectionRequestManager disconnectionRequestManager;
@@ -85,12 +85,12 @@ public class RegistrationLockVerificationManager {
   public void verifyRegistrationLock(final Account account, @Nullable final String clientRegistrationLock,
       final String userAgent,
       final Flow flow,
-      final PhoneVerificationRequest.VerificationType phoneVerificationType
+      final PrincipalVerificationRequest.VerificationType principalVerificationType
   ) throws RateLimitExceededException, WebApplicationException {
 
     final Tags expiredTags = Tags.of(UserAgentTagUtil.getPlatformTag(userAgent),
         Tag.of(REGISTRATION_LOCK_VERIFICATION_FLOW_TAG_NAME, flow.name()),
-        Tag.of(PHONE_VERIFICATION_TYPE_TAG_NAME, phoneVerificationType.name())
+        Tag.of(PRINCIPAL_VERIFICATION_TYPE_TAG_NAME, principalVerificationType.name())
     );
 
     final StoredRegistrationLock existingRegistrationLock = account.getRegistrationLock();
@@ -108,10 +108,10 @@ public class RegistrationLockVerificationManager {
     }
 
     if (StringUtils.isNotEmpty(clientRegistrationLock)) {
-      rateLimiters.getPinLimiter().validate(account.getNumber());
+      rateLimiters.getPinLimiter().validate(account.getPrincipal());
     }
 
-    final String phoneNumber = account.getNumber();
+    final String principal = account.getPrincipal();
     final boolean registrationLockMatches = existingRegistrationLock.verify(clientRegistrationLock);
     final boolean alreadyLocked = account.hasLockedCredentials();
 
@@ -135,10 +135,10 @@ public class RegistrationLockVerificationManager {
     registrationLockIdleDays.record(timeSinceLastSeen.toDays());
 
     if (!registrationLockMatches) {
-      // At this point, the client verified ownership of the phone number but doesn’t have the reglock PIN.
+      // At this point, the client verified ownership of the principal but doesn’t have the reglock PIN.
       // Freezing the existing account credentials will definitively start the reglock timeout.
       // Until the timeout, the current reglock can still be supplied,
-      // along with phone number verification, to restore access.
+      // along with principal verification, to restore access.
       final Account updatedAccount;
       if (!alreadyLocked) {
         updatedAccount = accounts.update(account, Account::lockAuthTokenHash);
@@ -152,7 +152,7 @@ public class RegistrationLockVerificationManager {
       // if the user verified correctly via registration recovery password and sent an empty token.
       // This allows users to re-register via registration recovery password
       // instead of always being forced to fall back to SMS verification.
-      if (!phoneVerificationType.equals(PhoneVerificationRequest.VerificationType.RECOVERY_PASSWORD) || clientRegistrationLock != null) {
+      if (!principalVerificationType.equals(PrincipalVerificationRequest.VerificationType.RECOVERY_PASSWORD) || clientRegistrationLock != null) {
         registrationRecoveryPasswordsManager.remove(updatedAccount.getIdentifier(IdentityType.PNI));
       }
 
@@ -173,7 +173,7 @@ public class RegistrationLockVerificationManager {
           .build());
     }
 
-    rateLimiters.getPinLimiter().clear(phoneNumber);
+    rateLimiters.getPinLimiter().clear(principal);
   }
 
   private @Nullable ExternalServiceCredentials svr2FailureCredentials(final StoredRegistrationLock existingRegistrationLock, final Account account) {

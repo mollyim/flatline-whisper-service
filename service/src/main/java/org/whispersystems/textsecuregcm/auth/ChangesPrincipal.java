@@ -11,10 +11,10 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Indicates that an endpoint changes the phone number and PNI keys associated with an account, and that
+ * Indicates that an endpoint changes the principal and PNI keys associated with an account, and that
  * any websockets associated with the account may need to be refreshed after a call to that endpoint.
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface ChangesPhoneNumber {
+public @interface ChangesPrincipal {
 }

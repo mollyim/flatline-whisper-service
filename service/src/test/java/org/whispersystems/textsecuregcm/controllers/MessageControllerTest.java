@@ -107,7 +107,7 @@ import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.ClientReleaseManager;
 import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
-import org.whispersystems.textsecuregcm.storage.PhoneNumberIdentifiers;
+import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RemovedMessage;
 import org.whispersystems.textsecuregcm.storage.ReportMessageManager;
 import org.whispersystems.textsecuregcm.tests.util.AccountsHelper;
@@ -128,7 +128,7 @@ import reactor.core.scheduler.Schedulers;
 @ExtendWith(DropwizardExtensionsSupport.class)
 class MessageControllerTest {
 
-  private static final String SINGLE_DEVICE_RECIPIENT = "+14151111111";
+  private static final String SINGLE_DEVICE_RECIPIENT = "user.account1@example.com";
   private static final UUID SINGLE_DEVICE_UUID = UUID.randomUUID();
   private static final AciServiceIdentifier SINGLE_DEVICE_ACI_ID = new AciServiceIdentifier(SINGLE_DEVICE_UUID);
   private static final UUID SINGLE_DEVICE_PNI = UUID.randomUUID();
@@ -137,7 +137,7 @@ class MessageControllerTest {
   private static final int SINGLE_DEVICE_REG_ID1 = 111;
   private static final int SINGLE_DEVICE_PNI_REG_ID1 = 1111;
 
-  private static final String MULTI_DEVICE_RECIPIENT = "+14152222222";
+  private static final String MULTI_DEVICE_RECIPIENT = "user.account2@example.com";
   private static final UUID MULTI_DEVICE_UUID = UUID.randomUUID();
   private static final AciServiceIdentifier MULTI_DEVICE_ACI_ID = new AciServiceIdentifier(MULTI_DEVICE_UUID);
   private static final UUID MULTI_DEVICE_PNI = UUID.randomUUID();
@@ -171,7 +171,7 @@ class MessageControllerTest {
   private static final RateLimiters rateLimiters = mock(RateLimiters.class);
   private static final CardinalityEstimator cardinalityEstimator = mock(CardinalityEstimator.class);
   private static final RateLimiter rateLimiter = mock(RateLimiter.class);
-  private static final PhoneNumberIdentifiers phoneNumberIdentifiers = mock(PhoneNumberIdentifiers.class);
+  private static final PrincipalNameIdentifiers PRINCIPAL_NAME_IDENTIFIERS = mock(PrincipalNameIdentifiers.class);
   private static final PushNotificationManager pushNotificationManager = mock(PushNotificationManager.class);
   private static final PushNotificationScheduler pushNotificationScheduler = mock(PushNotificationScheduler.class);
   private static final ReportMessageManager reportMessageManager = mock(ReportMessageManager.class);
@@ -193,7 +193,7 @@ class MessageControllerTest {
       .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
       .addResource(
           new MessageController(rateLimiters, cardinalityEstimator, messageSender, receiptSender, accountsManager,
-              messagesManager, phoneNumberIdentifiers, pushNotificationManager, pushNotificationScheduler,
+              messagesManager, PRINCIPAL_NAME_IDENTIFIERS, pushNotificationManager, pushNotificationScheduler,
               reportMessageManager, messageDeliveryScheduler, mock(ClientReleaseManager.class),
               serverSecretParams, SpamChecker.noop(), new MessageMetrics(), mock(MessageDeliveryLoopMonitor.class),
               clock))
@@ -258,7 +258,7 @@ class MessageControllerTest {
     final Device device = new Device();
     device.setId(id);
     device.setRegistrationId(registrationId);
-    device.setPhoneNumberIdentityRegistrationId(pniRegistrationId);
+    device.setPrincipalNameIdentityRegistrationId(pniRegistrationId);
     device.setFetchesMessages(enabled);
 
     return device;
@@ -275,7 +275,7 @@ class MessageControllerTest {
         rateLimiters,
         rateLimiter,
         cardinalityEstimator,
-        phoneNumberIdentifiers,
+        PRINCIPAL_NAME_IDENTIFIERS,
         pushNotificationManager,
         reportMessageManager
     );
@@ -873,8 +873,8 @@ class MessageControllerTest {
   }
 
   @Test
-  void testReportMessageByE164() {
-    final String senderNumber = "+12125550001";
+  void testReportMessageByPrincipal() {
+    final String senderPrincipal = "user.account@example.com";
     final UUID senderAci = UUID.randomUUID();
     final UUID senderPni = UUID.randomUUID();
     final String userAgent = "user-agent";
@@ -882,14 +882,14 @@ class MessageControllerTest {
 
     final Account account = mock(Account.class);
     when(account.getUuid()).thenReturn(senderAci);
-    when(account.getNumber()).thenReturn(senderNumber);
-    when(account.getPhoneNumberIdentifier()).thenReturn(senderPni);
+    when(account.getPrincipal()).thenReturn(senderPrincipal);
+    when(account.getPrincipalNameIdentifier()).thenReturn(senderPni);
 
-    when(accountsManager.getByE164(senderNumber)).thenReturn(Optional.of(account));
+    when(accountsManager.getByPrincipal(senderPrincipal)).thenReturn(Optional.of(account));
 
     try (final Response response =
         resources.getJerseyTest()
-            .target(String.format("/v1/messages/report/%s/%s", senderNumber, messageGuid))
+            .target(String.format("/v1/messages/report/%s/%s", senderPrincipal, messageGuid))
             .request()
             .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
             .header(HttpHeaders.USER_AGENT, userAgent)
@@ -897,16 +897,16 @@ class MessageControllerTest {
 
       assertThat(response.getStatus(), is(equalTo(202)));
 
-      verify(reportMessageManager).report(Optional.of(senderNumber), Optional.of(senderAci), Optional.of(senderPni),
+      verify(reportMessageManager).report(Optional.of(senderPrincipal), Optional.of(senderAci), Optional.of(senderPni),
           messageGuid, AuthHelper.VALID_UUID, Optional.empty(), userAgent);
-      verify(accountsManager, never()).findRecentlyDeletedPhoneNumberIdentifier(any(UUID.class));
-      verify(phoneNumberIdentifiers, never()).getPhoneNumber(any());
+      verify(accountsManager, never()).findRecentlyDeletedprincipalNameIdentifier(any(UUID.class));
+      verify(PRINCIPAL_NAME_IDENTIFIERS, never()).getPrincipal(any());
     }
   }
 
   @Test
-  void testReportMesageByE164DeletedAccount() {
-    final String senderNumber = "+12125550001";
+  void testReportMessageByPrincipalDeletedAccount() {
+    final String senderPrincipal = "user.account@example.com";
     final UUID senderAci = UUID.randomUUID();
     final UUID senderPni = UUID.randomUUID();
     final String userAgent = "user-agent";
@@ -914,16 +914,16 @@ class MessageControllerTest {
 
     final Account account = mock(Account.class);
     when(account.getUuid()).thenReturn(senderAci);
-    when(account.getNumber()).thenReturn(senderNumber);
-    when(account.getPhoneNumberIdentifier()).thenReturn(senderPni);
+    when(account.getPrincipal()).thenReturn(senderPrincipal);
+    when(account.getPrincipalNameIdentifier()).thenReturn(senderPni);
 
-    when(accountsManager.getByE164(senderNumber)).thenReturn(Optional.empty());
-    when(phoneNumberIdentifiers.getPhoneNumberIdentifier(senderNumber)).thenReturn(CompletableFuture.completedFuture(senderPni));
+    when(accountsManager.getByPrincipal(senderPrincipal)).thenReturn(Optional.empty());
+    when(PRINCIPAL_NAME_IDENTIFIERS.getPrincipalNameIdentifier(senderPrincipal)).thenReturn(CompletableFuture.completedFuture(senderPni));
     when(accountsManager.findRecentlyDeletedAccountIdentifier(senderPni)).thenReturn(Optional.of(senderAci));
 
     try (final Response response =
         resources.getJerseyTest()
-            .target(String.format("/v1/messages/report/%s/%s", senderNumber, messageGuid))
+            .target(String.format("/v1/messages/report/%s/%s", senderPrincipal, messageGuid))
             .request()
             .header("Authorization", AuthHelper.getAuthHeader(AuthHelper.VALID_UUID, AuthHelper.VALID_PASSWORD))
             .header(HttpHeaders.USER_AGENT, userAgent)
@@ -931,14 +931,14 @@ class MessageControllerTest {
 
       assertThat(response.getStatus(), is(equalTo(202)));
 
-      verify(reportMessageManager).report(Optional.of(senderNumber), Optional.of(senderAci), Optional.of(senderPni),
+      verify(reportMessageManager).report(Optional.of(senderPrincipal), Optional.of(senderAci), Optional.of(senderPni),
           messageGuid, AuthHelper.VALID_UUID, Optional.empty(), userAgent);
     }
   }
 
   @Test
   void testReportMessageByAci() {
-    final String senderNumber = "+12125550001";
+    final String senderPrincipal = "user.account@example.com";
     final UUID senderAci = UUID.randomUUID();
     final UUID senderPni = UUID.randomUUID();
     final String userAgent = "user-agent";
@@ -946,11 +946,11 @@ class MessageControllerTest {
 
     final Account account = mock(Account.class);
     when(account.getUuid()).thenReturn(senderAci);
-    when(account.getNumber()).thenReturn(senderNumber);
-    when(account.getPhoneNumberIdentifier()).thenReturn(senderPni);
+    when(account.getPrincipal()).thenReturn(senderPrincipal);
+    when(account.getPrincipalNameIdentifier()).thenReturn(senderPni);
 
     when(accountsManager.getByAccountIdentifier(senderAci)).thenReturn(Optional.of(account));
-    when(phoneNumberIdentifiers.getPhoneNumber(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderNumber)));
+    when(PRINCIPAL_NAME_IDENTIFIERS.getPrincipal(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderPrincipal)));
 
     try (final Response response =
         resources.getJerseyTest()
@@ -962,16 +962,16 @@ class MessageControllerTest {
 
       assertThat(response.getStatus(), is(equalTo(202)));
 
-      verify(reportMessageManager).report(Optional.of(senderNumber), Optional.of(senderAci), Optional.of(senderPni),
+      verify(reportMessageManager).report(Optional.of(senderPrincipal), Optional.of(senderAci), Optional.of(senderPni),
           messageGuid, AuthHelper.VALID_UUID, Optional.empty(), userAgent);
-      verify(accountsManager, never()).findRecentlyDeletedPhoneNumberIdentifier(any(UUID.class));
-      verify(phoneNumberIdentifiers, never()).getPhoneNumber(any());
+      verify(accountsManager, never()).findRecentlyDeletedprincipalNameIdentifier(any(UUID.class));
+      verify(PRINCIPAL_NAME_IDENTIFIERS, never()).getPrincipal(any());
     }
   }
 
   @Test
   void testReportMessageByAciDeletedAccount() {
-    final String senderNumber = "+12125550001";
+    final String senderPrincipal = "user.account@example.com";
     final UUID senderAci = UUID.randomUUID();
     final UUID senderPni = UUID.randomUUID();
     final String userAgent = "user-agent";
@@ -979,12 +979,12 @@ class MessageControllerTest {
 
     final Account account = mock(Account.class);
     when(account.getUuid()).thenReturn(senderAci);
-    when(account.getNumber()).thenReturn(senderNumber);
-    when(account.getPhoneNumberIdentifier()).thenReturn(senderPni);
+    when(account.getPrincipal()).thenReturn(senderPrincipal);
+    when(account.getPrincipalNameIdentifier()).thenReturn(senderPni);
 
     when(accountsManager.getByAccountIdentifier(senderAci)).thenReturn(Optional.empty());
-    when(accountsManager.findRecentlyDeletedPhoneNumberIdentifier(senderAci)).thenReturn(Optional.of(senderPni));
-    when(phoneNumberIdentifiers.getPhoneNumber(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderNumber)));
+    when(accountsManager.findRecentlyDeletedprincipalNameIdentifier(senderAci)).thenReturn(Optional.of(senderPni));
+    when(PRINCIPAL_NAME_IDENTIFIERS.getPrincipal(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderPrincipal)));
 
     try (final Response response =
         resources.getJerseyTest()
@@ -996,7 +996,7 @@ class MessageControllerTest {
 
       assertThat(response.getStatus(), is(equalTo(202)));
 
-      verify(reportMessageManager).report(Optional.of(senderNumber), Optional.of(senderAci), Optional.of(senderPni),
+      verify(reportMessageManager).report(Optional.of(senderPrincipal), Optional.of(senderAci), Optional.of(senderPni),
           messageGuid, AuthHelper.VALID_UUID, Optional.empty(), userAgent);
     }
   }
@@ -1004,19 +1004,19 @@ class MessageControllerTest {
   @Test
   void testReportMessageByAciWithSpamReportToken() {
 
-    final String senderNumber = "+12125550001";
+    final String senderPrincipal = "user.account@example.com";
     final UUID senderAci = UUID.randomUUID();
     final UUID senderPni = UUID.randomUUID();
     UUID messageGuid = UUID.randomUUID();
 
     final Account account = mock(Account.class);
     when(account.getUuid()).thenReturn(senderAci);
-    when(account.getNumber()).thenReturn(senderNumber);
-    when(account.getPhoneNumberIdentifier()).thenReturn(senderPni);
+    when(account.getPrincipal()).thenReturn(senderPrincipal);
+    when(account.getPrincipalNameIdentifier()).thenReturn(senderPni);
 
     when(accountsManager.getByAccountIdentifier(senderAci)).thenReturn(Optional.of(account));
-    when(accountsManager.findRecentlyDeletedPhoneNumberIdentifier(senderAci)).thenReturn(Optional.of(senderPni));
-    when(phoneNumberIdentifiers.getPhoneNumber(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderNumber)));
+    when(accountsManager.findRecentlyDeletedprincipalNameIdentifier(senderAci)).thenReturn(Optional.of(senderPni));
+    when(PRINCIPAL_NAME_IDENTIFIERS.getPrincipal(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderPrincipal)));
 
     Entity<SpamReport> entity = Entity.entity(new SpamReport(new byte[3]), "application/json");
 
@@ -1028,15 +1028,15 @@ class MessageControllerTest {
             .post(entity)) {
 
       assertThat(response.getStatus(), is(equalTo(202)));
-      verify(reportMessageManager).report(eq(Optional.of(senderNumber)),
+      verify(reportMessageManager).report(eq(Optional.of(senderPrincipal)),
           eq(Optional.of(senderAci)),
           eq(Optional.of(senderPni)),
           eq(messageGuid),
           eq(AuthHelper.VALID_UUID),
           argThat(maybeBytes -> maybeBytes.map(bytes -> Arrays.equals(bytes, new byte[3])).orElse(false)),
           any());
-      verify(accountsManager, never()).findRecentlyDeletedPhoneNumberIdentifier(any(UUID.class));
-      verify(phoneNumberIdentifiers, never()).getPhoneNumber(any());
+      verify(accountsManager, never()).findRecentlyDeletedprincipalNameIdentifier(any(UUID.class));
+      verify(PRINCIPAL_NAME_IDENTIFIERS, never()).getPrincipal(any());
     }
 
     when(accountsManager.getByAccountIdentifier(senderAci)).thenReturn(Optional.empty());
@@ -1053,7 +1053,7 @@ class MessageControllerTest {
             .post(entity)) {
 
       assertThat(response.getStatus(), is(equalTo(202)));
-      verify(reportMessageManager).report(eq(Optional.of(senderNumber)),
+      verify(reportMessageManager).report(eq(Optional.of(senderPrincipal)),
           eq(Optional.of(senderAci)),
           eq(Optional.of(senderPni)),
           eq(messageGuid),
@@ -1067,19 +1067,19 @@ class MessageControllerTest {
   @MethodSource
   void testReportMessageByAciWithNullSpamReportToken(Entity<?> entity, boolean expectOk) {
 
-    final String senderNumber = "+12125550001";
+    final String senderPrincipal = "user.account@example.com";
     final UUID senderAci = UUID.randomUUID();
     final UUID senderPni = UUID.randomUUID();
     UUID messageGuid = UUID.randomUUID();
 
     final Account account = mock(Account.class);
     when(account.getUuid()).thenReturn(senderAci);
-    when(account.getNumber()).thenReturn(senderNumber);
-    when(account.getPhoneNumberIdentifier()).thenReturn(senderPni);
+    when(account.getPrincipal()).thenReturn(senderPrincipal);
+    when(account.getPrincipalNameIdentifier()).thenReturn(senderPni);
 
     when(accountsManager.getByAccountIdentifier(senderAci)).thenReturn(Optional.of(account));
-    when(accountsManager.findRecentlyDeletedPhoneNumberIdentifier(senderAci)).thenReturn(Optional.of(senderPni));
-    when(phoneNumberIdentifiers.getPhoneNumber(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderNumber)));
+    when(accountsManager.findRecentlyDeletedprincipalNameIdentifier(senderAci)).thenReturn(Optional.of(senderPni));
+    when(PRINCIPAL_NAME_IDENTIFIERS.getPrincipal(senderPni)).thenReturn(CompletableFuture.completedFuture(List.of(senderPrincipal)));
 
     try (final Response response =
         resources.getJerseyTest()

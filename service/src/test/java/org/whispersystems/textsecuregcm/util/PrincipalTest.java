@@ -16,62 +16,62 @@ import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
-public class E164Test {
+public class PrincipalTest {
 
   private static final Validator VALIDATOR = Validation.buildDefaultValidatorFactory().getValidator();
 
-  private static final String E164_VALID = "+18005550123";
+  private static final String PRINCIPAL_VALID = "valid.principal@example.com";
 
-  private static final String E164_INVALID = "1(800)555-0123";
+  private static final String PRINCIPAL_INVALID = "invalid.principal.¥€Š";
 
   private static final String EMPTY = "";
 
   @SuppressWarnings("FieldCanBeLocal")
   private static class Data {
 
-    @E164
-    private final String number;
+    @Principal
+    private final String principal;
 
-    @E164
-    private final Optional<String> optionalNumber;
+    @Principal
+    private final Optional<String> optionalPrincipal;
 
-    private Data(final String number, final Optional<String> optionalNumber) {
-      this.number = number;
-      this.optionalNumber = optionalNumber;
+    private Data(final String principal, final Optional<String> optionalPrincipal) {
+      this.principal = principal;
+      this.optionalPrincipal = optionalPrincipal;
     }
   }
 
   private static class Methods {
 
-    public void foo(@E164 final String number, @E164 final Optional<String> optionalNumber) {
+    public void foo(@Principal final String principal, @Principal final Optional<String> optionalPrincipal) {
       // noop
     }
 
-    @E164
+    @Principal
     public String bar() {
       return "nevermind";
     }
 
-    @E164
+    @Principal
     public Optional<String> barOptionalString() {
       return Optional.of("nevermind");
     }
   }
 
-  private record Rec(@E164 String number, @E164 Optional<String> optionalNumber) {
+  private record Rec(@Principal String principal, @Principal Optional<String> optionalPrincipal) {
   }
 
   @Test
   public void testRecord() {
-    checkNoViolations(new Rec(E164_VALID, Optional.of(E164_VALID)));
-    checkHasViolations(new Rec(E164_INVALID, Optional.of(E164_INVALID)));
+    checkNoViolations(new Rec(PRINCIPAL_VALID, Optional.of(PRINCIPAL_VALID)));
+    checkHasViolations(new Rec(PRINCIPAL_INVALID, Optional.of(PRINCIPAL_INVALID)));
     checkHasViolations(new Rec(EMPTY, Optional.of(EMPTY)));
   }
 
   @Test
   public void testClassField() {
-    checkNoViolations(new Data(E164_VALID, Optional.of(E164_VALID)));
-    checkHasViolations(new Data(E164_INVALID, Optional.of(E164_INVALID)));
+    checkNoViolations(new Data(PRINCIPAL_VALID, Optional.of(PRINCIPAL_VALID)));
+    checkHasViolations(new Data(PRINCIPAL_INVALID, Optional.of(PRINCIPAL_INVALID)));
     checkHasViolations(new Data(EMPTY, Optional.of(EMPTY)));
   }
 
@@ -81,9 +81,11 @@ public class E164Test {
     final Method foo = Methods.class.getMethod("foo", String.class, Optional.class);
 
     final Set<ConstraintViolation<Methods>> violations1 =
-        VALIDATOR.forExecutables().validateParameters(m, foo, new Object[] {E164_VALID, Optional.of(E164_VALID)});
+        VALIDATOR.forExecutables().validateParameters(m, foo, new Object[] {
+            PRINCIPAL_VALID, Optional.of(PRINCIPAL_VALID)});
     final Set<ConstraintViolation<Methods>> violations2 =
-        VALIDATOR.forExecutables().validateParameters(m, foo, new Object[] {E164_INVALID, Optional.of(E164_INVALID)});
+        VALIDATOR.forExecutables().validateParameters(m, foo, new Object[] {
+            PRINCIPAL_INVALID, Optional.of(PRINCIPAL_INVALID)});
     final Set<ConstraintViolation<Methods>> violations3 =
         VALIDATOR.forExecutables().validateParameters(m, foo, new Object[] {EMPTY, Optional.of(EMPTY)});
 
@@ -98,9 +100,9 @@ public class E164Test {
     final Method bar = Methods.class.getMethod("bar");
 
     final Set<ConstraintViolation<Methods>> violations1 =
-        VALIDATOR.forExecutables().validateReturnValue(m, bar, E164_VALID);
+        VALIDATOR.forExecutables().validateReturnValue(m, bar, PRINCIPAL_VALID);
     final Set<ConstraintViolation<Methods>> violations2 =
-        VALIDATOR.forExecutables().validateReturnValue(m, bar, E164_INVALID);
+        VALIDATOR.forExecutables().validateReturnValue(m, bar, PRINCIPAL_INVALID);
     final Set<ConstraintViolation<Methods>> violations3 =
         VALIDATOR.forExecutables().validateReturnValue(m, bar, EMPTY);
 
@@ -115,9 +117,9 @@ public class E164Test {
     final Method bar = Methods.class.getMethod("barOptionalString");
 
     final Set<ConstraintViolation<Methods>> violations1 =
-        VALIDATOR.forExecutables().validateReturnValue(m, bar, Optional.of(E164_VALID));
+        VALIDATOR.forExecutables().validateReturnValue(m, bar, Optional.of(PRINCIPAL_VALID));
     final Set<ConstraintViolation<Methods>> violations2 =
-        VALIDATOR.forExecutables().validateReturnValue(m, bar, Optional.of(E164_INVALID));
+        VALIDATOR.forExecutables().validateReturnValue(m, bar, Optional.of(PRINCIPAL_INVALID));
     final Set<ConstraintViolation<Methods>> violations3 =
         VALIDATOR.forExecutables().validateReturnValue(m, bar, Optional.of(EMPTY));
 

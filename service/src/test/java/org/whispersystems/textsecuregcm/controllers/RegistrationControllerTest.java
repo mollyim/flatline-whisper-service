@@ -55,7 +55,7 @@ import org.junitpioneer.jupiter.cartesian.ArgumentSets;
 import org.junitpioneer.jupiter.cartesian.CartesianTest;
 import org.signal.libsignal.protocol.IdentityKey;
 import org.signal.libsignal.protocol.ecc.ECKeyPair;
-import org.whispersystems.textsecuregcm.auth.PhoneVerificationTokenManager;
+import org.whispersystems.textsecuregcm.auth.PrincipalVerificationTokenManager;
 import org.whispersystems.textsecuregcm.auth.RegistrationLockError;
 import org.whispersystems.textsecuregcm.auth.RegistrationLockVerificationManager;
 import org.whispersystems.textsecuregcm.entities.AccountAttributes;
@@ -70,8 +70,8 @@ import org.whispersystems.textsecuregcm.entities.RegistrationRequest;
 import org.whispersystems.textsecuregcm.entities.RegistrationServiceSession;
 import org.whispersystems.textsecuregcm.limits.RateLimiter;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
-import org.whispersystems.textsecuregcm.mappers.ImpossiblePhoneNumberExceptionMapper;
-import org.whispersystems.textsecuregcm.mappers.NonNormalizedPhoneNumberExceptionMapper;
+import org.whispersystems.textsecuregcm.mappers.ImpossiblePrincipalExceptionMapper;
+import org.whispersystems.textsecuregcm.mappers.NonNormalizedPrincipalExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.RateLimitExceededExceptionMapper;
 import org.whispersystems.textsecuregcm.registration.RegistrationServiceClient;
 import org.whispersystems.textsecuregcm.spam.RegistrationRecoveryChecker;
@@ -80,7 +80,7 @@ import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.DeviceCapability;
 import org.whispersystems.textsecuregcm.storage.DeviceSpec;
-import org.whispersystems.textsecuregcm.storage.PhoneNumberIdentifiers;
+import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.RegistrationRecoveryPasswordsManager;
 import org.whispersystems.textsecuregcm.tests.util.AuthHelper;
 import org.whispersystems.textsecuregcm.tests.util.KeysHelper;
@@ -98,7 +98,7 @@ class RegistrationControllerTest {
   private static final String PASSWORD = "password";
 
   private final AccountsManager accountsManager = mock(AccountsManager.class);
-  private final PhoneNumberIdentifiers phoneNumberIdentifiers = mock(PhoneNumberIdentifiers.class);
+  private final PrincipalNameIdentifiers principalNameIdentifiers = mock(PrincipalNameIdentifiers.class);
   private final RegistrationServiceClient registrationServiceClient = mock(RegistrationServiceClient.class);
   private final RegistrationLockVerificationManager registrationLockVerificationManager = mock(
       RegistrationLockVerificationManager.class);
@@ -112,13 +112,13 @@ class RegistrationControllerTest {
   private final ResourceExtension resources = ResourceExtension.builder()
       .addProperty(ServerProperties.UNWRAP_COMPLETION_STAGE_IN_WRITER_ENABLE, Boolean.TRUE)
       .addProvider(new RateLimitExceededExceptionMapper())
-      .addProvider(new ImpossiblePhoneNumberExceptionMapper())
-      .addProvider(new NonNormalizedPhoneNumberExceptionMapper())
+      .addProvider(new ImpossiblePrincipalExceptionMapper())
+      .addProvider(new NonNormalizedPrincipalExceptionMapper())
       .setMapper(SystemMapper.jsonMapper())
       .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
       .addResource(
           new RegistrationController(accountsManager,
-              new PhoneVerificationTokenManager(phoneNumberIdentifiers, registrationServiceClient,
+              new PrincipalVerificationTokenManager(principalNameIdentifiers, registrationServiceClient,
                   registrationRecoveryPasswordsManager, registrationRecoveryChecker),
               registrationLockVerificationManager, rateLimiters))
       .build();
@@ -248,7 +248,7 @@ class RegistrationControllerTest {
 
   @Test
   void recoveryPasswordManagerVerificationFailureOrTimeout() {
-    when(phoneNumberIdentifiers.getPhoneNumberIdentifier(any()))
+    when(principalNameIdentifiers.getPrincipalNameIdentifier(any()))
         .thenReturn(CompletableFuture.completedFuture(UUID.randomUUID()));
     when(registrationRecoveryChecker.checkRegistrationRecoveryAttempt(any(), any())).thenReturn(true);
     when(registrationRecoveryPasswordsManager.verify(any(), any()))
@@ -296,7 +296,7 @@ class RegistrationControllerTest {
 
   @Test
   void recoveryPasswordManagerVerificationTrue() throws InterruptedException {
-    when(phoneNumberIdentifiers.getPhoneNumberIdentifier(any()))
+    when(principalNameIdentifiers.getPrincipalNameIdentifier(any()))
         .thenReturn(CompletableFuture.completedFuture(UUID.randomUUID()));
     when(registrationRecoveryChecker.checkRegistrationRecoveryAttempt(any(), any())).thenReturn(true);
     when(registrationRecoveryPasswordsManager.verify(any(), any()))
@@ -334,7 +334,7 @@ class RegistrationControllerTest {
 
   @Test
   void registrationRecoveryCheckerAllowsAttempt() throws InterruptedException {
-    when(phoneNumberIdentifiers.getPhoneNumberIdentifier(any()))
+    when(principalNameIdentifiers.getPrincipalNameIdentifier(any()))
         .thenReturn(CompletableFuture.completedFuture(UUID.randomUUID()));
     when(registrationRecoveryChecker.checkRegistrationRecoveryAttempt(any(), any())).thenReturn(true);
     when(registrationRecoveryPasswordsManager.verify(any(), any()))
@@ -391,7 +391,7 @@ class RegistrationControllerTest {
                     SESSION_EXPIRATION_SECONDS))));
 
     final Account account = mock(Account.class);
-    when(accountsManager.getByE164(any())).thenReturn(Optional.of(account));
+    when(accountsManager.getByPrincipal(any())).thenReturn(Optional.of(account));
     when(account.hasCapability(DeviceCapability.TRANSFER)).thenReturn(deviceTransferSupported);
 
     final int expectedStatus;
@@ -458,7 +458,7 @@ class RegistrationControllerTest {
     } else {
       maybeAccount = Optional.empty();
     }
-    when(accountsManager.getByE164(any())).thenReturn(maybeAccount);
+    when(accountsManager.getByPrincipal(any())).thenReturn(maybeAccount);
 
     final Account account = mock(Account.class);
     when(account.getPrimaryDevice()).thenReturn(mock(Device.class));
@@ -731,12 +731,12 @@ class RegistrationControllerTest {
                     SESSION_EXPIRATION_SECONDS))));
 
     final UUID accountIdentifier = UUID.randomUUID();
-    final UUID phoneNumberIdentifier = UUID.randomUUID();
+    final UUID principalNameIdentifier = UUID.randomUUID();
     final Device device = mock(Device.class);
 
     final Account account = MockUtils.buildMock(Account.class, a -> {
       when(a.getUuid()).thenReturn(accountIdentifier);
-      when(a.getPhoneNumberIdentifier()).thenReturn(phoneNumberIdentifier);
+      when(a.getPrincipalNameIdentifier()).thenReturn(principalNameIdentifier);
       when(a.getPrimaryDevice()).thenReturn(device);
     });
 
@@ -773,7 +773,7 @@ class RegistrationControllerTest {
         .thenReturn(CompletableFuture.completedFuture(Optional.of(registrationSession)));
 
     final Optional<Account> maybeAccount = Optional.ofNullable(existingAccount ? mock(Account.class) : null);
-    when(accountsManager.getByE164(any())).thenReturn(maybeAccount);
+    when(accountsManager.getByPrincipal(any())).thenReturn(maybeAccount);
 
     final Account account = mock(Account.class);
     when(account.getPrimaryDevice()).thenReturn(mock(Device.class));
@@ -796,8 +796,8 @@ class RegistrationControllerTest {
     return a.getFetchesMessages() == b.getFetchesMessages()
         && a.getRegistrationId() == b.getRegistrationId()
         && a.isUnrestrictedUnidentifiedAccess() == b.isUnrestrictedUnidentifiedAccess()
-        && a.isDiscoverableByPhoneNumber() == b.isDiscoverableByPhoneNumber()
-        && Objects.equals(a.getPhoneNumberIdentityRegistrationId(), b.getPhoneNumberIdentityRegistrationId())
+        && a.isDiscoverableByPrincipal() == b.isDiscoverableByPrincipal()
+        && Objects.equals(a.getPrincipalNameIdentityRegistrationId(), b.getPrincipalNameIdentityRegistrationId())
         && Arrays.equals(a.getName(), b.getName())
         && Objects.equals(a.getRegistrationLock(), b.getRegistrationLock())
         && Arrays.equals(a.getUnidentifiedAccessKey(), b.getUnidentifiedAccessKey())

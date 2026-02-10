@@ -21,7 +21,6 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.net.HttpHeaders;
-import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.dropwizard.auth.AuthValueFactoryProvider;
@@ -51,7 +50,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.signal.keytransparency.client.CondensedTreeSearchResponse;
 import org.signal.keytransparency.client.DistinguishedResponse;
-import org.signal.keytransparency.client.E164SearchRequest;
+import org.signal.keytransparency.client.PrincipalSearchRequest;
 import org.signal.keytransparency.client.FullTreeHead;
 import org.signal.keytransparency.client.MonitorResponse;
 import org.signal.keytransparency.client.SearchProof;
@@ -79,9 +78,7 @@ import org.whispersystems.textsecuregcm.util.TestRemoteAddressFilterProvider;
 @ExtendWith(DropwizardExtensionsSupport.class)
 public class KeyTransparencyControllerTest {
 
-  public static final String NUMBER = PhoneNumberUtil.getInstance().format(
-      PhoneNumberUtil.getInstance().getExampleNumber("US"),
-      PhoneNumberUtil.PhoneNumberFormat.E164);
+  public static final String PRINCIPAL = "user.account@example.com";
   public static final AciServiceIdentifier ACI = new AciServiceIdentifier(UUID.randomUUID());
   public static final byte[] USERNAME_HASH = TestRandomUtil.nextBytes(20);
   private static final TestRemoteAddressFilterProvider TEST_REMOTE_ADDRESS_FILTER_PROVIDER
@@ -123,7 +120,7 @@ public class KeyTransparencyControllerTest {
   @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
   @ParameterizedTest
   @MethodSource
-  void searchSuccess(final Optional<String> e164, final Optional<byte[]> usernameHash) {
+  void searchSuccess(final Optional<String> principal, final Optional<byte[]> usernameHash) {
     final CondensedTreeSearchResponse aciSearchResponse = CondensedTreeSearchResponse.newBuilder()
         .setOpening(ByteString.copyFrom(TestRandomUtil.nextBytes(16)))
         .setSearch(SearchProof.getDefaultInstance())
@@ -136,7 +133,7 @@ public class KeyTransparencyControllerTest {
         .setTreeHead(FullTreeHead.getDefaultInstance())
         .setAci(aciSearchResponse);
 
-    e164.ifPresent(ignored -> searchResponseBuilder.setE164(CondensedTreeSearchResponse.getDefaultInstance()));
+    principal.ifPresent(ignored -> searchResponseBuilder.setPrincipal(CondensedTreeSearchResponse.getDefaultInstance()));
     usernameHash.ifPresent(ignored -> searchResponseBuilder.setUsernameHash(CondensedTreeSearchResponse.getDefaultInstance()));
 
     when(keyTransparencyServiceClient.search(any(), any(), any(), any(), any(), anyLong()))
@@ -146,9 +143,9 @@ public class KeyTransparencyControllerTest {
         .target("/v1/key-transparency/search")
         .request();
 
-    final Optional<byte[]> unidentifiedAccessKey = e164.isPresent() ? Optional.of(UNIDENTIFIED_ACCESS_KEY) : Optional.empty();
+    final Optional<byte[]> unidentifiedAccessKey = principal.isPresent() ? Optional.of(UNIDENTIFIED_ACCESS_KEY) : Optional.empty();
     final String searchJson = createRequestJson(
-        new KeyTransparencySearchRequest(ACI, e164, usernameHash, ACI_IDENTITY_KEY,
+        new KeyTransparencySearchRequest(ACI, principal, usernameHash, ACI_IDENTITY_KEY,
             unidentifiedAccessKey, Optional.of(3L), 4L));
 
     try (Response response = request.post(Entity.json(searchJson))) {
@@ -162,10 +159,10 @@ public class KeyTransparencyControllerTest {
       ArgumentCaptor<ByteString> aciArgument = ArgumentCaptor.forClass(ByteString.class);
       ArgumentCaptor<ByteString> aciIdentityKeyArgument = ArgumentCaptor.forClass(ByteString.class);
       ArgumentCaptor<Optional<ByteString>> usernameHashArgument = ArgumentCaptor.forClass(Optional.class);
-      ArgumentCaptor<Optional<E164SearchRequest>> e164Argument = ArgumentCaptor.forClass(Optional.class);
+      ArgumentCaptor<Optional<PrincipalSearchRequest>> principalArgument = ArgumentCaptor.forClass(Optional.class);
 
       verify(keyTransparencyServiceClient).search(aciArgument.capture(), aciIdentityKeyArgument.capture(),
-          usernameHashArgument.capture(), e164Argument.capture(), eq(Optional.of(3L)), eq(4L));
+          usernameHashArgument.capture(), principalArgument.capture(), eq(Optional.of(3L)), eq(4L));
 
       assertArrayEquals(ACI.toCompactByteArray(), aciArgument.getValue().toByteArray());
       assertArrayEquals(ACI_IDENTITY_KEY.serialize(), aciIdentityKeyArgument.getValue().toByteArray());
@@ -176,14 +173,14 @@ public class KeyTransparencyControllerTest {
         assertTrue(usernameHashArgument.getValue().isEmpty());
       }
 
-      if (e164.isPresent()) {
-        final E164SearchRequest expected = E164SearchRequest.newBuilder()
-            .setE164(e164.get())
+      if (principal.isPresent()) {
+        final PrincipalSearchRequest expected = PrincipalSearchRequest.newBuilder()
+            .setPrincipal(principal.get())
             .setUnidentifiedAccessKey(ByteString.copyFrom(unidentifiedAccessKey.get()))
             .build();
-        assertEquals(expected, e164Argument.getValue().orElseThrow());
+        assertEquals(expected, principalArgument.getValue().orElseThrow());
       } else {
-        assertTrue(e164Argument.getValue().isEmpty());
+        assertTrue(principalArgument.getValue().isEmpty());
       }
     } catch (InvalidProtocolBufferException e) {
       throw new RuntimeException(e);
@@ -192,9 +189,9 @@ public class KeyTransparencyControllerTest {
 
   private static Stream<Arguments> searchSuccess() {
     return Stream.of(
-        Arguments.of(Optional.of(NUMBER), Optional.empty()),
+        Arguments.of(Optional.of(PRINCIPAL), Optional.empty()),
         Arguments.of(Optional.empty(), Optional.of(USERNAME_HASH)),
-        Arguments.of(Optional.of(NUMBER), Optional.of(USERNAME_HASH))
+        Arguments.of(Optional.of(PRINCIPAL), Optional.of(USERNAME_HASH))
     );
   }
 
@@ -243,7 +240,7 @@ public class KeyTransparencyControllerTest {
   @MethodSource
   void searchInvalidRequest(final AciServiceIdentifier aci,
       final IdentityKey aciIdentityKey,
-      final Optional<String> e164,
+      final Optional<String> principal,
       final Optional<byte[]> unidentifiedAccessKey,
       final Optional<Long> lastTreeHeadSize,
       final long distinguishedTreeHeadSize) {
@@ -251,7 +248,7 @@ public class KeyTransparencyControllerTest {
         .target("/v1/key-transparency/search")
         .request();
     try (Response response = request.post(Entity.json(
-        createRequestJson(new KeyTransparencySearchRequest(aci, e164, Optional.empty(),
+        createRequestJson(new KeyTransparencySearchRequest(aci, principal, Optional.empty(),
             aciIdentityKey, unidentifiedAccessKey, lastTreeHeadSize, distinguishedTreeHeadSize))))) {
       assertEquals(422, response.getStatus());
       verifyNoInteractions(keyTransparencyServiceClient);
@@ -268,9 +265,9 @@ public class KeyTransparencyControllerTest {
         Arguments.of(ACI, ACI_IDENTITY_KEY, Optional.empty(), Optional.empty(), Optional.of(0L), 4L),
         // lastDistinguishedTreeHeadSize must be positive
         Arguments.of(ACI, ACI_IDENTITY_KEY, Optional.empty(), Optional.empty(), Optional.empty(), 0L),
-        // E164 can't be provided without an unidentified access key
-        Arguments.of(ACI, ACI_IDENTITY_KEY, Optional.of(NUMBER), Optional.empty(), Optional.empty(), 4L),
-        // ...and an unidentified access key can't be provided without an E164
+        // principal can't be provided without an unidentified access key
+        Arguments.of(ACI, ACI_IDENTITY_KEY, Optional.of(PRINCIPAL), Optional.empty(), Optional.empty(), 4L),
+        // ...and an unidentified access key can't be provided without a principal
         Arguments.of(ACI, ACI_IDENTITY_KEY, Optional.empty(), Optional.of(UNIDENTIFIED_ACCESS_KEY), Optional.empty(), 4L)
         );
   }
@@ -433,38 +430,38 @@ public class KeyTransparencyControllerTest {
                 Optional.empty(),
                 Optional.of(new KeyTransparencyMonitorRequest.UsernameHashMonitor(USERNAME_HASH,
                     5, new byte[33])), 3L, 4L))),
-        // e164 fields cannot be null
+        // principal fields cannot be null
         Arguments.of(
             createRequestJson(new KeyTransparencyMonitorRequest(
                 new KeyTransparencyMonitorRequest.AciMonitor(ACI, 4, COMMITMENT_INDEX),
-                Optional.of(new KeyTransparencyMonitorRequest.E164Monitor(null, 5, null)),
+                Optional.of(new KeyTransparencyMonitorRequest.PrincipalMonitor(null, 5, null)),
                 Optional.empty(), 3L, 4L))),
         Arguments.of(
             createRequestJson(new KeyTransparencyMonitorRequest(
                 new KeyTransparencyMonitorRequest.AciMonitor(ACI, 4, COMMITMENT_INDEX),
-                Optional.of(new KeyTransparencyMonitorRequest.E164Monitor(null, 5, COMMITMENT_INDEX)),
+                Optional.of(new KeyTransparencyMonitorRequest.PrincipalMonitor(null, 5, COMMITMENT_INDEX)),
                 Optional.empty(), 3L, 4L))),
         Arguments.of(
             createRequestJson(new KeyTransparencyMonitorRequest(
                 new KeyTransparencyMonitorRequest.AciMonitor(ACI, 4, COMMITMENT_INDEX),
-                Optional.of(new KeyTransparencyMonitorRequest.E164Monitor(NUMBER, 5, null)),
+                Optional.of(new KeyTransparencyMonitorRequest.PrincipalMonitor(PRINCIPAL, 5, null)),
                 Optional.empty(), 3L, 4L))),
-        // e164Position must be positive
+        // principalPosition must be positive
         Arguments.of(createRequestJson(new KeyTransparencyMonitorRequest(
             new KeyTransparencyMonitorRequest.AciMonitor(ACI, 4, COMMITMENT_INDEX),
             Optional.of(
-                new KeyTransparencyMonitorRequest.E164Monitor(NUMBER, 0, COMMITMENT_INDEX)),
+                new KeyTransparencyMonitorRequest.PrincipalMonitor(PRINCIPAL, 0, COMMITMENT_INDEX)),
             Optional.empty(), 3L, 4L))),
-        // e164 commitment index must be the correct size
+        // principal commitment index must be the correct size
         Arguments.of(createRequestJson(new KeyTransparencyMonitorRequest(
             new KeyTransparencyMonitorRequest.AciMonitor(ACI, 4, COMMITMENT_INDEX),
             Optional.of(
-                new KeyTransparencyMonitorRequest.E164Monitor(NUMBER, 5, new byte[0])),
+                new KeyTransparencyMonitorRequest.PrincipalMonitor(PRINCIPAL, 5, new byte[0])),
             Optional.empty(), 3L, 4L))),
         Arguments.of(createRequestJson(new KeyTransparencyMonitorRequest(
             new KeyTransparencyMonitorRequest.AciMonitor(ACI, 4, COMMITMENT_INDEX),
             Optional.of(
-                new KeyTransparencyMonitorRequest.E164Monitor(NUMBER, 5, new byte[33])),
+                new KeyTransparencyMonitorRequest.PrincipalMonitor(PRINCIPAL, 5, new byte[33])),
             Optional.empty(), 3L, 4L))),
         // lastNonDistinguishedTreeHeadSize must be positive
         Arguments.of(createRequestJson(new KeyTransparencyMonitorRequest(

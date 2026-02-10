@@ -71,7 +71,7 @@ public class Device {
   private int registrationId;
 
   @JsonProperty("pniRegistrationId")
-  private int phoneNumberIdentityRegistrationId;
+  private int principalNameIdentityRegistrationId;
 
   @JsonProperty
   private long lastSeen;
@@ -224,7 +224,7 @@ public class Device {
   public int getRegistrationId(final IdentityType identityType) {
     return switch (identityType) {
       case ACI -> registrationId;
-      case PNI -> phoneNumberIdentityRegistrationId;
+      case PNI -> principalNameIdentityRegistrationId;
     };
   }
 
@@ -232,8 +232,8 @@ public class Device {
     this.registrationId = registrationId;
   }
 
-  public void setPhoneNumberIdentityRegistrationId(final int phoneNumberIdentityRegistrationId) {
-    this.phoneNumberIdentityRegistrationId = phoneNumberIdentityRegistrationId;
+  public void setPrincipalNameIdentityRegistrationId(final int principalNameIdentityRegistrationId) {
+    this.principalNameIdentityRegistrationId = principalNameIdentityRegistrationId;
   }
 
   public long getPushTimestamp() {

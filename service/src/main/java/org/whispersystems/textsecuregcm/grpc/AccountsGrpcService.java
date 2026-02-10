@@ -30,8 +30,8 @@ import org.signal.chat.account.ReserveUsernameHashError;
 import org.signal.chat.account.ReserveUsernameHashErrorType;
 import org.signal.chat.account.ReserveUsernameHashRequest;
 import org.signal.chat.account.ReserveUsernameHashResponse;
-import org.signal.chat.account.SetDiscoverableByPhoneNumberRequest;
-import org.signal.chat.account.SetDiscoverableByPhoneNumberResponse;
+import org.signal.chat.account.SetDiscoverableByPrincipalRequest;
+import org.signal.chat.account.SetDiscoverableByPrincipalResponse;
 import org.signal.chat.account.SetRegistrationLockRequest;
 import org.signal.chat.account.SetRegistrationLockResponse;
 import org.signal.chat.account.SetRegistrationRecoveryPasswordRequest;
@@ -85,8 +85,8 @@ public class AccountsGrpcService extends ReactorAccountsGrpc.AccountsImplBase {
         .map(account -> {
           final AccountIdentifiers.Builder accountIdentifiersBuilder = AccountIdentifiers.newBuilder()
               .addServiceIdentifiers(ServiceIdentifierUtil.toGrpcServiceIdentifier(new AciServiceIdentifier(account.getUuid())))
-              .addServiceIdentifiers(ServiceIdentifierUtil.toGrpcServiceIdentifier(new PniServiceIdentifier(account.getPhoneNumberIdentifier())))
-              .setE164(account.getNumber());
+              .addServiceIdentifiers(ServiceIdentifierUtil.toGrpcServiceIdentifier(new PniServiceIdentifier(account.getPrincipalNameIdentifier())))
+              .setPrincipal(account.getPrincipal());
 
           account.getUsernameHash().ifPresent(usernameHash ->
               accountIdentifiersBuilder.setUsernameHash(ByteString.copyFrom(usernameHash)));
@@ -315,14 +315,14 @@ public class AccountsGrpcService extends ReactorAccountsGrpc.AccountsImplBase {
   }
 
   @Override
-  public Mono<SetDiscoverableByPhoneNumberResponse> setDiscoverableByPhoneNumber(final SetDiscoverableByPhoneNumberRequest request) {
+  public Mono<SetDiscoverableByPrincipalResponse> setDiscoverableByPrincipal(final SetDiscoverableByPrincipalRequest request) {
     final AuthenticatedDevice authenticatedDevice = AuthenticationUtil.requireAuthenticatedDevice();
 
     return Mono.fromFuture(() -> accountsManager.getByAccountIdentifierAsync(authenticatedDevice.accountIdentifier()))
         .map(maybeAccount -> maybeAccount.orElseThrow(Status.UNAUTHENTICATED::asRuntimeException))
         .flatMap(account -> Mono.fromFuture(() -> accountsManager.updateAsync(account,
-            a -> a.setDiscoverableByPhoneNumber(request.getDiscoverableByPhoneNumber()))))
-        .thenReturn(SetDiscoverableByPhoneNumberResponse.newBuilder().build());
+            a -> a.setDiscoverableByPrincipal(request.getDiscoverableByPrincipal()))))
+        .thenReturn(SetDiscoverableByPrincipalResponse.newBuilder().build());
   }
 
   @Override

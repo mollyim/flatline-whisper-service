@@ -22,7 +22,7 @@ import org.signal.libsignal.usernames.BaseUsernameException;
 import org.signal.libsignal.usernames.Username;
 import org.whispersystems.textsecuregcm.entities.AccountIdentifierResponse;
 import org.whispersystems.textsecuregcm.entities.AccountIdentityResponse;
-import org.whispersystems.textsecuregcm.entities.ChangeNumberRequest;
+import org.whispersystems.textsecuregcm.entities.ChangePrincipalRequest;
 import org.whispersystems.textsecuregcm.entities.ConfirmUsernameHashRequest;
 import org.whispersystems.textsecuregcm.entities.ReserveUsernameHashRequest;
 import org.whispersystems.textsecuregcm.entities.ReserveUsernameHashResponse;
@@ -34,7 +34,7 @@ public class AccountTest {
 
   @Test
   public void testCreateAccount() {
-    final TestUser user = Operations.newRegisteredUser("+19995550101");
+    final TestUser user = Operations.newRegisteredUser("user.account1@example.com");
     try {
       final Pair<Integer, AccountIdentityResponse> execute = Operations.apiGet("/v1/accounts/whoami")
           .authorized(user)
@@ -47,7 +47,7 @@ public class AccountTest {
 
   @Test
   public void testCreateAccountAtomic() {
-    final TestUser user = Operations.newRegisteredUser("+19995550201");
+    final TestUser user = Operations.newRegisteredUser("user.account2@example.com");
     try {
       final Pair<Integer, AccountIdentityResponse> execute = Operations.apiGet("/v1/accounts/whoami")
           .authorized(user)
@@ -59,15 +59,15 @@ public class AccountTest {
   }
 
   @Test
-  public void changePhoneNumber() {
-    final TestUser user = Operations.newRegisteredUser("+19995550301");
-    final String targetNumber = "+19995550302";
+  public void changePrincipal() {
+    final TestUser user = Operations.newRegisteredUser("user.account3.1@example.com");
+    final String targetPrincipal = "user.account3.2@example.com";
 
     final ECKeyPair pniIdentityKeyPair = ECKeyPair.generate();
 
-    final ChangeNumberRequest changeNumberRequest = new ChangeNumberRequest(null,
-        Operations.populateRandomRecoveryPassword(targetNumber),
-        targetNumber,
+    final ChangePrincipalRequest changePrincipalRequest = new ChangePrincipalRequest(null,
+        Operations.populateRandomRecoveryPassword(targetPrincipal),
+        targetPrincipal,
         null,
         new IdentityKey(pniIdentityKeyPair.getPublicKey()),
         Collections.emptyList(),
@@ -76,18 +76,18 @@ public class AccountTest {
         Map.of(Device.PRIMARY_ID, 17));
 
     final AccountIdentityResponse accountIdentityResponse =
-        Operations.apiPut("/v2/accounts/number", changeNumberRequest)
+        Operations.apiPut("/v2/accounts/principal", changePrincipalRequest)
             .authorized(user)
             .executeExpectSuccess(AccountIdentityResponse.class);
 
     assertEquals(user.aciUuid(), accountIdentityResponse.uuid());
     assertNotEquals(user.pniUuid(), accountIdentityResponse.pni());
-    assertEquals(targetNumber, accountIdentityResponse.number());
+    assertEquals(targetPrincipal, accountIdentityResponse.principal());
   }
 
   @Test
   public void testUsernameOperations() throws Exception {
-    final TestUser user = Operations.newRegisteredUser("+19995550102");
+    final TestUser user = Operations.newRegisteredUser("user.account4@example.com");
     try {
       verifyFullUsernameLifecycle(user);
       // no do it again to check changing usernames

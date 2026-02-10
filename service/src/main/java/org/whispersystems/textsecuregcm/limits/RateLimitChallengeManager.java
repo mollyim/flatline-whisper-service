@@ -35,7 +35,6 @@ public class RateLimitChallengeManager {
       "attempt");
   private static final String RESET_RATE_LIMIT_EXCEEDED_COUNTER_NAME = name(RateLimitChallengeManager.class, "resetRateLimitExceeded");
 
-  private static final String SOURCE_COUNTRY_TAG_NAME = "sourceCountry";
   private static final String SUCCESS_TAG_NAME = "success";
 
   public RateLimitChallengeManager(
@@ -70,7 +69,6 @@ public class RateLimitChallengeManager {
     final boolean challengeSuccess = captchaChecker.verify(Optional.of(account.getUuid()), Action.CHALLENGE, captcha, mostRecentProxyIp, userAgent).isValid(scoreThreshold);
 
     final Tags tags = Tags.of(
-        Tag.of(SOURCE_COUNTRY_TAG_NAME, Util.getCountryCode(account.getNumber())),
         Tag.of(SUCCESS_TAG_NAME, String.valueOf(challengeSuccess)),
         UserAgentTagUtil.getPlatformTag(userAgent)
     );
@@ -88,8 +86,7 @@ public class RateLimitChallengeManager {
     try {
       rateLimiters.getRateLimitResetLimiter().validate(account.getUuid());
     } catch (final RateLimitExceededException e) {
-      Metrics.counter(RESET_RATE_LIMIT_EXCEEDED_COUNTER_NAME,
-          SOURCE_COUNTRY_TAG_NAME, Util.getCountryCode(account.getNumber())).increment();
+      Metrics.counter(RESET_RATE_LIMIT_EXCEEDED_COUNTER_NAME).increment();
 
       throw e;
     }

@@ -11,8 +11,8 @@ import org.signal.keytransparency.client.AciMonitorRequest;
 import org.signal.keytransparency.client.ConsistencyParameters;
 import org.signal.keytransparency.client.DistinguishedRequest;
 import org.signal.keytransparency.client.DistinguishedResponse;
-import org.signal.keytransparency.client.E164MonitorRequest;
-import org.signal.keytransparency.client.E164SearchRequest;
+import org.signal.keytransparency.client.PrincipalMonitorRequest;
+import org.signal.keytransparency.client.PrincipalSearchRequest;
 import org.signal.keytransparency.client.MonitorRequest;
 import org.signal.keytransparency.client.MonitorResponse;
 import org.signal.keytransparency.client.SearchRequest;
@@ -61,10 +61,10 @@ public class KeyTransparencyGrpcService extends
   }
 
   private SearchRequest validateSearchRequest(final SearchRequest request) {
-    if (request.hasE164SearchRequest()) {
-      final E164SearchRequest e164SearchRequest = request.getE164SearchRequest();
-      if (e164SearchRequest.getUnidentifiedAccessKey().isEmpty() != e164SearchRequest.getE164().isEmpty()) {
-        throw Status.INVALID_ARGUMENT.withDescription("Unidentified access key and E164 must be provided together or not at all").asRuntimeException();
+    if (request.hasPrincipalSearchRequest()) {
+      final PrincipalSearchRequest principalSearchRequest = request.getPrincipalSearchRequest();
+      if (principalSearchRequest.getUnidentifiedAccessKey().isEmpty() != principalSearchRequest.getPrincipal().isEmpty()) {
+        throw Status.INVALID_ARGUMENT.withDescription("Unidentified access key and principal must be provided together or not at all").asRuntimeException();
       }
     }
 
@@ -107,16 +107,16 @@ public class KeyTransparencyGrpcService extends
       }
     }
 
-    if (request.hasE164()) {
-      final E164MonitorRequest e164MonitorRequest = request.getE164();
-      if (e164MonitorRequest.getE164().isEmpty()) {
-        throw Status.INVALID_ARGUMENT.withDescription("E164 cannot be empty").asRuntimeException();
+    if (request.hasPrincipal()) {
+      final PrincipalMonitorRequest principalMonitorRequest = request.getPrincipal();
+      if (principalMonitorRequest.getPrincipal().isEmpty()) {
+        throw Status.INVALID_ARGUMENT.withDescription("principal cannot be empty").asRuntimeException();
       }
-      if (e164MonitorRequest.getEntryPosition() <= 0) {
-        throw Status.INVALID_ARGUMENT.withDescription("E164 entry position must be positive").asRuntimeException();
+      if (principalMonitorRequest.getEntryPosition() <= 0) {
+        throw Status.INVALID_ARGUMENT.withDescription("principal entry position must be positive").asRuntimeException();
       }
-      if (e164MonitorRequest.getCommitmentIndex().size() != COMMITMENT_INDEX_LENGTH) {
-        throw Status.INVALID_ARGUMENT.withDescription("E164 commitment index must be 32 bytes").asRuntimeException();
+      if (principalMonitorRequest.getCommitmentIndex().size() != COMMITMENT_INDEX_LENGTH) {
+        throw Status.INVALID_ARGUMENT.withDescription("principal commitment index must be 32 bytes").asRuntimeException();
       }
     }
 

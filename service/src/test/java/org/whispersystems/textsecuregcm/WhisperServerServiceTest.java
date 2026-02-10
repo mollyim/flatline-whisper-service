@@ -18,30 +18,21 @@ import jakarta.ws.rs.core.Response;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.eclipse.jetty.util.component.LifeCycle;
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.StatusCode;
 import org.eclipse.jetty.websocket.client.WebSocketClient;
-import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
-import org.whispersystems.textsecuregcm.configuration.OpenTelemetryConfiguration;
 import org.whispersystems.textsecuregcm.metrics.NoopAwsSdkMetricPublisher;
 import org.whispersystems.textsecuregcm.storage.DynamoDbExtension;
 import org.whispersystems.textsecuregcm.storage.DynamoDbExtensionSchema;
 import org.whispersystems.textsecuregcm.tests.util.TestWebsocketListener;
 import org.whispersystems.textsecuregcm.util.AttributeValues;
 import org.whispersystems.textsecuregcm.util.HeaderUtils;
-import org.whispersystems.textsecuregcm.util.Util;
 import org.whispersystems.websocket.messages.WebSocketResponseMessage;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
@@ -157,31 +148,31 @@ class WhisperServerServiceTest {
 
     final DynamoDbClient dynamoDbClient = getDynamoDbClient();
 
-    final DynamoDbExtension.TableSchema numbers = DynamoDbExtensionSchema.Tables.NUMBERS;
-    final AttributeValue numberAV = AttributeValues.s("+12125550001");
+    final DynamoDbExtension.TableSchema principals = DynamoDbExtensionSchema.Tables.PRINCIPALS;
+    final AttributeValue principalAV = AttributeValues.s("user.account@example.com");
 
     final GetItemResponse notFoundResponse = dynamoDbClient.getItem(GetItemRequest.builder()
-        .tableName(numbers.tableName())
-        .key(Map.of(numbers.hashKeyName(), numberAV))
+        .tableName(principals.tableName())
+        .key(Map.of(principals.hashKeyName(), principalAV))
         .build());
 
     assertFalse(notFoundResponse.hasItem());
 
     dynamoDbClient.putItem(PutItemRequest.builder()
-        .tableName(numbers.tableName())
-        .item(Map.of(numbers.hashKeyName(), numberAV))
+        .tableName(principals.tableName())
+        .item(Map.of(principals.hashKeyName(), principalAV))
         .build());
 
     final GetItemResponse foundResponse = dynamoDbClient.getItem(GetItemRequest.builder()
-        .tableName(numbers.tableName())
-        .key(Map.of(numbers.hashKeyName(), numberAV))
+        .tableName(principals.tableName())
+        .key(Map.of(principals.hashKeyName(), principalAV))
         .build());
 
     assertTrue(foundResponse.hasItem());
 
     dynamoDbClient.deleteItem(DeleteItemRequest.builder()
-        .tableName(numbers.tableName())
-        .key(Map.of(numbers.hashKeyName(), numberAV))
+        .tableName(principals.tableName())
+        .key(Map.of(principals.hashKeyName(), principalAV))
         .build());
   }
 

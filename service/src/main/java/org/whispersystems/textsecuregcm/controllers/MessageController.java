@@ -106,7 +106,7 @@ import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.ClientReleaseManager;
 import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.MessagesManager;
-import org.whispersystems.textsecuregcm.storage.PhoneNumberIdentifiers;
+import org.whispersystems.textsecuregcm.storage.PrincipalNameIdentifiers;
 import org.whispersystems.textsecuregcm.storage.ReportMessageManager;
 import org.whispersystems.textsecuregcm.util.HeaderUtils;
 import org.whispersystems.textsecuregcm.util.Util;
@@ -126,7 +126,7 @@ public class MessageController {
   private final ReceiptSender receiptSender;
   private final AccountsManager accountsManager;
   private final MessagesManager messagesManager;
-  private final PhoneNumberIdentifiers phoneNumberIdentifiers;
+  private final PrincipalNameIdentifiers principalNameIdentifiers;
   private final PushNotificationManager pushNotificationManager;
   private final PushNotificationScheduler pushNotificationScheduler;
   private final ReportMessageManager reportMessageManager;
@@ -180,7 +180,7 @@ public class MessageController {
       ReceiptSender receiptSender,
       AccountsManager accountsManager,
       MessagesManager messagesManager,
-      PhoneNumberIdentifiers phoneNumberIdentifiers,
+      PrincipalNameIdentifiers principalNameIdentifiers,
       PushNotificationManager pushNotificationManager,
       PushNotificationScheduler pushNotificationScheduler,
       ReportMessageManager reportMessageManager,
@@ -197,7 +197,7 @@ public class MessageController {
     this.receiptSender = receiptSender;
     this.accountsManager = accountsManager;
     this.messagesManager = messagesManager;
-    this.phoneNumberIdentifiers = phoneNumberIdentifiers;
+    this.principalNameIdentifiers = principalNameIdentifiers;
     this.pushNotificationManager = pushNotificationManager;
     this.pushNotificationScheduler = pushNotificationScheduler;
     this.reportMessageManager = reportMessageManager;
@@ -881,33 +881,49 @@ public class MessageController {
       @Nullable SpamReport spamReport,
       @HeaderParam(HttpHeaders.USER_AGENT) String userAgent
   ) {
-    final Optional<String> sourceNumber;
+    final Optional<String> sourcePrincipal;
     final Optional<UUID> sourceAci;
     final Optional<UUID> sourcePni;
 
-    if (source.startsWith("+")) {
-      sourceNumber = Optional.of(source);
-      final Optional<Account> maybeAccount = accountsManager.getByE164(source);
-      if (maybeAccount.isPresent()) {
-        sourceAci = maybeAccount.map(Account::getUuid);
-        sourcePni = maybeAccount.map(Account::getPhoneNumberIdentifier);
-      } else {
-        sourcePni = Optional.ofNullable(phoneNumberIdentifiers.getPhoneNumberIdentifier(source).join());
-        sourceAci = sourcePni.flatMap(accountsManager::findRecentlyDeletedAccountIdentifier);
-      }
-    } else {
+    // FLT(uoemai): This condition previously distinguished whether the source was a phone number or an ACI
+    // based on its format. Since the principal, like the ACI, can also be a UUID, this logic had to be changed.
+    // The source is assumed to be a principal if it is not a UUID. If it is, it is first assumed to be an ACI.
+    // If a source UUID is not found as an ACI, it is assumed to be a principal.
+    final boolean sourceIsUuid = Optional.ofNullable(source)
+        .map(s -> {
+          try {
+            UUID.fromString(s);
+            return true;
+          } catch (IllegalArgumentException e) {
+            return false;
+          }
+        }).orElse(false);
+
+    if(sourceIsUuid) {
       sourceAci = Optional.of(UUID.fromString(source));
-
-      final Optional<Account> sourceAccount = accountsManager.getByAccountIdentifier(sourceAci.get());
-
+      final Optional<Account> sourceAccount = accountsManager
+          .getByAccountIdentifier(sourceAci.get())
+          .or(() -> accountsManager.getByPrincipal(source));
       if (sourceAccount.isEmpty()) {
         logger.warn("Could not find source: {}", sourceAci.get());
-        sourcePni = accountsManager.findRecentlyDeletedPhoneNumberIdentifier(sourceAci.get());
-        sourceNumber = sourcePni.flatMap(pni ->
-            Util.getCanonicalNumber(phoneNumberIdentifiers.getPhoneNumber(pni).join()));
+        sourcePni = accountsManager.findRecentlyDeletedprincipalNameIdentifier(sourceAci.get());
+        sourcePrincipal = sourcePni.flatMap(pni ->
+            // FLT(uoemai): Although this logic is kept for compatibility and future proofing,
+            //              only a single canonical principal should be associated with a PNI.
+            Util.getCanonicalPrincipal(principalNameIdentifiers.getPrincipal(pni).join()));
       } else {
-        sourceNumber = sourceAccount.map(Account::getNumber);
-        sourcePni = sourceAccount.map(Account::getPhoneNumberIdentifier);
+        sourcePrincipal = sourceAccount.map(Account::getPrincipal);
+        sourcePni = sourceAccount.map(Account::getPrincipalNameIdentifier);
+      }
+    } else {
+      sourcePrincipal = Optional.of(source);
+      final Optional<Account> maybeAccount = accountsManager.getByPrincipal(source);
+      if (maybeAccount.isPresent()) {
+        sourceAci = maybeAccount.map(Account::getUuid);
+        sourcePni = maybeAccount.map(Account::getPrincipalNameIdentifier);
+      } else {
+        sourcePni = Optional.ofNullable(principalNameIdentifiers.getPrincipalNameIdentifier(source).join());
+        sourceAci = sourcePni.flatMap(accountsManager::findRecentlyDeletedAccountIdentifier);
       }
     }
 
@@ -919,7 +935,7 @@ public class MessageController {
             .flatMap(r -> Optional.ofNullable(r.token()))
             .filter(t -> t.length > 0);
 
-    reportMessageManager.report(sourceNumber, sourceAci, sourcePni, messageGuid, spamReporterUuid, maybeSpamReportToken, userAgent);
+    reportMessageManager.report(sourcePrincipal, sourceAci, sourcePni, messageGuid, spamReporterUuid, maybeSpamReportToken, userAgent);
 
     return Response.status(Status.ACCEPTED)
         .build();

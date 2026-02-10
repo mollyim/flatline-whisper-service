@@ -33,8 +33,8 @@ import java.time.Duration;
 import java.util.Optional;
 import org.glassfish.jersey.server.ManagedAsync;
 import org.signal.keytransparency.client.AciMonitorRequest;
-import org.signal.keytransparency.client.E164MonitorRequest;
-import org.signal.keytransparency.client.E164SearchRequest;
+import org.signal.keytransparency.client.PrincipalMonitorRequest;
+import org.signal.keytransparency.client.PrincipalSearchRequest;
 import org.signal.keytransparency.client.UsernameHashMonitorRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,8 +67,8 @@ public class KeyTransparencyController {
           ACI identity key.
 
           The username hash search response field is populated if it is found in the log and its mapped value matches
-          the provided ACI. The E164 search response is populated similarly, with some additional requirements:
-          - The account associated with the provided ACI must be discoverable by phone number.
+          the provided ACI. The principal search response is populated similarly, with some additional requirements:
+          - The account associated with the provided ACI must be discoverable by principal.
           - The provided unidentified access key must match the one on the account.
 
           Enforced unauthenticated endpoint.
@@ -93,10 +93,10 @@ public class KeyTransparencyController {
     requireNotAuthenticated(authenticatedAccount);
 
     try {
-      final Optional<E164SearchRequest> maybeE164SearchRequest =
-          request.e164().flatMap(e164 -> request.unidentifiedAccessKey().map(uak ->
-              E164SearchRequest.newBuilder()
-                  .setE164(e164)
+      final Optional<PrincipalSearchRequest> maybePrincipalSearchRequest =
+          request.principal().flatMap(principal -> request.unidentifiedAccessKey().map(uak ->
+              PrincipalSearchRequest.newBuilder()
+                  .setPrincipal(principal)
                   .setUnidentifiedAccessKey(ByteString.copyFrom(request.unidentifiedAccessKey().get()))
                   .build()
           ));
@@ -106,7 +106,7 @@ public class KeyTransparencyController {
               ByteString.copyFrom(request.aci().toCompactByteArray()),
               ByteString.copyFrom(request.aciIdentityKey().serialize()),
               request.usernameHash().map(ByteString::copyFrom),
-              maybeE164SearchRequest,
+              maybePrincipalSearchRequest,
               request.lastTreeHeadSize(),
               request.distinguishedTreeHeadSize())
           .toByteArray());
@@ -156,17 +156,17 @@ public class KeyTransparencyController {
               .setCommitmentIndex(ByteString.copyFrom(usernameHash.commitmentIndex()))
               .build());
 
-      final Optional<E164MonitorRequest> e164MonitorRequest = request.e164().map(e164 ->
-          E164MonitorRequest.newBuilder()
-              .setE164(e164.value())
-              .setEntryPosition(e164.entryPosition())
-              .setCommitmentIndex(ByteString.copyFrom(e164.commitmentIndex()))
+      final Optional<PrincipalMonitorRequest> principalMonitorRequest = request.principal().map(principal ->
+          PrincipalMonitorRequest.newBuilder()
+              .setPrincipal(principal.value())
+              .setEntryPosition(principal.entryPosition())
+              .setCommitmentIndex(ByteString.copyFrom(principal.commitmentIndex()))
               .build());
 
       return new KeyTransparencyMonitorResponse(keyTransparencyServiceClient.monitor(
           aciMonitorRequest,
           usernameHashMonitorRequest,
-          e164MonitorRequest,
+          principalMonitorRequest,
           request.lastNonDistinguishedTreeHeadSize(),
           request.lastDistinguishedTreeHeadSize())
           .toByteArray());

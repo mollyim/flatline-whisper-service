@@ -14,7 +14,6 @@ import org.whispersystems.textsecuregcm.entities.MessageProtos.SenderCertificate
 import org.whispersystems.textsecuregcm.entities.MessageProtos.ServerCertificate;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
 import org.whispersystems.textsecuregcm.storage.Account;
-import org.whispersystems.textsecuregcm.storage.Device;
 
 public class CertificateGenerator {
 
@@ -30,7 +29,7 @@ public class CertificateGenerator {
     this.serverCertificate = ServerCertificate.parseFrom(serverCertificate);
   }
 
-  public byte[] createFor(final Account account, final byte deviceId, boolean includeE164) throws InvalidKeyException {
+  public byte[] createFor(final Account account, final byte deviceId, boolean includePrincipal) throws InvalidKeyException {
     SenderCertificate.Certificate.Builder builder = SenderCertificate.Certificate.newBuilder()
         .setSenderDevice(Math.toIntExact(deviceId))
         .setExpires(System.currentTimeMillis() + TimeUnit.DAYS.toMillis(expiresDays))
@@ -38,8 +37,8 @@ public class CertificateGenerator {
         .setSigner(serverCertificate)
         .setSenderUuid(account.getUuid().toString());
 
-    if (includeE164) {
-      builder.setSender(account.getNumber());
+    if (includePrincipal) {
+      builder.setSender(account.getPrincipal());
     }
 
     byte[] certificate = builder.build().toByteArray();

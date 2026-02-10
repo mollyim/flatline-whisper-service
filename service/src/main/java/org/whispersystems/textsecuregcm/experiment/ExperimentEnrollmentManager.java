@@ -14,9 +14,8 @@ import java.util.function.Supplier;
 
 import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicConfiguration;
 import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicExperimentEnrollmentConfiguration;
-import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicE164ExperimentEnrollmentConfiguration;
+import org.whispersystems.textsecuregcm.configuration.dynamic.DynamicPrincipalExperimentEnrollmentConfiguration;
 import org.whispersystems.textsecuregcm.storage.DynamicConfigurationManager;
-import org.whispersystems.textsecuregcm.util.Util;
 
 public class ExperimentEnrollmentManager {
 
@@ -63,44 +62,36 @@ public class ExperimentEnrollmentManager {
     return Optional.empty();
   }
 
-  public boolean isEnrolled(final String e164, final UUID accountUuid, final String experimentName) {
+  public boolean isEnrolled(final String principal, final UUID accountUuid, final String experimentName) {
 
     final Optional<DynamicExperimentEnrollmentConfiguration> maybeConfiguration = dynamicConfigurationManager
         .getConfiguration().getExperimentEnrollmentConfiguration(experimentName);
 
     return maybeConfiguration
         .flatMap(config -> isAccountEnrolled(accountUuid, config, experimentName))
-        .orElse(isEnrolled(e164, experimentName));
+        .orElse(isEnrolled(principal, experimentName));
   }
 
-  public boolean isEnrolled(final String e164, final String experimentName) {
+  public boolean isEnrolled(final String principal, final String experimentName) {
 
-    final Optional<DynamicE164ExperimentEnrollmentConfiguration> maybeConfiguration = dynamicConfigurationManager
-        .getConfiguration().getE164ExperimentEnrollmentConfiguration(experimentName);
+    final Optional<DynamicPrincipalExperimentEnrollmentConfiguration> maybeConfiguration = dynamicConfigurationManager
+        .getConfiguration().getPrincipalExperimentEnrollmentConfiguration(experimentName);
 
     return maybeConfiguration.map(config -> {
 
-      if (config.getEnrolledE164s().contains(e164)) {
+      if (config.getEnrolledPrincipals().contains(principal)) {
         return true;
       }
 
-      if (config.getExcludedE164s().contains(e164)) {
+      if (config.getExcludedPrincipals().contains(principal)) {
         return false;
       }
 
-      {
-        final String countryCode = Util.getCountryCode(e164);
+      // FLT(uoemai): Here, it was possible to enroll accounts by country code.
+      // In Flatline, there is no guarantee that the principal will contain this or any other information.
+      // In the future perhaps we should allow enrolling principals based on substrings, prefixes or suffixes.
 
-        if (config.getIncludedCountryCodes().contains(countryCode)) {
-          return true;
-        }
-
-        if (config.getExcludedCountryCodes().contains(countryCode)) {
-          return false;
-        }
-      }
-
-      return isEnrolled(e164, config.getEnrollmentPercentage(), experimentName);
+      return isEnrolled(principal, config.getEnrollmentPercentage(), experimentName);
 
     }).orElse(false);
   }

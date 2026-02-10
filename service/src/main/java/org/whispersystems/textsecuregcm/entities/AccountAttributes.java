@@ -31,7 +31,7 @@ public class AccountAttributes {
   private int registrationId;
 
   @JsonProperty("pniRegistrationId")
-  private int phoneNumberIdentityRegistrationId;
+  private int principalNameIdentityRegistrationId;
 
   @JsonProperty
   @JsonSerialize(using = ByteArrayAdapter.Serializing.class)
@@ -56,7 +56,7 @@ public class AccountAttributes {
   private Set<DeviceCapability> capabilities;
 
   @JsonProperty
-  private boolean discoverableByPhoneNumber = true;
+  private boolean discoverableByPrincipal = true;
 
   @JsonProperty
   @Nullable
@@ -70,17 +70,17 @@ public class AccountAttributes {
   public AccountAttributes(
       final boolean fetchesMessages,
       final int registrationId,
-      final int phoneNumberIdentifierRegistrationId,
+      final int principalNameIdentifierRegistrationId,
       final byte[] name,
       final String registrationLock,
-      final boolean discoverableByPhoneNumber,
+      final boolean discoverableByPrincipal,
       final Set<DeviceCapability> capabilities) {
     this.fetchesMessages = fetchesMessages;
     this.registrationId = registrationId;
-    this.phoneNumberIdentityRegistrationId = phoneNumberIdentifierRegistrationId;
+    this.principalNameIdentityRegistrationId = principalNameIdentifierRegistrationId;
     this.name = name;
     this.registrationLock = registrationLock;
-    this.discoverableByPhoneNumber = discoverableByPhoneNumber;
+    this.discoverableByPrincipal = discoverableByPrincipal;
     this.capabilities = capabilities;
   }
 
@@ -92,8 +92,8 @@ public class AccountAttributes {
     return registrationId;
   }
 
-  public int getPhoneNumberIdentityRegistrationId() {
-    return phoneNumberIdentityRegistrationId;
+  public int getPrincipalNameIdentityRegistrationId() {
+    return principalNameIdentityRegistrationId;
   }
 
   public byte[] getName() {
@@ -117,8 +117,8 @@ public class AccountAttributes {
     return capabilities;
   }
 
-  public boolean isDiscoverableByPhoneNumber() {
-    return discoverableByPhoneNumber;
+  public boolean isDiscoverableByPrincipal() {
+    return discoverableByPrincipal;
   }
 
   public Optional<byte[]> recoveryPassword() {
@@ -140,6 +140,6 @@ public class AccountAttributes {
   @AssertTrue
   @Schema(hidden = true)
   public boolean isEachRegistrationIdValid() {
-    return validRegistrationId(registrationId) && validRegistrationId(phoneNumberIdentityRegistrationId);
+    return validRegistrationId(registrationId) && validRegistrationId(principalNameIdentityRegistrationId);
   }
 }
