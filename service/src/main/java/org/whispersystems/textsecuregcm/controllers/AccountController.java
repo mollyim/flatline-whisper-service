@@ -56,6 +56,7 @@ import org.whispersystems.textsecuregcm.identity.IdentityType;
 import org.whispersystems.textsecuregcm.identity.ServiceIdentifier;
 import org.whispersystems.textsecuregcm.limits.RateLimitedByIp;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
+import org.whispersystems.textsecuregcm.push.WebPushSubscription;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
@@ -110,6 +111,7 @@ public class AccountController {
 
     accounts.updateDevice(account, device.getId(), d -> {
       d.setApnId(null);
+      d.setWebPush(null);
       d.setGcmId(registrationId.gcmRegistrationId());
       d.setFetchesMessages(false);
     });
@@ -127,6 +129,49 @@ public class AccountController {
     accounts.updateDevice(account, device.getId(), d -> {
       d.setGcmId(null);
       d.setFetchesMessages(false);
+      d.setUserAgent("OWA");
+    });
+  }
+
+
+  @PUT
+  @Path("/webpush/")
+  @Consumes(MediaType.APPLICATION_JSON)
+  @Produces(MediaType.APPLICATION_JSON)
+  public void setWebPushSubscription(@Auth AuthenticatedDevice auth,
+      @NotNull @Valid WebPushSubscription webPushSubscription) {
+
+    final Account account = accounts.getByAccountIdentifier(auth.accountIdentifier())
+        .orElseThrow(() -> new WebApplicationException(Status.UNAUTHORIZED));
+
+    final Device device = account.getDevice(auth.deviceId())
+        .orElseThrow(() -> new WebApplicationException(Status.UNAUTHORIZED));
+
+    if (Objects.equals(device.getWebPush(), webPushSubscription)) {
+      return;
+    }
+
+    accounts.updateDevice(account, device.getId(), d -> {
+      d.setApnId(null);
+      d.setGcmId(null);
+      d.setWebPush(webPushSubscription);
+      d.setFetchesMessages(false);
+    });
+  }
+
+  @DELETE
+  @Path("/webpush/")
+  public void deletewebpushRegistrationId(@Auth AuthenticatedDevice auth) {
+    final Account account = accounts.getByAccountIdentifier(auth.accountIdentifier())
+        .orElseThrow(() -> new WebApplicationException(Status.UNAUTHORIZED));
+
+    final Device device = account.getDevice(auth.deviceId())
+        .orElseThrow(() -> new WebApplicationException(Status.UNAUTHORIZED));
+
+    accounts.updateDevice(account, device.getId(), d -> {
+      d.setWebPush(null);
+      d.setFetchesMessages(false);
+      // For now, only Android app can use webpush, desktop may support it later
       d.setUserAgent("OWA");
     });
   }
@@ -149,6 +194,7 @@ public class AccountController {
     accounts.updateDevice(account, device.getId(), d -> {
       d.setApnId(registrationId.apnRegistrationId());
       d.setGcmId(null);
+      d.setWebPush(null);
       d.setFetchesMessages(false);
     });
   }
