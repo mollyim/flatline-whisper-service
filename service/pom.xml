@@ -256,6 +256,10 @@
       <groupId>com.google.crypto.tink</groupId>
       <artifactId>tink</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.google.crypto.tink</groupId>
+      <artifactId>apps-webpush</artifactId>
+    </dependency>
 
     <!-- resolve opentelemetry-semconv conflicts from lower in firebase-admin and firestore dependency trees -->
     <dependency>

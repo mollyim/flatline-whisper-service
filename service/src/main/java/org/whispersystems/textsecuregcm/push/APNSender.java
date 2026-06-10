@@ -114,7 +114,7 @@ public class APNSender implements Managed, PushNotificationSender {
 
     final Instant start = Instant.now();
 
-    return apnsClient.sendNotification(new SimpleApnsPushNotification(notification.deviceToken(),
+    return apnsClient.sendNotification(new SimpleApnsPushNotification((String) notification.pushToken().value(),
         bundleId,
         payload,
         MAX_EXPIRATION,

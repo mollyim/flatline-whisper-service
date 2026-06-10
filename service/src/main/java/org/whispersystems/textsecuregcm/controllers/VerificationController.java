@@ -79,6 +79,7 @@ import org.whispersystems.textsecuregcm.mappers.RegistrationServiceSenderExcepti
 import org.whispersystems.textsecuregcm.metrics.UserAgentTagUtil;
 import org.whispersystems.textsecuregcm.push.PushNotification;
 import org.whispersystems.textsecuregcm.push.PushNotificationManager;
+import org.whispersystems.textsecuregcm.push.PushNotification.PushToken;
 import org.whispersystems.textsecuregcm.registration.ClientType;
 import org.whispersystems.textsecuregcm.registration.MessageTransport;
 import org.whispersystems.textsecuregcm.registration.RegistrationFraudException;
@@ -338,7 +339,13 @@ public class VerificationController {
         );
       }
 
-      pushNotificationManager.sendRegistrationChallengeNotification(pushTokenAndType.first(), pushTokenAndType.second(),
+      final PushToken<?> token = switch(pushTokenAndType.second()) {
+        case FCM -> new PushToken.FCM(pushTokenAndType.first());
+        case APN -> new PushToken.APN(pushTokenAndType.first());
+        case WEBPUSH -> null;
+      };
+
+      pushNotificationManager.sendRegistrationChallengeNotification(token,
           verificationSession.pushChallenge());
     }
 
