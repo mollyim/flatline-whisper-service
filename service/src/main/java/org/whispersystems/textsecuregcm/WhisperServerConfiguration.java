@@ -65,6 +65,7 @@ import org.whispersystems.textsecuregcm.configuration.TlsKeyStoreConfiguration;
 import org.whispersystems.textsecuregcm.configuration.TurnConfiguration;
 import org.whispersystems.textsecuregcm.configuration.UnidentifiedDeliveryConfiguration;
 import org.whispersystems.textsecuregcm.configuration.VirtualThreadConfiguration;
+import org.whispersystems.textsecuregcm.configuration.WebPushConfiguration;
 import org.whispersystems.textsecuregcm.configuration.ZkConfig;
 import org.whispersystems.websocket.configuration.WebSocketConfiguration;
 
@@ -323,6 +324,11 @@ public class WhisperServerConfiguration extends Configuration {
   @Valid
   @NotNull
   @JsonProperty
+  private WebPushConfiguration webPush;
+
+  @Valid
+  @NotNull
+  @JsonProperty
   private ExternalRequestFilterConfiguration externalRequestFilter;
 
   @Valid
@@ -553,6 +559,10 @@ public class WhisperServerConfiguration extends Configuration {
 
   public NoiseTunnelConfiguration getNoiseTunnelConfiguration() {
     return noiseTunnel;
+  }
+
+  public WebPushConfiguration getWebPushConfiguration() {
+    return webPush;
   }
 
   public ExternalRequestFilterConfiguration getExternalRequestFilterConfiguration() {

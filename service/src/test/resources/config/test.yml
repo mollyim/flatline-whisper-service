@@ -529,6 +529,9 @@ noiseTunnel:
   noiseStaticPrivateKey: secret://noiseTunnel.noiseStaticPrivateKey
   recognizedProxySecret: secret://noiseTunnel.recognizedProxySecret
 
+webPush:
+  vapidStaticPrivateKey: secret://webPush.vapidStaticPrivateKey
+
 externalRequestFilter:
   grpcMethods:
     - com.example.grpc.ExampleService/exampleMethod

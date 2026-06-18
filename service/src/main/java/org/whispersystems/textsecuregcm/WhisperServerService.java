@@ -683,7 +683,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     // FLT(uoemai): Notification providers replaced by dummy logger during development.
     // APNSender apnSender = new APNSender(apnSenderExecutor, config.getApnConfiguration());
     // FcmSender fcmSender = new FcmSender(fcmSenderExecutor, config.getFcmConfiguration().credentials().value());
-    WebPushSender webPushSender = new WebPushSender(webPushSenderExecutor, webPushSenderCluster);
+    WebPushSender webPushSender = new WebPushSender(webPushSenderExecutor, webPushSenderCluster, config.getWebPushConfiguration().vapidStaticKeyPair());
     DummySender apnSender = new DummySender("APN");
     DummySender fcmSender = new DummySender("FCM");
     PushNotificationScheduler pushNotificationScheduler = new PushNotificationScheduler(pushSchedulerCluster,
