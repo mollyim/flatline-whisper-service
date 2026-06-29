@@ -29,6 +29,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.whispersystems.textsecuregcm.push.PushNotification.NotificationType;
+import org.whispersystems.textsecuregcm.push.PushNotification.UnsupportedNotificationType;
 import org.whispersystems.textsecuregcm.util.ExceptionUtils;
 import org.whispersystems.textsecuregcm.util.GoogleApiUtil;
 
@@ -84,12 +86,18 @@ public class FcmSender implements PushNotificationSender {
             .setPriority(pushNotification.urgent() ? AndroidConfig.Priority.HIGH : AndroidConfig.Priority.NORMAL)
             .build());
 
-    final String key = switch (pushNotification.notificationType()) {
-      case NOTIFICATION -> "newMessageAlert";
-      case ATTEMPT_LOGIN_NOTIFICATION_HIGH_PRIORITY -> "attemptLoginContext";
-      case CHALLENGE -> "challenge";
-      case RATE_LIMIT_CHALLENGE -> "rateLimitChallenge";
-    };
+    final String key;
+    try {
+      key = switch (pushNotification.notificationType()) {
+        case NOTIFICATION -> "newMessageAlert";
+        case ATTEMPT_LOGIN_NOTIFICATION_HIGH_PRIORITY -> "attemptLoginContext";
+        case CHALLENGE -> "challenge";
+        case RATE_LIMIT_CHALLENGE -> "rateLimitChallenge";
+        case ACTIVATION_TOKEN -> throw new UnsupportedNotificationType(NotificationType.ACTIVATION_TOKEN);
+      };
+    } catch (UnsupportedNotificationType e) {
+      return CompletableFuture.completedFuture(new SendPushNotificationResult(false, Optional.of(e.getMessage()), false, Optional.empty()));
+    }
 
     builder.putData(key, pushNotification.data() != null ? pushNotification.data() : "");
 

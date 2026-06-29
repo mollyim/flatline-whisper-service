@@ -17,10 +17,17 @@ public record PushNotification(PushToken<?> pushToken,
                                @Nullable Device destinationDevice,
                                boolean urgent) {
 
+  static public class UnsupportedNotificationType extends Exception{
+    public UnsupportedNotificationType(NotificationType type) {
+      super("Unsupported push type: " + type.name());
+    }
+  }
+
   public enum NotificationType {
     NOTIFICATION,
     ATTEMPT_LOGIN_NOTIFICATION_HIGH_PRIORITY,
     CHALLENGE,
+    ACTIVATION_TOKEN,
     RATE_LIMIT_CHALLENGE
   }
 
@@ -48,7 +55,7 @@ public record PushNotification(PushToken<?> pushToken,
     public record APN(String value) implements PushToken<String> {
       public TokenType type() { return TokenType.APN; }
     }
-    public record WEBPUSH(WebPushSubscription value) implements PushToken<WebPushSubscription> {
+    public record WEBPUSH(WebPushSubscription value, boolean activated) implements PushToken<WebPushSubscription> {
       public TokenType type() { return TokenType.WEBPUSH; }
     }
   }

@@ -25,6 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.net.HttpHeaders;
 import io.dropwizard.auth.AuthValueFactoryProvider;
 import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
@@ -82,6 +83,9 @@ import org.whispersystems.textsecuregcm.mappers.ImpossiblePhoneNumberExceptionMa
 import org.whispersystems.textsecuregcm.mappers.JsonMappingExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.NonNormalizedPhoneNumberExceptionMapper;
 import org.whispersystems.textsecuregcm.mappers.RateLimitExceededExceptionMapper;
+import org.whispersystems.textsecuregcm.push.PushNotificationManager;
+import org.whispersystems.textsecuregcm.push.WebPushActivation;
+import org.whispersystems.textsecuregcm.push.WebPushSubscription;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountBadge;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
@@ -136,6 +140,7 @@ class AccountControllerTest {
   private static final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager =
       mock(RegistrationRecoveryPasswordsManager.class);
   private static final UsernameHashZkProofVerifier usernameZkProofVerifier = mock(UsernameHashZkProofVerifier.class);
+  private static final PushNotificationManager pushNotificationManager = mock(PushNotificationManager.class);
 
   private final byte[] registration_lock_key = new byte[32];
 
@@ -158,7 +163,8 @@ class AccountControllerTest {
               accountsManager,
           rateLimiters,
           registrationRecoveryPasswordsManager,
-          usernameZkProofVerifier
+          usernameZkProofVerifier,
+          pushNotificationManager
       ))
       .build();
 
@@ -309,7 +315,6 @@ class AccountControllerTest {
     }
   }
 
-
   @Test
   void testSetWebPush() {
     try (final Response response = resources.getJerseyTest()
@@ -327,7 +332,131 @@ class AccountControllerTest {
       assertThat(response.getStatus()).isEqualTo(204);
 
       verify(AuthHelper.VALID_DEVICE_3_PRIMARY, times(1)).setWebPush(any());
+      verify(AuthHelper.VALID_DEVICE_3_PRIMARY, times(1)).setWebPushActivation(any());
       verify(accountsManager, times(1)).updateDevice(eq(AuthHelper.VALID_ACCOUNT_3), anyByte(), any());
+    }
+  }
+
+  @Test
+  void testSetWebPushSameSubInactive() throws JsonProcessingException {
+    final WebPushSubscription webPushSub = SystemMapper.jsonMapper().readValue("""
+        {
+          "endpoint": "https://domain.tld/random1",
+          "auth": "BTBZMqHH6r4Tts7J_aSIgg",
+          "publicKey": "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4"
+        }
+      """, WebPushSubscription.class);
+    when(AuthHelper.VALID_DEVICE_3_PRIMARY.getWebPush()).thenReturn(webPushSub);
+    when(AuthHelper.VALID_DEVICE_3_PRIMARY.getWebPushActivated()).thenReturn(false);
+    try (final Response response = resources.getJerseyTest()
+        .target("/v1/accounts/webpush/")
+        .request()
+        .header(HttpHeaders.AUTHORIZATION,
+            AuthHelper.getAuthHeader(AuthHelper.VALID_UUID_3, AuthHelper.VALID_PASSWORD_3_PRIMARY))
+        .put(Entity.json("""
+        {
+            "endpoint": "https://domain.tld/random1",
+            "auth": "BTBZMqHH6r4Tts7J_aSIgg",
+            "publicKey": "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4"
+        }
+        """))) {
+      assertThat(response.getStatus()).isEqualTo(204);
+
+      verify(AuthHelper.VALID_DEVICE_3_PRIMARY, times(1)).setWebPush(any());
+      verify(AuthHelper.VALID_DEVICE_3_PRIMARY, times(1)).setWebPushActivation(any());
+      verify(accountsManager, times(1)).updateDevice(eq(AuthHelper.VALID_ACCOUNT_3), anyByte(), any());
+    }
+  }
+
+  @Test
+  void testSetWebPushAlreadyActivated() throws JsonProcessingException {
+    final WebPushSubscription webPushSub = SystemMapper.jsonMapper().readValue("""
+        {
+          "endpoint": "https://domain.tld/random1",
+          "auth": "BTBZMqHH6r4Tts7J_aSIgg",
+          "publicKey": "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4"
+        }
+      """, WebPushSubscription.class);
+    when(AuthHelper.VALID_DEVICE_3_PRIMARY.getWebPush()).thenReturn(webPushSub);
+    when(AuthHelper.VALID_DEVICE_3_PRIMARY.getWebPushActivated()).thenReturn(true);
+    try (final Response response = resources.getJerseyTest()
+        .target("/v1/accounts/webpush/")
+        .request()
+        .header(HttpHeaders.AUTHORIZATION,
+            AuthHelper.getAuthHeader(AuthHelper.VALID_UUID_3, AuthHelper.VALID_PASSWORD_3_PRIMARY))
+        .put(Entity.json("""
+        {
+            "endpoint": "https://domain.tld/random1",
+            "auth": "BTBZMqHH6r4Tts7J_aSIgg",
+            "publicKey": "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4"
+        }
+        """))) {
+      assertThat(response.getStatus()).isEqualTo(204);
+
+      verify(AuthHelper.VALID_DEVICE_3_PRIMARY, never()).setWebPush(any());
+      verify(AuthHelper.VALID_DEVICE_3_PRIMARY, never()).setWebPushActivation(any());
+      verify(accountsManager, never()).updateDevice(eq(AuthHelper.VALID_ACCOUNT_3), anyByte(), any());
+    }
+  }
+
+  @Test
+  void testActivateWebPushSameToken() throws JsonProcessingException {
+    final WebPushSubscription webPushSub = SystemMapper.jsonMapper().readValue("""
+        {
+          "endpoint": "https://domain.tld/random1",
+          "auth": "BTBZMqHH6r4Tts7J_aSIgg",
+          "publicKey": "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4"
+        }
+      """, WebPushSubscription.class);
+    final WebPushActivation deviceActivation = new WebPushActivation(false, "f94694be-f105-44f7-acca-8c025bde71a7");
+    when(AuthHelper.VALID_DEVICE_3_PRIMARY.getWebPush()).thenReturn(webPushSub);
+    when(AuthHelper.VALID_DEVICE_3_PRIMARY.getWebPushActivation()).thenReturn(deviceActivation);
+    try (final Response response = resources.getJerseyTest()
+        .target("/v1/accounts/webpush/activate/")
+        .request()
+        .header(HttpHeaders.AUTHORIZATION,
+            AuthHelper.getAuthHeader(AuthHelper.VALID_UUID_3, AuthHelper.VALID_PASSWORD_3_PRIMARY))
+        .put(Entity.json("""
+        {
+            "activationToken": "f94694be-f105-44f7-acca-8c025bde71a7"
+        }
+        """))) {
+      assertThat(response.getStatus()).isEqualTo(204);
+
+      verify(AuthHelper.VALID_DEVICE_3_PRIMARY, never()).setWebPush(any());
+      verify(AuthHelper.VALID_DEVICE_3_PRIMARY, times(1)).setWebPushActivation(any());
+      verify(accountsManager, times(1)).updateDevice(eq(AuthHelper.VALID_ACCOUNT_3), anyByte(), any());
+    }
+  }
+
+
+  @Test
+  void testActivateWebPushInvalidToken() throws JsonProcessingException {
+    final WebPushSubscription webPushSub = SystemMapper.jsonMapper().readValue("""
+        {
+          "endpoint": "https://domain.tld/random1",
+          "auth": "BTBZMqHH6r4Tts7J_aSIgg",
+          "publicKey": "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4"
+        }
+      """, WebPushSubscription.class);
+    final WebPushActivation deviceActivation = new WebPushActivation(false, "f94694be-f105-44f7-acca-8c025bde71a7");
+    when(AuthHelper.VALID_DEVICE_3_PRIMARY.getWebPush()).thenReturn(webPushSub);
+    when(AuthHelper.VALID_DEVICE_3_PRIMARY.getWebPushActivation()).thenReturn(deviceActivation);
+    try (final Response response = resources.getJerseyTest()
+        .target("/v1/accounts/webpush/activate/")
+        .request()
+        .header(HttpHeaders.AUTHORIZATION,
+            AuthHelper.getAuthHeader(AuthHelper.VALID_UUID_3, AuthHelper.VALID_PASSWORD_3_PRIMARY))
+        .put(Entity.json("""
+        {
+            "activationToken": "b6cf9c40-012a-4c92-ab7b-e1dc118f72f0"
+        }
+        """))) {
+      assertThat(response.getStatus()).isEqualTo(204);
+
+      verify(AuthHelper.VALID_DEVICE_3_PRIMARY, never()).setWebPush(any());
+      verify(AuthHelper.VALID_DEVICE_3_PRIMARY, never()).setWebPushActivation(any());
+      verify(accountsManager, never()).updateDevice(eq(AuthHelper.VALID_ACCOUNT_3), anyByte(), any());
     }
   }
 

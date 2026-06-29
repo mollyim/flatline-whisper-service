@@ -19,6 +19,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import org.apache.commons.lang3.StringUtils;
+import org.signal.chat.device.ActivatePushTokenRequest;
+import org.signal.chat.device.ActivatePushTokenResponse;
 import org.signal.chat.device.ClearPushTokenRequest;
 import org.signal.chat.device.ClearPushTokenResponse;
 import org.signal.chat.device.GetDevicesRequest;
@@ -35,6 +37,7 @@ import org.signal.chat.device.SetPushTokenResponse;
 import org.whispersystems.textsecuregcm.auth.grpc.AuthenticatedDevice;
 import org.whispersystems.textsecuregcm.auth.grpc.AuthenticationUtil;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
+import org.whispersystems.textsecuregcm.push.WebPushActivation;
 import org.whispersystems.textsecuregcm.push.WebPushSubscription;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
@@ -217,10 +220,24 @@ public class DevicesGrpcService extends ReactorDevicesGrpc.DevicesImplBase {
           final Device device = account.getDevice(authenticatedDevice.deviceId())
               .orElseThrow(Status.UNAUTHENTICATED::asRuntimeException);
 
+          // If this is a new web push registration, or if the web push registration is not yet active => generate a new activation token
+          // Else, if it s the same registration and it's already activated: do nothing
+          @Nullable final WebPushActivation webPushActivation;
+          if (webPush != null) {
+            if (!Objects.equals(device.getWebPush(), webPush) || !device.getWebPushActivated()) {
+              webPushActivation = WebPushActivation.newToken();
+            } else {
+              webPushActivation = device.getWebPushActivation();
+            }
+          } else {
+            webPushActivation = null;
+          }
+
           final boolean tokenUnchanged =
               Objects.equals(device.getApnId(), apnsToken) &&
                   Objects.equals(device.getGcmId(), fcmToken) &&
-                  Objects.equals(device.getWebPush(), webPush);
+                  Objects.equals(device.getWebPush(), webPush) &&
+                  Objects.equals(device.getWebPushActivation(), webPushActivation);
 
           return tokenUnchanged
               ? Mono.empty()
@@ -228,10 +245,34 @@ public class DevicesGrpcService extends ReactorDevicesGrpc.DevicesImplBase {
                 d.setApnId(apnsToken);
                 d.setGcmId(fcmToken);
                 d.setWebPush(webPush);
+                d.setWebPushActivation(webPushActivation);
                 d.setFetchesMessages(false);
               }));
         })
         .thenReturn(SetPushTokenResponse.newBuilder().build());
+  }
+
+  @Override
+  public Mono<ActivatePushTokenResponse> activatePushToken(final ActivatePushTokenRequest request) {
+    final AuthenticatedDevice authenticatedDevice = AuthenticationUtil.requireAuthenticatedDevice();
+
+    return Mono.fromFuture(() -> accountsManager.getByAccountIdentifierAsync(authenticatedDevice.accountIdentifier()))
+        .map(maybeAccount -> maybeAccount.orElseThrow(Status.UNAUTHENTICATED::asRuntimeException))
+        .flatMap(account -> Mono.fromFuture(() -> accountsManager.updateDeviceAsync(account, authenticatedDevice.deviceId(), device -> {
+          String token = request.getActivationToken();
+          WebPushActivation deviceActivationToken = device.getWebPushActivation();
+          if (
+            StringUtils.isNotBlank(token) &&
+            device.getWebPush() != null &&
+            deviceActivationToken != null &&
+            Objects.equals(deviceActivationToken.activationToken(), token)
+          ) {
+              device.setWebPushActivation(new WebPushActivation(true, null));
+          }
+
+          device.setFetchesMessages(true);
+        })))
+        .thenReturn(ActivatePushTokenResponse.newBuilder().build());
   }
 
   @Override
@@ -250,6 +291,7 @@ public class DevicesGrpcService extends ReactorDevicesGrpc.DevicesImplBase {
           device.setApnId(null);
           device.setGcmId(null);
           device.setWebPush(null);
+          device.setWebPushActivation(null);
           device.setFetchesMessages(true);
         })))
         .thenReturn(ClearPushTokenResponse.newBuilder().build());
