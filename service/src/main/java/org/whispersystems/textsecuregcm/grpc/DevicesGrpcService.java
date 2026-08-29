@@ -37,6 +37,7 @@ import org.signal.chat.device.SetPushTokenResponse;
 import org.whispersystems.textsecuregcm.auth.grpc.AuthenticatedDevice;
 import org.whispersystems.textsecuregcm.auth.grpc.AuthenticationUtil;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
+import org.whispersystems.textsecuregcm.limits.RateLimiters;
 import org.whispersystems.textsecuregcm.push.WebPushActivation;
 import org.whispersystems.textsecuregcm.push.WebPushSubscription;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
@@ -50,11 +51,14 @@ import reactor.core.publisher.Mono;
 public class DevicesGrpcService extends ReactorDevicesGrpc.DevicesImplBase {
 
   private final AccountsManager accountsManager;
+  private final RateLimiters rateLimiters;
 
   private static final int MAX_NAME_LENGTH = 256;
 
-  public DevicesGrpcService(final AccountsManager accountsManager) {
+  public DevicesGrpcService(final AccountsManager accountsManager,
+        final RateLimiters rateLimiters) {
     this.accountsManager = accountsManager;
+    this.rateLimiters = rateLimiters;
   }
 
   @Override
@@ -223,10 +227,17 @@ public class DevicesGrpcService extends ReactorDevicesGrpc.DevicesImplBase {
           // If this is a new web push registration, or if the web push registration is not yet active => generate a new activation token
           // Else, if it s the same registration and it's already activated: do nothing
           @Nullable final WebPushActivation webPushActivation;
+          Mono<Void> rateLimiterMono = Mono.empty();
           if (webPush != null) {
             if (!Objects.equals(device.getWebPush(), webPush) || !device.getWebPushActivated()) {
+              rateLimiterMono = rateLimiters
+                  .getSetWebPushLimiter()
+                  .validateReactive(authenticatedDevice.accountIdentifier());
               webPushActivation = WebPushActivation.newToken();
             } else {
+              // If the web push registration is the same and already activated,
+              // we use the current activation token,
+              // so tokenUnchanged is true;
               webPushActivation = device.getWebPushActivation();
             }
           } else {
@@ -241,13 +252,16 @@ public class DevicesGrpcService extends ReactorDevicesGrpc.DevicesImplBase {
 
           return tokenUnchanged
               ? Mono.empty()
-              : Mono.fromFuture(() -> accountsManager.updateDeviceAsync(account, authenticatedDevice.deviceId(), d -> {
-                d.setApnId(apnsToken);
-                d.setGcmId(fcmToken);
-                d.setWebPush(webPush);
-                d.setWebPushActivation(webPushActivation);
-                d.setFetchesMessages(false);
-              }));
+              : rateLimiterMono
+                .then(Mono.fromFuture(() ->
+                  accountsManager.updateDeviceAsync(account, authenticatedDevice.deviceId(), d -> {
+                    d.setApnId(apnsToken);
+                    d.setGcmId(fcmToken);
+                    d.setWebPush(webPush);
+                    d.setWebPushActivation(webPushActivation);
+                    d.setFetchesMessages(false);
+                  })
+                ));
         })
         .thenReturn(SetPushTokenResponse.newBuilder().build());
   }
