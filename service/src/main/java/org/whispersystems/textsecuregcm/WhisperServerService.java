@@ -192,6 +192,7 @@ import org.whispersystems.textsecuregcm.push.PushNotificationManager;
 import org.whispersystems.textsecuregcm.push.PushNotificationScheduler;
 import org.whispersystems.textsecuregcm.push.ReceiptSender;
 import org.whispersystems.textsecuregcm.push.RedisMessageAvailabilityManager;
+import org.whispersystems.textsecuregcm.push.WebPushSender;
 import org.whispersystems.textsecuregcm.redis.ConnectionEventLogger;
 import org.whispersystems.textsecuregcm.redis.FaultTolerantRedisClient;
 import org.whispersystems.textsecuregcm.redis.FaultTolerantRedisClusterClient;
@@ -500,6 +501,8 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     FaultTolerantRedisClusterClient messagesCluster =
         config.getMessageCacheConfiguration().getRedisClusterConfiguration()
             .build("messages", sharedClientResources.mutate());
+    FaultTolerantRedisClusterClient webPushSenderCluster = config.getPushSchedulerCluster().build("webpush",
+        sharedClientResources.mutate());
     FaultTolerantRedisClusterClient pushSchedulerCluster = config.getPushSchedulerCluster().build("push_scheduler",
         sharedClientResources.mutate());
     FaultTolerantRedisClusterClient rateLimitersCluster = config.getRateLimitersCluster().build("rate_limiters",
@@ -511,6 +514,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     final BlockingQueue<Runnable> receiptSenderQueue = new LinkedBlockingQueue<>();
     Metrics.gaugeCollectionSize(name(getClass(), "receiptSenderQueue"), Collections.emptyList(), receiptSenderQueue);
     final BlockingQueue<Runnable> fcmSenderQueue = new LinkedBlockingQueue<>();
+    final BlockingQueue<Runnable> webPushSenderQueue = new LinkedBlockingQueue<>();
     Metrics.gaugeCollectionSize(name(getClass(), "fcmSenderQueue"), Collections.emptyList(), fcmSenderQueue);
     final BlockingQueue<Runnable> messageDeliveryQueue = new LinkedBlockingQueue<>();
     Metrics.gaugeCollectionSize(MetricsUtil.name(getClass(), "messageDeliveryQueue"), Collections.emptyList(),
@@ -521,6 +525,8 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         .maxThreads(1).minThreads(1).build();
     ExecutorService fcmSenderExecutor = ExecutorServiceBuilder.of(environment, "fcmSender")
         .maxThreads(32).minThreads(32).workQueue(fcmSenderQueue).build();
+    ExecutorService webPushSenderExecutor = ExecutorServiceBuilder.of(environment, "webPushSender")
+        .maxThreads(32).minThreads(32).workQueue(webPushSenderQueue).build();
     ExecutorService secureValueRecoveryServiceExecutor = ExecutorServiceBuilder.of(environment, "secureValueRecoveryService")
         .maxThreads(1).minThreads(1).build();
     ExecutorService storageServiceExecutor = ExecutorServiceBuilder.of(environment, "storageService")
@@ -677,12 +683,18 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     // FLT(uoemai): Notification providers replaced by dummy logger during development.
     // APNSender apnSender = new APNSender(apnSenderExecutor, config.getApnConfiguration());
     // FcmSender fcmSender = new FcmSender(fcmSenderExecutor, config.getFcmConfiguration().credentials().value());
+    WebPushSender webPushSender = new WebPushSender(
+      webPushSenderExecutor,
+      webPushSenderCluster,
+      config.getWebPushConfiguration().vapidStaticKeyPair(),
+      config.getWebPushConfiguration().vapidSub()
+    );
     DummySender apnSender = new DummySender("APN");
     DummySender fcmSender = new DummySender("FCM");
     PushNotificationScheduler pushNotificationScheduler = new PushNotificationScheduler(pushSchedulerCluster,
-        apnSender, fcmSender, accountsManager, 0, 0, retryExecutor);
+        apnSender, fcmSender, webPushSender, accountsManager, 0, 0, retryExecutor);
     PushNotificationManager pushNotificationManager =
-        new PushNotificationManager(accountsManager, apnSender, fcmSender, pushNotificationScheduler);
+        new PushNotificationManager(accountsManager, apnSender, fcmSender, webPushSender, pushNotificationScheduler);
     RateLimiters rateLimiters = RateLimiters.create(dynamicConfigurationManager, rateLimitersCluster, retryExecutor);
     // FLT(uoemai): Device provisioning is disabled in the prototype.
     // ProvisioningManager provisioningManager = new ProvisioningManager(pubsubClient);
@@ -1131,7 +1143,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         phoneNumberIdentifiers, registrationServiceClient, registrationRecoveryPasswordsManager, registrationRecoveryChecker);
     final List<Object> commonControllers = Lists.newArrayList(
         new AccountController(accountsManager, rateLimiters, registrationRecoveryPasswordsManager,
-            usernameHashZkProofVerifier),
+            usernameHashZkProofVerifier, pushNotificationManager),
         new AccountControllerV2(accountsManager, changeNumberManager, phoneVerificationTokenManager,
             registrationLockVerificationManager, rateLimiters),
         new AttachmentControllerV4(rateLimiters, gcsAttachmentGenerator, tusAttachmentGenerator,

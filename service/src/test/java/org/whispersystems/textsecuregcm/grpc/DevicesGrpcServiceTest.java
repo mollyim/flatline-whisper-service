@@ -7,15 +7,20 @@ package org.whispersystems.textsecuregcm.grpc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.anyByte;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.whispersystems.textsecuregcm.grpc.GrpcTestUtils.assertStatusException;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
+import reactor.core.publisher.Mono;
+
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -24,6 +29,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
@@ -34,7 +40,10 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junitpioneer.jupiter.cartesian.CartesianTest;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.signal.chat.device.ActivatePushTokenRequest;
+import org.signal.chat.device.ActivatePushTokenResponse;
 import org.signal.chat.device.ClearPushTokenRequest;
 import org.signal.chat.device.ClearPushTokenResponse;
 import org.signal.chat.device.DevicesGrpc;
@@ -49,16 +58,24 @@ import org.signal.chat.device.SetDeviceNameResponse;
 import org.signal.chat.device.SetPushTokenRequest;
 import org.signal.chat.device.SetPushTokenResponse;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
+import org.whispersystems.textsecuregcm.limits.RateLimiter;
+import org.whispersystems.textsecuregcm.limits.RateLimiters;
+import org.whispersystems.textsecuregcm.push.WebPushActivation;
+import org.whispersystems.textsecuregcm.push.WebPushSubscription;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.DeviceCapability;
+import org.whispersystems.textsecuregcm.util.SystemMapper;
 import org.whispersystems.textsecuregcm.util.TestRandomUtil;
 
 class DevicesGrpcServiceTest extends SimpleBaseGrpcTest<DevicesGrpcService, DevicesGrpc.DevicesBlockingStub> {
 
   @Mock
   private AccountsManager accountsManager;
+
+  @Mock
+  private RateLimiter rateLimiter;
 
   @Mock
   private Account authenticatedAccount;
@@ -94,7 +111,12 @@ class DevicesGrpcServiceTest extends SimpleBaseGrpcTest<DevicesGrpcService, Devi
           return CompletableFuture.completedFuture(account);
         });
 
-    return new DevicesGrpcService(accountsManager);
+    final RateLimiters rateLimiters = mock(RateLimiters.class);
+    when(rateLimiters.getSetWebPushLimiter()).thenReturn(rateLimiter);
+    when(rateLimiter.validateReactive(any(UUID.class))).thenReturn(Mono.empty());
+    when(rateLimiter.validateReactive(anyString())).thenReturn(Mono.empty());
+
+    return new DevicesGrpcService(accountsManager, rateLimiters);
   }
 
   @Test
@@ -300,7 +322,8 @@ class DevicesGrpcServiceTest extends SimpleBaseGrpcTest<DevicesGrpcService, Devi
   void setPushToken(final byte deviceId,
       final SetPushTokenRequest request,
       @Nullable final String expectedApnsToken,
-      @Nullable final String expectedFcmToken) {
+      @Nullable final String expectedFcmToken,
+      @Nullable final WebPushSubscription expectedWebPush) {
 
     mockAuthenticationInterceptor().setAuthenticatedDevice(AUTHENTICATED_ACI, deviceId);
 
@@ -311,12 +334,23 @@ class DevicesGrpcServiceTest extends SimpleBaseGrpcTest<DevicesGrpcService, Devi
 
     verify(device).setApnId(expectedApnsToken);
     verify(device).setGcmId(expectedFcmToken);
+    verify(device).setWebPush(expectedWebPush);
     verify(device).setFetchesMessages(false);
   }
 
-  private static Stream<Arguments> setPushToken() {
+  private static Stream<Arguments> setPushToken() throws JsonProcessingException {
     final String apnsToken = "apns-token";
     final String fcmToken = "fcm-token";
+    final String endpoint = "https://domain.tld/random1";
+    final String userAuth = "BTBZMqHH6r4Tts7J_aSIgg";
+    final String userPublicKey = "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4";
+    final WebPushSubscription webPush = SystemMapper.jsonMapper().readValue(String.format("""
+        {
+          "endpoint": "%s",
+          "auth": "%s",
+          "publicKey": "%s"
+        }
+      """, endpoint, userAuth, userPublicKey), WebPushSubscription.class);
 
     final Stream.Builder<Arguments> streamBuilder = Stream.builder();
 
@@ -327,7 +361,7 @@ class DevicesGrpcServiceTest extends SimpleBaseGrpcTest<DevicesGrpcService, Devi
                   .setApnsToken(apnsToken)
                   .build())
               .build(),
-          apnsToken, null));
+          apnsToken, null, null));
 
       streamBuilder.add(Arguments.of(deviceId,
           SetPushTokenRequest.newBuilder()
@@ -335,7 +369,17 @@ class DevicesGrpcServiceTest extends SimpleBaseGrpcTest<DevicesGrpcService, Devi
                   .setFcmToken(fcmToken)
                   .build())
               .build(),
-          null, fcmToken));
+          null, fcmToken, null));
+
+      streamBuilder.add(Arguments.of(deviceId,
+          SetPushTokenRequest.newBuilder()
+              .setWebPushRequest(SetPushTokenRequest.WebPushRequest.newBuilder()
+                  .setEndpoint(endpoint)
+                  .setPublicKey(userPublicKey)
+                  .setAuth(userAuth)
+                  .build())
+              .build(),
+          null, null, webPush));
     }
 
     return streamBuilder.build();
@@ -345,11 +389,13 @@ class DevicesGrpcServiceTest extends SimpleBaseGrpcTest<DevicesGrpcService, Devi
   @MethodSource
   void setPushTokenUnchanged(final SetPushTokenRequest request,
       @Nullable final String apnsToken,
-      @Nullable final String fcmToken) {
+      @Nullable final String fcmToken,
+      @Nullable final WebPushSubscription webPush) {
 
     final Device device = mock(Device.class);
     when(device.getApnId()).thenReturn(apnsToken);
     when(device.getGcmId()).thenReturn(fcmToken);
+    when(device.getWebPush()).thenReturn(webPush);
 
     when(authenticatedAccount.getDevice(AUTHENTICATED_DEVICE_ID)).thenReturn(Optional.of(device));
 
@@ -358,9 +404,19 @@ class DevicesGrpcServiceTest extends SimpleBaseGrpcTest<DevicesGrpcService, Devi
     verify(accountsManager, never()).updateDevice(any(), anyByte(), any());
   }
 
-  private static Stream<Arguments> setPushTokenUnchanged() {
+  private static Stream<Arguments> setPushTokenUnchanged() throws JsonProcessingException {
     final String apnsToken = "apns-token";
     final String fcmToken = "fcm-token";
+    final String endpoint = "https://domain.tld/random1";
+    final String userAuth = "BTBZMqHH6r4Tts7J_aSIgg";
+    final String userPublicKey = "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4";
+    final WebPushSubscription webPush = SystemMapper.jsonMapper().readValue(String.format("""
+        {
+          "endpoint": "%s",
+          "auth": "%s",
+          "publicKey": "%s"
+        }
+      """, endpoint, userAuth, userPublicKey), WebPushSubscription.class);
 
     return Stream.of(
         Arguments.of(SetPushTokenRequest.newBuilder()
@@ -368,14 +424,23 @@ class DevicesGrpcServiceTest extends SimpleBaseGrpcTest<DevicesGrpcService, Devi
                     .setApnsToken(apnsToken)
                     .build())
                 .build(),
-            apnsToken, null, false),
+            apnsToken, null, null, false),
 
         Arguments.of(SetPushTokenRequest.newBuilder()
                 .setFcmTokenRequest(SetPushTokenRequest.FcmTokenRequest.newBuilder()
                     .setFcmToken(fcmToken)
                     .build())
                 .build(),
-            null, fcmToken, false)
+            null, fcmToken, null, false),
+
+        Arguments.of(SetPushTokenRequest.newBuilder()
+                .setWebPushRequest(SetPushTokenRequest.WebPushRequest.newBuilder()
+                    .setEndpoint(endpoint)
+                    .setPublicKey(userPublicKey)
+                    .setAuth(userAuth)
+                    .build())
+                .build(),
+            null, null, webPush, false)
     );
   }
 
@@ -389,6 +454,9 @@ class DevicesGrpcServiceTest extends SimpleBaseGrpcTest<DevicesGrpcService, Devi
   }
 
   private static Stream<Arguments> setPushTokenIllegalArgument() {
+    final String invalidEndpoint = "http://domain.tld/random1";
+    final String userAuth = "BTBZMqHH6r4Tts7J_aSIgg";
+    final String userPublicKey = "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4";
     return Stream.of(
         Arguments.of(SetPushTokenRequest.newBuilder().build()),
 
@@ -398,7 +466,80 @@ class DevicesGrpcServiceTest extends SimpleBaseGrpcTest<DevicesGrpcService, Devi
 
         Arguments.of(SetPushTokenRequest.newBuilder()
             .setFcmTokenRequest(SetPushTokenRequest.FcmTokenRequest.newBuilder().build())
+            .build()),
+
+        // With a missing field
+        Arguments.of(SetPushTokenRequest.newBuilder()
+            .setWebPushRequest(SetPushTokenRequest.WebPushRequest.newBuilder()
+              .setPublicKey(userPublicKey)
+              .setAuth(userAuth)
+              .build())
+            .build()),
+
+        // With an invalid field
+        Arguments.of(SetPushTokenRequest.newBuilder()
+            .setWebPushRequest(SetPushTokenRequest.WebPushRequest.newBuilder()
+              .setEndpoint(invalidEndpoint)
+              .setPublicKey(userPublicKey)
+              .setAuth(userAuth)
+              .build())
             .build())
+    );
+  }
+
+
+  @ParameterizedTest
+  @MethodSource
+  void activatePushToken(final byte deviceId,
+    @Nullable final WebPushActivation deviceActivation,
+    @Nullable final String tokenSent,
+    @Nullable final boolean expectedSet) {
+
+    mockAuthenticationInterceptor().setAuthenticatedDevice(AUTHENTICATED_ACI, deviceId);
+
+    final Device device = mock(Device.class);
+    final WebPushSubscription webPush = mock(WebPushSubscription.class);
+    when(device.getId()).thenReturn(deviceId);
+    when(device.isPrimary()).thenReturn(deviceId == Device.PRIMARY_ID);
+    when(device.getWebPush()).thenReturn(webPush);
+    when(device.getWebPushActivation()).thenReturn(deviceActivation);
+    when(authenticatedAccount.getDevice(deviceId)).thenReturn(Optional.of(device));
+
+    if (tokenSent != null) {
+      final ActivatePushTokenResponse ignored = authenticatedServiceStub().activatePushToken(
+        ActivatePushTokenRequest.newBuilder().setActivationToken(tokenSent).build()
+      );
+    } else {
+      final ActivatePushTokenResponse ignored = authenticatedServiceStub().activatePushToken(
+        ActivatePushTokenRequest.newBuilder().build()
+      );
+    }
+
+    if (expectedSet) {
+      ArgumentCaptor<WebPushActivation> captor = ArgumentCaptor.forClass(WebPushActivation.class);
+      verify(device).setWebPushActivation(captor.capture());
+      assertEquals(true, captor.getValue().activated());
+      assertEquals(null, captor.getValue().activationToken());
+    } else {
+      verify(device, never()).setWebPushActivation(any());;
+    }
+    verify(device).setFetchesMessages(true);
+  }
+
+  private static Stream<Arguments> activatePushToken() {
+    return Stream.of(
+        Arguments.of(Device.PRIMARY_ID, new WebPushActivation(true, null), "any", false),
+        Arguments.of(Device.PRIMARY_ID, new WebPushActivation(true, null), null, false),
+        Arguments.of(Device.PRIMARY_ID, new WebPushActivation(false, "valid"), null, false),
+        Arguments.of(Device.PRIMARY_ID, new WebPushActivation(false, "valid"), "invalid", false),
+        Arguments.of(Device.PRIMARY_ID, new WebPushActivation(false, "valid"), "invalid", false),
+        Arguments.of(Device.PRIMARY_ID, new WebPushActivation(false, "valid"), "valid", true),
+        Arguments.of((byte) (Device.PRIMARY_ID + 1), new WebPushActivation(true, null), "any", false),
+        Arguments.of((byte) (Device.PRIMARY_ID + 1), new WebPushActivation(true, null), null, false),
+        Arguments.of((byte) (Device.PRIMARY_ID + 1), new WebPushActivation(false, "valid"), null, false),
+        Arguments.of((byte) (Device.PRIMARY_ID + 1), new WebPushActivation(false, "valid"), "invalid", false),
+        Arguments.of((byte) (Device.PRIMARY_ID + 1), new WebPushActivation(false, "valid"), "invalid", false),
+        Arguments.of((byte) (Device.PRIMARY_ID + 1), new WebPushActivation(false, "valid"), "valid", true)
     );
   }
 
@@ -407,6 +548,7 @@ class DevicesGrpcServiceTest extends SimpleBaseGrpcTest<DevicesGrpcService, Devi
   void clearPushToken(final byte deviceId,
       @Nullable final String apnsToken,
       @Nullable final String fcmToken,
+      @Nullable final WebPushSubscription webPush,
       @Nullable final String expectedUserAgent) {
 
     mockAuthenticationInterceptor().setAuthenticatedDevice(AUTHENTICATED_ACI, deviceId);
@@ -416,12 +558,14 @@ class DevicesGrpcServiceTest extends SimpleBaseGrpcTest<DevicesGrpcService, Devi
     when(device.isPrimary()).thenReturn(deviceId == Device.PRIMARY_ID);
     when(device.getApnId()).thenReturn(apnsToken);
     when(device.getGcmId()).thenReturn(fcmToken);
+    when(device.getWebPush()).thenReturn(webPush);
     when(authenticatedAccount.getDevice(deviceId)).thenReturn(Optional.of(device));
 
     final ClearPushTokenResponse ignored = authenticatedServiceStub().clearPushToken(ClearPushTokenRequest.newBuilder().build());
 
     verify(device).setApnId(null);
     verify(device).setGcmId(null);
+    verify(device).setWebPush(null);
     verify(device).setFetchesMessages(true);
 
     if (expectedUserAgent != null) {
@@ -431,14 +575,23 @@ class DevicesGrpcServiceTest extends SimpleBaseGrpcTest<DevicesGrpcService, Devi
     }
   }
 
-  private static Stream<Arguments> clearPushToken() {
+  private static Stream<Arguments> clearPushToken() throws JsonProcessingException {
+    final WebPushSubscription webPush = SystemMapper.jsonMapper().readValue("""
+        {
+          "endpoint": "https://domain.tld/random1",
+          "auth": "BTBZMqHH6r4Tts7J_aSIgg",
+          "publicKey": "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4"
+        }
+      """, WebPushSubscription.class);
     return Stream.of(
-        Arguments.of(Device.PRIMARY_ID, "apns-token", null, "OWI"),
-        Arguments.of(Device.PRIMARY_ID, null, "fcm-token", "OWA"),
-        Arguments.of(Device.PRIMARY_ID, null, null, null),
-        Arguments.of((byte) (Device.PRIMARY_ID + 1), "apns-token", null, "OWP"),
-        Arguments.of((byte) (Device.PRIMARY_ID + 1), null, "fcm-token", "OWA"),
-        Arguments.of((byte) (Device.PRIMARY_ID + 1), null, null, null)
+        Arguments.of(Device.PRIMARY_ID, "apns-token", null, null, "OWI"),
+        Arguments.of(Device.PRIMARY_ID, null, "fcm-token", null, "OWA"),
+        Arguments.of(Device.PRIMARY_ID, null, null, webPush, null),
+        Arguments.of(Device.PRIMARY_ID, null, null, null, null),
+        Arguments.of((byte) (Device.PRIMARY_ID + 1), "apns-token", null, null, "OWP"),
+        Arguments.of((byte) (Device.PRIMARY_ID + 1), null, "fcm-token", null, "OWA"),
+        Arguments.of((byte) (Device.PRIMARY_ID + 1), null, null, webPush, null),
+        Arguments.of((byte) (Device.PRIMARY_ID + 1), null, null, null, null)
     );
   }
 

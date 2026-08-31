@@ -51,6 +51,7 @@ import org.whispersystems.textsecuregcm.push.FcmSender;
 import org.whispersystems.textsecuregcm.push.PushNotificationManager;
 import org.whispersystems.textsecuregcm.push.PushNotificationScheduler;
 import org.whispersystems.textsecuregcm.push.RedisMessageAvailabilityManager;
+import org.whispersystems.textsecuregcm.push.WebPushSender;
 import org.whispersystems.textsecuregcm.redis.FaultTolerantRedisClient;
 import org.whispersystems.textsecuregcm.redis.FaultTolerantRedisClusterClient;
 import org.whispersystems.textsecuregcm.securestorage.SecureStorageClient;
@@ -105,6 +106,7 @@ record CommandDependencies(
     RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager,
     APNSender apnSender,
     FcmSender fcmSender,
+    WebPushSender webPushSender,
     PushNotificationManager pushNotificationManager,
     PushNotificationExperimentSamples pushNotificationExperimentSamples,
     FaultTolerantRedisClusterClient cacheCluster,
@@ -145,6 +147,8 @@ record CommandDependencies(
 
     FaultTolerantRedisClusterClient cacheCluster = configuration.getCacheClusterConfiguration()
         .build("main_cache", redisClientResourcesBuilder);
+    FaultTolerantRedisClusterClient webPushSenderCluster = configuration.getPushSchedulerCluster()
+        .build("webpush", redisClientResourcesBuilder);
     FaultTolerantRedisClusterClient pushSchedulerCluster = configuration.getPushSchedulerCluster()
         .build("push_scheduler", redisClientResourcesBuilder);
     FaultTolerantRedisClient pubsubClient =
@@ -167,6 +171,8 @@ record CommandDependencies(
     ExecutorService apnSenderExecutor = environment.lifecycle().executorService(name(WhisperServerService.class, "apnSender-%d"))
         .maxThreads(1).minThreads(1).build();
     ExecutorService fcmSenderExecutor = environment.lifecycle().executorService(name(WhisperServerService.class, "fcmSender-%d"))
+        .maxThreads(16).minThreads(16).build();
+    ExecutorService webPushSenderExecutor = environment.lifecycle().executorService(name(WhisperServerService.class, "webPushSender-%d"))
         .maxThreads(16).minThreads(16).build();
     ExecutorService clientEventExecutor = environment.lifecycle()
         .virtualExecutorService(name(WhisperServerService.class, "clientEvent-%d"));
@@ -350,10 +356,16 @@ record CommandDependencies(
 
     APNSender apnSender = new APNSender(apnSenderExecutor, configuration.getApnConfiguration());
     FcmSender fcmSender = new FcmSender(fcmSenderExecutor, configuration.getFcmConfiguration().credentials().value());
+    WebPushSender webPushSender = new WebPushSender(
+      webPushSenderExecutor,
+      webPushSenderCluster,
+      configuration.getWebPushConfiguration().vapidStaticKeyPair(),
+      configuration.getWebPushConfiguration().vapidSub()
+    );
     PushNotificationScheduler pushNotificationScheduler = new PushNotificationScheduler(pushSchedulerCluster,
-        apnSender, fcmSender, accountsManager, 0, 0, retryExecutor);
+        apnSender, fcmSender, webPushSender, accountsManager, 0, 0, retryExecutor);
     PushNotificationManager pushNotificationManager = new PushNotificationManager(accountsManager,
-        apnSender, fcmSender, pushNotificationScheduler);
+        apnSender, fcmSender, webPushSender, pushNotificationScheduler);
     PushNotificationExperimentSamples pushNotificationExperimentSamples =
         new PushNotificationExperimentSamples(dynamoDbAsyncClient,
             configuration.getDynamoDbTables().getPushNotificationExperimentSamples().getTableName(),
@@ -377,6 +389,7 @@ record CommandDependencies(
         registrationRecoveryPasswordsManager,
         apnSender,
         fcmSender,
+        webPushSender,
         pushNotificationManager,
         pushNotificationExperimentSamples,
         cacheCluster,

@@ -519,7 +519,6 @@ turn:
       - turn:%s:80?transport=tcp
       - turns:%s:443?transport=tcp
     hostname: turn.example.com
-    numHttpClients: 1
 
 linkDevice:
   secret: secret://linkDevice.secret
@@ -529,6 +528,12 @@ noiseTunnel:
   directPort: 8445
   noiseStaticPrivateKey: secret://noiseTunnel.noiseStaticPrivateKey
   recognizedProxySecret: secret://noiseTunnel.recognizedProxySecret
+
+webPush:
+  # vapidSub can be an https:// url or a mailto: url
+  # vapidSub: mailto:contact@example.com
+  vapidSub: https://github.com/mollyim/flatline-platform/issues
+  vapidStaticPrivateKey: secret://webPush.vapidStaticPrivateKey
 
 externalRequestFilter:
   grpcMethods:

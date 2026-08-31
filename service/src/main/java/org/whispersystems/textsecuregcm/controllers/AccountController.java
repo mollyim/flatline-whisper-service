@@ -56,6 +56,10 @@ import org.whispersystems.textsecuregcm.identity.IdentityType;
 import org.whispersystems.textsecuregcm.identity.ServiceIdentifier;
 import org.whispersystems.textsecuregcm.limits.RateLimitedByIp;
 import org.whispersystems.textsecuregcm.limits.RateLimiters;
+import org.whispersystems.textsecuregcm.push.PushNotificationManager;
+import org.whispersystems.textsecuregcm.push.WebPushActivation;
+import org.whispersystems.textsecuregcm.push.WebPushSubscription;
+import org.whispersystems.textsecuregcm.push.PushNotification.PushToken;
 import org.whispersystems.textsecuregcm.storage.Account;
 import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
@@ -75,6 +79,7 @@ public class AccountController {
   public static final int USERNAME_HASH_LENGTH = 32;
   public static final int MAXIMUM_USERNAME_CIPHERTEXT_LENGTH = 128;
 
+  private final PushNotificationManager pushNotificationManager;
   private final AccountsManager accounts;
   private final RateLimiters rateLimiters;
   private final RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager;
@@ -84,11 +89,13 @@ public class AccountController {
       AccountsManager accounts,
       RateLimiters rateLimiters,
       RegistrationRecoveryPasswordsManager registrationRecoveryPasswordsManager,
-      UsernameHashZkProofVerifier usernameHashZkProofVerifier) {
+      UsernameHashZkProofVerifier usernameHashZkProofVerifier,
+      PushNotificationManager pushNotificationManager) {
     this.accounts = accounts;
     this.rateLimiters = rateLimiters;
     this.registrationRecoveryPasswordsManager = registrationRecoveryPasswordsManager;
     this.usernameHashZkProofVerifier = usernameHashZkProofVerifier;
+    this.pushNotificationManager = pushNotificationManager;
   }
 
   @PUT
@@ -110,6 +117,8 @@ public class AccountController {
 
     accounts.updateDevice(account, device.getId(), d -> {
       d.setApnId(null);
+      d.setWebPush(null);
+      d.setWebPushActivation(null);
       d.setGcmId(registrationId.gcmRegistrationId());
       d.setFetchesMessages(false);
     });
@@ -127,6 +136,99 @@ public class AccountController {
     accounts.updateDevice(account, device.getId(), d -> {
       d.setGcmId(null);
       d.setFetchesMessages(false);
+      d.setUserAgent("OWA");
+    });
+  }
+
+
+  @PUT
+  @Path("/webpush/")
+  @Consumes(MediaType.APPLICATION_JSON)
+  @Produces(MediaType.APPLICATION_JSON)
+  @Operation(
+      summary = "Set web push subscription",
+      description = """
+          Authenticated endpoint. Takes in a web push endpoint, P256 public key, and an auth secret.
+          If the subscription is updated, it sends an encrypted activation token to the endpoint.
+          """
+  )
+  @ApiResponse(responseCode = "200", description = "Web Push subscription updated successfully.", useReturnTypeSchema = true)
+  @ApiResponse(responseCode = "429", description = "Ratelimited.")
+  public void setWebPushSubscription(@Auth AuthenticatedDevice auth,
+      @NotNull @Valid WebPushSubscription webPushSubscription) throws RateLimitExceededException {
+
+    final Account account = accounts.getByAccountIdentifier(auth.accountIdentifier())
+        .orElseThrow(() -> new WebApplicationException(Status.UNAUTHORIZED));
+
+    final Device device = account.getDevice(auth.deviceId())
+        .orElseThrow(() -> new WebApplicationException(Status.UNAUTHORIZED));
+
+    if (Objects.equals(device.getWebPush(), webPushSubscription) && device.getWebPushActivated()) {
+      return;
+    }
+
+    // Check rate limit only if the registration is different
+    rateLimiters.getSetWebPushLimiter().validate(auth.accountIdentifier());
+
+    final WebPushActivation activationToken = WebPushActivation.newToken();
+
+    // We send to the subscription, with activated=true, else it wouldn't be sent
+    pushNotificationManager.sendActivationTokenNotification(new PushToken.WEBPUSH(webPushSubscription, true), activationToken.activationToken());
+
+    accounts.updateDevice(account, device.getId(), d -> {
+      d.setApnId(null);
+      d.setGcmId(null);
+      d.setWebPush(webPushSubscription);
+      d.setWebPushActivation(activationToken);
+      d.setFetchesMessages(false);
+    });
+  }
+
+  @PUT
+  @Path("/webpush/activate")
+  @Consumes(MediaType.APPLICATION_JSON)
+  @Produces(MediaType.APPLICATION_JSON)
+  public void activateWebPush(@Auth AuthenticatedDevice auth,
+      @NotNull @Valid WebPushActivation webPushActivation) {
+
+    final Account account = accounts.getByAccountIdentifier(auth.accountIdentifier())
+        .orElseThrow(() -> new WebApplicationException(Status.UNAUTHORIZED));
+
+    final Device device = account.getDevice(auth.deviceId())
+        .orElseThrow(() -> new WebApplicationException(Status.UNAUTHORIZED));
+
+    final String token = webPushActivation.activationToken();
+    final WebPushActivation deviceActivation = device.getWebPushActivation();
+
+    if (
+      device.getWebPush() == null ||
+      token == null ||
+      deviceActivation == null ||
+      !Objects.equals(deviceActivation.activationToken(), token)
+    ) {
+      return;
+    }
+
+    accounts.updateDevice(account, device.getId(), d -> {
+      d.setWebPushActivation(new WebPushActivation(true, null));
+      d.setFetchesMessages(false);
+    });
+  }
+
+  @DELETE
+  @Path("/webpush/")
+  public void deletewebpushRegistrationId(@Auth AuthenticatedDevice auth) {
+    final Account account = accounts.getByAccountIdentifier(auth.accountIdentifier())
+        .orElseThrow(() -> new WebApplicationException(Status.UNAUTHORIZED));
+
+    final Device device = account.getDevice(auth.deviceId())
+        .orElseThrow(() -> new WebApplicationException(Status.UNAUTHORIZED));
+
+    accounts.updateDevice(account, device.getId(), d -> {
+      d.setWebPush(null);
+      d.setWebPushActivation(null);
+      d.setFetchesMessages(false);
+      // For now, only Android app can use webpush, desktop may support it later
       d.setUserAgent("OWA");
     });
   }
@@ -149,6 +251,8 @@ public class AccountController {
     accounts.updateDevice(account, device.getId(), d -> {
       d.setApnId(registrationId.apnRegistrationId());
       d.setGcmId(null);
+      d.setWebPush(null);
+      d.setWebPushActivation(null);
       d.setFetchesMessages(false);
     });
   }

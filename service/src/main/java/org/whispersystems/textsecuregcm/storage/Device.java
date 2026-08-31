@@ -9,6 +9,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import jakarta.validation.Valid;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -18,8 +19,15 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import javax.annotation.Nullable;
 import com.google.common.annotations.VisibleForTesting;
+
+import org.apache.commons.lang3.StringUtils;
 import org.whispersystems.textsecuregcm.auth.SaltedTokenHash;
 import org.whispersystems.textsecuregcm.identity.IdentityType;
+import org.whispersystems.textsecuregcm.push.NotPushRegisteredException;
+import org.whispersystems.textsecuregcm.push.WebPushActivation;
+import org.whispersystems.textsecuregcm.push.PushNotification.PushToken;
+import org.whispersystems.textsecuregcm.push.PushNotification.TokenType;
+import org.whispersystems.textsecuregcm.push.WebPushSubscription;
 import org.whispersystems.textsecuregcm.util.ByteArrayAdapter;
 import org.whispersystems.textsecuregcm.util.DeviceCapabilityAdapter;
 import org.whispersystems.textsecuregcm.util.DeviceNameByteArrayAdapter;
@@ -60,6 +68,12 @@ public class Device {
 
   @JsonProperty
   private String  apnId;
+
+  @JsonProperty
+  private WebPushSubscription webPush;
+
+  @JsonProperty
+  private WebPushActivation webPushActivation;
 
   @JsonProperty
   private long pushTimestamp;
@@ -133,6 +147,30 @@ public class Device {
     if (gcmId != null) {
       this.pushTimestamp = System.currentTimeMillis();
     }
+  }
+
+  public WebPushSubscription getWebPush() {
+    return webPush;
+  }
+
+  public void setWebPush(WebPushSubscription webPush) {
+    this.webPush = webPush;
+
+    if (webPush != null) {
+      this.pushTimestamp = System.currentTimeMillis();
+    }
+  }
+
+  public boolean getWebPushActivated() {
+    return webPushActivation != null && webPushActivation.activated();
+  }
+
+  public WebPushActivation getWebPushActivation() {
+    return webPushActivation;
+  }
+
+  public void setWebPushActivation(WebPushActivation webPushActivation) {
+    this.webPushActivation = webPushActivation;
   }
 
   public byte getId() {
@@ -246,5 +284,28 @@ public class Device {
 
   public String getUserAgent() {
     return this.userAgent;
+  }
+
+  public static PushToken<?> getPushToken(final Device device) throws NotPushRegisteredException {
+    final String gcmId = device.getGcmId();
+    final String apnId = device.getApnId();
+    final WebPushSubscription webPushSub = device.getWebPush();
+    if (StringUtils.isNotBlank(gcmId)) {
+      return new PushToken.FCM(gcmId);
+    } else if (StringUtils.isNotBlank(apnId)) {
+      return new PushToken.APN(apnId);
+    } else if (webPushSub != null) {
+      return new PushToken.WEBPUSH(webPushSub, device.getWebPushActivated());
+    } else {
+      throw new NotPushRegisteredException();
+    }
+  }
+
+  public static @Nullable PushToken<?> getPushToken(final Device device, final TokenType tokenType) {
+    return switch (tokenType) {
+      case TokenType.WEBPUSH -> new PushToken.WEBPUSH(device.getWebPush(), device.getWebPushActivated());
+      case TokenType.FCM -> new PushToken.FCM(device.getGcmId());
+      case TokenType.APN -> new PushToken.APN(device.getApnId());
+    };
   }
 }
